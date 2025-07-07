@@ -4263,7 +4263,7 @@ const Chain = Chainf;
 					if (entity.master.master.team === myTeam || entity.team === -101) return;
 					if (entity.isDead() || entity.passive || entity.invuln) return;
 					if (!FARMER && entity.dangerValue < 0) return;
-					if (entity.dangerValue < maxDanger) return;
+					if (entity.dangerValue <= maxDanger) return;
 					if (entity.alpha < 0.5 && !canSeeInvis) return;
 					if (c.SANDBOX && entity.sandboxId !== body.sandboxId) return;
 
@@ -4285,10 +4285,16 @@ const Chain = Chainf;
 						if ((dot / angleToTargetMag) < this.firingArcCos) return;
 					}
 
-					if(maxDanger < entity.dangerValue || (maxDanger === entity.dangerValue && Math.random()>.5)){
+					if(maxDanger === entity.dangerValue){
+						if(Math.random()>.5){
+							bestTarget = entity;
+							maxDanger = entity.dangerValue;
+						}
+					}else{
 						bestTarget = entity;
 						maxDanger = entity.dangerValue;
 					}
+
 					if (this.targetLock === entity) {
 						foundLockedTarget = true;
 					}
@@ -4318,8 +4324,9 @@ const Chain = Chainf;
 				// Throttle expensive target acquisition.
 				if (++this.tick > 15) {
 					this.tick = 0;
-					const range = this.body.aiSettings.SKYNET ? this.body.fov : this.body.master.fov;
-					this.findTarget(range);
+					let range = this.body.aiSettings.SKYNET ? this.body.fov : this.body.master.fov;
+					range *= this.body.aiSettings.BLIND ? 2/3 : 1
+					this.findTarget(range-(range/Math.sqrt(2))/2);
 				}
 
 				// Idle if no valid target.
@@ -10021,7 +10028,7 @@ function flatten(data, out, playerContext = null) {
                         ].forEach(body.sendMessage);
                     } else {
                         body.sendMessage(`You will remain invulnerable until you move, shoot, or your timer runs out.`);
-                        body.sendMessage("You have spawned! Welcome to the test. Hold N to level up.");
+                        body.sendMessage("You have spawned! Welcome to the game. Hold N to level up.");
                     }
                     return player;
                 }
