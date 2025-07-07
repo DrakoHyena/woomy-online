@@ -4263,7 +4263,7 @@ const Chain = Chainf;
 					if (entity.master.master.team === myTeam || entity.team === -101) return;
 					if (entity.isDead() || entity.passive || entity.invuln) return;
 					if (!FARMER && entity.dangerValue < 0) return;
-					if (entity.dangerValue <= maxDanger) return;
+					if (entity.dangerValue < maxDanger) return;
 					if (entity.alpha < 0.5 && !canSeeInvis) return;
 					if (c.SANDBOX && entity.sandboxId !== body.sandboxId) return;
 
@@ -4285,16 +4285,10 @@ const Chain = Chainf;
 						if ((dot / angleToTargetMag) < this.firingArcCos) return;
 					}
 
-					if(maxDanger === entity.dangerValue){
-						if(Math.random()>.5){
-							bestTarget = entity;
-							maxDanger = entity.dangerValue;
-						}
-					}else{
+					if(maxDanger < entity.dangerValue || (maxDanger === entity.dangerValue && Math.random()>.5)){
 						bestTarget = entity;
 						maxDanger = entity.dangerValue;
 					}
-
 					if (this.targetLock === entity) {
 						foundLockedTarget = true;
 					}
@@ -4324,9 +4318,8 @@ const Chain = Chainf;
 				// Throttle expensive target acquisition.
 				if (++this.tick > 15) {
 					this.tick = 0;
-					let range = this.body.aiSettings.SKYNET ? this.body.fov : this.body.master.fov;
-					range *= this.body.aiSettings.BLIND ? 2/3 : 1
-					this.findTarget(range-(range/Math.sqrt(2))/2);
+					const range = this.body.aiSettings.SKYNET ? this.body.fov : this.body.master.fov;
+					this.findTarget(range);
 				}
 
 				// Idle if no valid target.
@@ -5235,17 +5228,6 @@ const Chain = Chainf;
                     this.destroyOldestChild = PROPERTIES.DESTROY_OLDEST_CHILD == null ? false : PROPERTIES.DESTROY_OLDEST_CHILD;
                     this.shootOnDeath = PROPERTIES.SHOOT_ON_DEATH == null ? false : PROPERTIES.SHOOT_ON_DEATH;
                     this.onDealtDamage = PROPERTIES.ON_DEALT_DAMAGE == null ? null : PROPERTIES.ON_DEALT_DAMAGE;
-                    if (this.shootOnDeath && !this.skipShootOnDeath) this.body.onDead = () => {
-                        let self = this;
-                        for (let i = 0; i < self.body.guns.length; i++) {
-                            let gun = self.body.guns[i];
-                            if (gun.shootOnDeath) {
-                                let gx = gun.offset * Math.cos(gun.direction + gun.angle + gun.body.facing) + (1.35 * gun.length - gun.width * gun.settings.size / 2) * Math.cos(gun.angle + self.body.facing),
-                                    gy = gun.offset * Math.sin(gun.direction + gun.angle + gun.body.facing) + (1.35 * gun.length - gun.width * gun.settings.size / 2) * Math.sin(gun.angle + self.body.facing);
-                                gun.fire(gx, gy, self.body.skill);
-                            }
-                        }
-                    };
                     if (PROPERTIES.COLOR_OVERRIDE != null) this.colorOverride = PROPERTIES.COLOR_OVERRIDE;
                     if (PROPERTIES.CAN_SHOOT != null) this.canShoot = PROPERTIES.CAN_SHOOT;
                     this.alpha = PROPERTIES.ALPHA;
@@ -5391,7 +5373,7 @@ const Chain = Chainf;
                 let speed = (this.negRecoil ? -1 : 1) * this.settings.speed * c.runSpeed * sk.spd * (1 + ss);
                 let s = new Vector(speed * Math.cos(this.angle + this.body.facing + sd), speed * Math.sin(this.angle + this.body.facing + sd));
                 if (this.body.velocity.length) {
-                    let extraBoost = Math.max(1, s.x * this.body.velocity.x + s.y * this.body.velocity.y) / this.body.velocity.length / s.length;
+                    let extraBoost = Math.max(0, s.x * this.body.velocity.x + s.y * this.body.velocity.y) / this.body.velocity.length / s.length;
                     if (extraBoost) {
                         let len = s.length;
                         s.x += this.body.velocity.length * extraBoost * s.x / len;
@@ -7539,6 +7521,14 @@ const Chain = Chainf;
                 this.regenerate();
                 this.damageReceived = 0;
                 if (this.isDead()) {
+                    for (let i = 0; i < this.guns.length; i++) {
+                        let gun = this.guns[i];
+                        if (gun.shootOnDeath) {
+                            let gx = gun.offset * Math.cos(gun.direction + gun.angle + gun.body.facing) + (1.35 * gun.length - gun.width * gun.settings.size / 2) * Math.cos(gun.angle + this.facing),
+                                gy = gun.offset * Math.sin(gun.direction + gun.angle + gun.body.facing) + (1.35 * gun.length - gun.width * gun.settings.size / 2) * Math.sin(gun.angle + this.facing);
+                            gun.fire(gx, gy, this.skill);
+                        }
+                    }
                     // Explosions, phases and whatnot
                     if (this.onDead != null && !this.hasDoneOnDead) {
                         this.hasDoneOnDead = true;
@@ -10031,7 +10021,7 @@ function flatten(data, out, playerContext = null) {
                         ].forEach(body.sendMessage);
                     } else {
                         body.sendMessage(`You will remain invulnerable until you move, shoot, or your timer runs out.`);
-                        body.sendMessage("You have spawned! Welcome to the game. Hold N to level up.");
+                        body.sendMessage("You have spawned! Welcome to the test. Hold N to level up.");
                     }
                     return player;
                 }
