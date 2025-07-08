@@ -13,7 +13,34 @@ let drawEntity = function () {
 		let angle = arguments.length > 8 && arguments[8] !== undefined ? arguments[8] : 0,
 			fill = arguments.length > 9 && arguments[9] !== undefined ? arguments[9] : 1;
 		if (sides === -4000) return 0;
-
+					if (typeof sides === "object") {
+						if (!sides[2]) {console.log(sides[0])//if there is only 2 parameters, its a svg, if there is more its a dot-to-dot path (there is no point in making dot-to-dot with < 2 parameters right?)
+						let radiusDiv = sides[1] || 1//svg stuff below
+						let path = new Path2D(sides[0])
+						radius /= radiusDiv;
+						context.save();
+						context.translate(centerX, centerY);
+						context.scale(radius, radius);
+						context.lineWidth /= radius;
+						context.rotate(angle);
+						context.stroke(path);
+						if (fill) context.fill(path);
+						context.restore();
+						return} else{//dot-to-dot stuff
+							context.save()
+							context.beginPath();
+							let xDirection = Math.cos(angle),
+                            	yDirection = Math.sin(angle);
+                        	for (let [x, y] of sides) {
+                            	context.lineTo(centerX + radius * (x * xDirection - y * yDirection), centerY + radius * (y * xDirection + x * yDirection));
+                        	}
+						context.closePath()
+						context.stroke()
+						context.fill()
+                        context.restore();
+							return;
+						}
+					}
 		if (!Array.isArray(sides)) angle += sides % 2 ? 0 : Math.PI / sides;
 		context.beginPath();
 		switch (sides) {
@@ -782,8 +809,7 @@ let drawEntity = function () {
 					}
 					context.restore();
 				} else if (sides > 200) {
-					let path = path2dCache.get(sides) || 2 * Math.PI,
-						radiusDiv = 1;
+					/*//Old Code
 					if (typeof path === "object") {
 						radiusDiv = path.radiusDiv
 						path = path.path
@@ -797,7 +823,9 @@ let drawEntity = function () {
 						if (fill) context.fill(path);
 						context.restore();
 						break;
-					}
+					}*/
+					let path = path2dCache.get(sides) || 2 * Math.PI,
+					radiusDiv = 1;
 					switch (sides) {
 						case 201: // 6 Pointed Star
 							path = new Path2D("m -1.2745055,-0.73559036 .8496635,-1.54e-5 L -5.9657109e-7,-1.4711814 .42484199,-0.73560576 1.2745055,-0.73559036 .84968469,-1.7597132e-6 1.2745055,0.73558804 .42484199,0.73560224 -5.9657109e-7,1.4711779 -0.424842,0.73559964 -1.2745055,0.73558804 -0.8496847,-1.7597132e-6 Z");
