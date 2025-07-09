@@ -1488,6 +1488,47 @@ let drawEntity = function () {
 
 			case 100: // Tachyon
 				break;
+			default:
+				if (typeof skin == "string") {
+					const allowedFunctions = new Set([
+						"arc", "arcTo", "beginPath", "bezierCurveTo", "clearRect", "clip",
+						"closePath", "createConicGradient", "createImageData", "createLinearGradient",
+						"createPattern", "createRadialGradient", "drawFocusIfNeeded", "drawImage",
+						"ellipse", "fill", "fillRect", "fillText", "getContextAttributes", "getImageData",
+						"getLineDash", "getTransform", "isContextLost", "isPointInPath", "isPointInStroke",
+						"lineTo", "measureText", "moveTo", "putImageData", "quadraticCurveTo", "rect", "reset",
+						"resetTransform", "restore", "rotate", "roundRect", "save", "scale", "setLineDash",
+						"setTransform", "stroke", "strokeRect", "strokeText", "transform", "translate",
+						//custom stuff
+						"shapedBarrel"
+					]);//basically every method possible on canvasRenderingContext2D (to make sure he doesn't use context with malicious code)
+					let skinPurged = skin.replaceAll(";", "\n");//this normalizes the code so you can't do in-block code to trick
+					//adding context. before every line if not already, yup
+					let transformedCode = skinPurged.replace(/(?<![\w.])([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/g, (match, fnName) => {
+						return `context.${fnName}(`;
+					});
+					//find all function calls prefixed with context. and see if they are allowed
+					const calledFunctions = Array.from(transformedCode.matchAll(/context\.([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/g)).map(m => m[1]);
+					const disallowed = calledFunctions.filter(fn => !allowedFunctions.has(fn));
+					if (disallowed.length > 0) {
+						throw new Error(`Disallowed functions used: ${disallowed.join(", ")}`);
+					}
+					//do custom shapedBarrel() stuff and whatnot in the future
+					transformedCode = transformedCode.replace(/context\.shapedBarrel\s*\(\s*(\d+)\s*\)/g, (match, numPoints) => {
+						return `
+							let numPoints = ${numPoints};
+							const angleStep = (2 * Math.PI) / numPoints;
+							context.moveTo(length * Math.cos(0), length * Math.sin(0));
+							for (let i = 1; i <= numPoints; i++) {
+								const theta = i * angleStep;
+								context.lineTo(length * Math.cos(theta), length * Math.sin(theta));
+							}
+						`;
+					})
+					//and finally execute it
+					eval(transformedCode)
+				}
+			break;
 		}
 	}
 
