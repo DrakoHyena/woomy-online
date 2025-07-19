@@ -28,7 +28,7 @@ function drawHealth(x, y, instance, ratio, alpha) {
 		shield = instance.render.shield.get();
 	if (health < 1 || shield < 1) {
 		let yy = y + 1.1 * realSize + 22;
-		ctx.globalAlpha = fade*(health === 0?0:1);
+		ctx.globalAlpha = alpha*fade*(health === 0?0:1);
 		size *= 1.1;
 		let mixc = config.coloredHealthBars ? mixColors(getColor(instance.color), color.guiwhite, .5) : config.tintedHealth ? mixColors(color.lgreen, color.red, 1 - health) : color.lgreen;
 		if (config.shieldbars) {
