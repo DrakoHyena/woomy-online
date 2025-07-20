@@ -8562,7 +8562,7 @@ function flatten(data, out, playerContext = null) {
                 kick(reason = "Unspecified.") {
                     util.warn(this.readableID + "has been kicked. Reason: " + reason);
                     this.talk("P", "You have been kicked: " + reason)
-                    this.talk("closeSocket")
+					this.close()
                 }
                 ban(reason) {
                     if (this.isBanned) {
@@ -8609,7 +8609,7 @@ function flatten(data, out, playerContext = null) {
                     players = players.filter(player => player.id !== this.id);
                     clients = clients.filter(client => client.id !== this.id);
                     clearInterval(this.animationsInterval);
-                    		worker.postMessage({ type: "updatePlayers", players: players.length, name: room.displayName, desc: room.displayDesc })
+                    		worker.postMessage({ type: "updatePlayers", players: clients.length, name: room.displayName, desc: room.displayDesc })
                 }
                 closeWithReason(reason) {
                     this.talk("P", reason);
@@ -8846,7 +8846,7 @@ function flatten(data, out, playerContext = null) {
                             this.woomyOnlineSocketId = m[3];
                             util.info(trimName(name) + (isNew ? " joined" : " rejoined") + " the game! Player ID: " + (entitiesIdLog - 1) + ". IP: " + this.ip + ". Players: " + clients.length + ".");
 
-                    		worker.postMessage({ type: "updatePlayers", players: players.length, name: room.displayName, desc: room.displayDesc })
+                    		worker.postMessage({ type: "updatePlayers", players: clients.length, name: room.displayName, desc: room.displayDesc })
                             /*if (this.spawnCount > 0 && this.name != undefined && trimName(name) !== this.name) {
                                 this.error("spawn", "Unknown protocol error!");
                                 return;
@@ -12779,7 +12779,7 @@ function flatten(data, out, playerContext = null) {
         }, 1000);*/
 
         if (room.maxBots > 0) setTimeout(() => util.log(`Spawned ${room.maxBots} AI bot${room.maxBots > 1 ? "s." : "."}`), 350);
-        worker.postMessage({ type: "updatePlayers", players: players.length, name: room.displayName, desc: room.displayDesc })
+        worker.postMessage({ type: "updatePlayers", players: clients.length, name: room.displayName, desc: room.displayDesc })
         worker.postMessage({ type: "serverStarted" })
     })();
 }
