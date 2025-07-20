@@ -1736,194 +1736,215 @@ let drawEntity = function () {
 			assignedContext = arguments.length > 8 && arguments[8] !== undefined ? arguments[8] : 0,
 			turretInfo = arguments.length > 9 && arguments[9] !== undefined ? arguments[9] : 0,
 			render = arguments.length > 10 && arguments[10] !== undefined ? arguments[10] : instance.render,
-			context = assignedContext || ctx,
-			fade = turretInfo ? 1 : render.status.getFade(instance.size),
-			drawSize = scale * ratio * (turretInfo ? instance.size : render.size),
-			m = mockups.get(instance.index),
-			xx = x,
-			yy = y,
-			source = turretInfo === 0 ? instance : turretInfo,
-			shadowRelativeColor = false;
+			source = turretInfo === 0 ? instance : turretInfo;
+
+		// Preserve original main context globalAlpha.
+		const originalCtxGlobalAlpha = ctx.globalAlpha;
+
 		if (config.hideMiniRenders === true && !render.real) return;
+
+		let fade = turretInfo ? 1 : render.status.getFade(instance.size);
 		if (fade === 0 || alpha === 0) return;
-		if (config.lerpSize) drawSize = drawSize*fade;
-		ctx.globalAlpha = (config.glassMode ? .7 : 1);
-        if (alpha !== 1 && turretInfo === 0) {
-            context = ctx2;
-            context.canvas.width = Math.max(context.canvas.height = drawSize * m.position.axis + ratio * 7.5 * instance.size, 1); //20,100
-            xx = context.canvas.width / 2 - drawSize * 2 * m.position.axis * m.position.middle.x * Math.cos(rot) / 4;
-            yy = context.canvas.height / 2 - drawSize * 2 * m.position.axis * m.position.middle.x * Math.sin(rot) / 4;
-        }
-		context.lineCap = "round";
-		context.lineJoin = config.pointy ? "miter" : "round";
-		if (render.real) switch (config.shaders) {
-			case "Disabled":
-				context.shadowBlur = false;
-				context.shadowColor = false;
-				context.shadowOffsetX = 0;
-				context.shadowOffsetY = 0;
-				break;
-			case "Light Blur":
-				context.shadowBlur = 14;
-				context.shadowColor = "#ebf5f0";
-				context.shadowOffsetX = 0;
-				context.shadowOffsetY = 0;
-				break;
-			case "Dark Blur":
-				context.shadowBlur = 14;
-				context.shadowColor = "#101211";
-				context.shadowOffsetX = 0;
-				context.shadowOffsetY = 0;
-				break;
-			case "Colorful Blur":
-				context.shadowBlur = 18;
-				shadowRelativeColor = true;
-				context.shadowOffsetX = 0;
-				context.shadowOffsetY = 0;
-				break;
-			case "Light":
-				context.shadowBlur = 0;
-				context.shadowColor = "#ebf5f0";
-				context.shadowOffsetX = 8;
-				context.shadowOffsetY = 8;
-				break;
-			case "Dark":
-				context.shadowBlur = 0;
-				context.shadowColor = "#101211";
-				context.shadowOffsetX = 8;
-				context.shadowOffsetY = 8;
-				break;
-			case "Light Stroke":
-				context.shadowBlur = 0;
-				context.shadowColor = "#ebf5f0";
-				context.shadowOffsetX = 8;
-				context.shadowOffsetY = 8;
-				break;
-			case "Dark Stroke":
-				context.shadowBlur = 0;
-				context.shadowColor = "#101211";
-				context.shadowOffsetX = 8;
-				context.shadowOffsetY = 8;
-				break;
-			case "Colorful Dense":
-				context.shadowBlur = 10;
-				shadowRelativeColor = true;
-				context.shadowOffsetX = 0;
-				context.shadowOffsetY = 0;
-				break;
-			case "Dynamic Fake 3D":
-				context.shadowBlur = 0;
-				shadowRelativeColor = true;
-				context.shadowOffsetX = Math.max(-4, Math.min(4, x * 0.012));
-				context.shadowOffsetY = Math.max(-4, Math.min(4, y * 0.012));
-				//context.shadowOffsetX = context.shadowOffsetX > 0 ? Math.min(context.shadowOffsetX, 4) : Math.max(context.shadowOffsetX, -4);
-				//context.shadowOffsetY = context.shadowOffsetY > 0 ? Math.min(context.shadowOffsetY, 4) : Math.max(context.shadowOffsetY, -4);
-				//context.shadowOffsetX *= 1;
-				//context.shadowOffsetY *= 1;
-				break;
-			case "Fake 3D":
-				context.shadowBlur = 0;
-				shadowRelativeColor = true;
-				context.shadowOffsetX = 4;
-				context.shadowOffsetY = 4;
-				break;
-		};
-		source.guns?.update?.()
+
+		let drawSize = scale * ratio * (turretInfo ? instance.size : render.size);
+		if (config.lerpSize) drawSize = drawSize * fade;
+
+		// Get mockup data.
+		const m = mockups.get(instance.index);
+
+		let currentContext = assignedContext || ctx;
+		// Coordinates relative to currentContext.
+		let tankDrawX = x;
+		let tankDrawY = y;
+
+		const useOffscreenCanvas = (alpha < 1 && turretInfo === 0);
+		if (useOffscreenCanvas) {
+			currentContext = ctx2;
+
+			// Dynamically size offscreen canvas.
+			currentContext.canvas.width = Math.max(currentContext.canvas.height = drawSize * m.position.axis + ratio * 7.5 * instance.size, 1);
+
+			// Recalculate tank center for offscreen canvas.
+			tankDrawX = currentContext.canvas.width / 2 - drawSize * 2 * m.position.axis * m.position.middle.x * Math.cos(rot) / 4;
+			tankDrawY = currentContext.canvas.height / 2 - drawSize * 2 * m.position.axis * m.position.middle.x * Math.sin(rot) / 4;
+
+			currentContext.clearRect(0, 0, currentContext.canvas.width, currentContext.canvas.height);
+			// Save offscreen canvas state.
+			currentContext.save();
+			// Draw opaque on offscreen canvas.
+			currentContext.globalAlpha = 1;
+		} else {
+			// Apply globalAlpha for main context drawing.
+			currentContext.globalAlpha = (config.glassMode ? .7 : 1);
+		}
+
+		// Apply common canvas settings.
+		currentContext.lineCap = "round";
+		currentContext.lineJoin = config.pointy ? "miter" : "round";
+
+		// Apply shader settings.
+		let shadowRelativeColor = false;
+		if (render.real) {
+			switch (config.shaders) {
+				case "Disabled":
+					currentContext.shadowBlur = 0;
+					currentContext.shadowColor = "rgba(0,0,0,0)";
+					currentContext.shadowOffsetX = 0;
+					currentContext.shadowOffsetY = 0;
+					break;
+				case "Light Blur":
+					currentContext.shadowBlur = 14;
+					currentContext.shadowColor = "#ebf5f0";
+					currentContext.shadowOffsetX = 0;
+					currentContext.shadowOffsetY = 0;
+					break;
+				case "Dark Blur":
+					currentContext.shadowBlur = 14;
+					currentContext.shadowColor = "#101211";
+					currentContext.shadowOffsetX = 0;
+					currentContext.shadowOffsetY = 0;
+					break;
+				case "Colorful Blur":
+					currentContext.shadowBlur = 18;
+					shadowRelativeColor = true;
+					currentContext.shadowOffsetX = 0;
+					currentContext.shadowOffsetY = 0;
+					break;
+				case "Light":
+					currentContext.shadowBlur = 0;
+					currentContext.shadowColor = "#ebf5f0";
+					currentContext.shadowOffsetX = 8;
+					currentContext.shadowOffsetY = 8;
+					break;
+				case "Dark":
+					currentContext.shadowBlur = 0;
+					currentContext.shadowColor = "#101211";
+					currentContext.shadowOffsetX = 8;
+					currentContext.shadowOffsetY = 8;
+					break;
+				case "Light Stroke":
+					currentContext.shadowBlur = 0;
+					currentContext.shadowColor = "#ebf5f0";
+					currentContext.shadowOffsetX = 8;
+					currentContext.shadowOffsetY = 8;
+					break;
+				case "Dark Stroke":
+					currentContext.shadowBlur = 0;
+					currentContext.shadowColor = "#101211";
+					currentContext.shadowOffsetX = 8;
+					currentContext.shadowOffsetY = 8;
+					break;
+				case "Colorful Dense":
+					currentContext.shadowBlur = 10;
+					shadowRelativeColor = true;
+					currentContext.shadowOffsetX = 0;
+					currentContext.shadowOffsetY = 0;
+					break;
+				case "Dynamic Fake 3D":
+					currentContext.shadowBlur = 0;
+					shadowRelativeColor = true;
+					currentContext.shadowOffsetX = Math.max(-4, Math.min(4, x * 0.012));
+					currentContext.shadowOffsetY = Math.max(-4, Math.min(4, y * 0.012));
+					break;
+				case "Fake 3D":
+					currentContext.shadowBlur = 0;
+					shadowRelativeColor = true;
+					currentContext.shadowOffsetX = 4;
+					currentContext.shadowOffsetY = 4;
+					break;
+			}
+		}
+
+		source.guns?.update?.();
+
 		let renderColor = render.status.getColor();
 		let renderBlend = render.status.getBlend();
 		let finalColor = mixColors(getColor(instance.color), renderColor, renderBlend);
-		if(fade > 0) {
-			finalColor = mixColors(finalColor, color.dgrey, 1-fade);
+		if (fade > 0) {
+			finalColor = mixColors(finalColor, color.dgrey, 1 - fade);
 		}
 		let invulnTicker = instance.invuln && (Date.now() - instance.invuln) % 200 > 110;
 		if (invulnTicker) finalColor = mixColors(finalColor, color.vlgrey, .5);
-		if(fade > 0) rot += (((90*Math.PI)/180)*(1-fade))*Math.sign(rot)
-		context.lineWidth = ratio * config.borderChunk * fade
-		if (scale < 1) { // big/messy mini-render fix
-			context.lineWidth *= scale
+
+		let adjustedRot = rot;
+		if (fade > 0) adjustedRot += (((90 * Math.PI) / 180) * (1 - fade)) * Math.sign(rot);
+
+		currentContext.lineWidth = ratio * config.borderChunk * fade;
+		if (scale < 1) {
+			currentContext.lineWidth *= scale;
 		}
 
-		// PROP RENDEIRNG - LAYER -2
+		// --- PROP RENDERING - LAYER -2 ---
 		if (m.props.length) {
 			for (let i = 0; i < m.props.length; i++) {
-				let origM = JSON.parse(JSON.stringify(m))
 				let p = m.props[i];
 				let pColor = getColor(p.color == -1 ? instance.color : p.color);
 				if (invulnTicker) pColor = mixColors(pColor, color.vlgrey, .5);
-				setColors(context, pColor);
-
+				setColors(currentContext, pColor);
 				handleAnimation({
 					id: instance.id,
-					context: context,
+					context: currentContext,
 					propColor: pColor,
 					propIndex: i,
 					props: m.props
 				});
-				if (p.layer === -2) drawProp(context, p, pColor, rot, xx, yy, drawSize, m, source);
-				m = origM
+				if (p.layer === -2) drawProp(currentContext, p, pColor, adjustedRot, tankDrawX, tankDrawY, drawSize, m, source);
 			}
 		}
 
-		// TURRET RENDERING - LAYER 0
-		if (m.isLoading || source.turrets.length === m.turrets.length) {
+		// --- TURRET RENDERING - LAYER 0 ---
+		if (source.turrets.length === m.turrets.length) {
 			for (let i = 0; i < m.turrets.length; i++) {
 				if (!source.turrets[i]) continue;
 				let t = m.turrets[i];
 				if (t.layer === 0) {
-					let ang = t.direction + t.angle + rot,
+					let ang = t.direction + t.angle + adjustedRot,
 						len = t.offset * drawSize;
 					source.turrets[i].lerpedFacing = lerpAngle(source.turrets[i].lerpedFacing || source.turrets[i].facing, source.turrets[i].facing, .15);
-					drawEntity(xx + len * Math.cos(ang), yy + len * Math.sin(ang), t, ratio, alpha, (drawSize / ratio / t.size * t.sizeFactor), (source?.turrets?.[i]?.lerpedFacing || 0) + turretsObeyRot * rot, turretsObeyRot, context, source.turrets[i], render);
+					drawEntity(tankDrawX + len * Math.cos(ang), tankDrawY + len * Math.sin(ang), t, ratio, alpha, (drawSize / ratio / t.size * t.sizeFactor), (source?.turrets?.[i]?.lerpedFacing || 0) + turretsObeyRot * adjustedRot, turretsObeyRot, currentContext, source.turrets[i], render);
 				}
 			}
-		} else throw new Error(`Mismatch turret number! Expected: ${m.turrets.length} Reality: ${source.turrets.length}`);
+		}
 
-		// PROP RENDERING - LAYER -1
+		// --- PROP RENDERING - LAYER -1 ---
 		if (m.props.length) {
 			for (let i = 0; i < m.props.length; i++) {
-				let origM = JSON.parse(JSON.stringify(m))
 				let p = m.props[i];
 				let pColor = getColor(p.color == -1 ? instance.color : p.color);
 				if (invulnTicker) pColor = mixColors(pColor, color.vlgrey, .5);
-				setColors(context, pColor);
+				setColors(currentContext, pColor);
 				handleAnimation({
 					id: instance.id,
-					context: context,
+					context: currentContext,
 					propColor: pColor,
 					propIndex: i,
 					props: m.props
 				});
-				if (p.layer === -1) drawProp(context, p, pColor, rot, xx, yy, drawSize, m, source);
-				m = origM
+				if (p.layer === -1) drawProp(currentContext, p, pColor, adjustedRot, tankDrawX, tankDrawY, drawSize, m, source);
 			}
 		}
 
-		// GUN RENDERING
-		if (m.isLoading || source.guns.length === m.guns.length) {
+		// --- GUN RENDERING ---
+		if (source.guns.length === m.guns.length) {
 			let positions = source.guns.getPositions();
-			context.lineJoin = config.pointy ? "miter" : "round";
 			for (let i = 0; i < m.guns.length; i++) {
 				let g = m.guns[i];
 
-				// Pre-calculate default values and common terms
 				const gunAngle = g.angle || 0;
-				const gunAspect = (g.aspect == null ? 1 : g.aspect); // Or g.aspect ?? 1 in modern JS
-				const gunBaseColor = (g.color == null ? 16 : g.color); // Or g.color ?? 16
+				const gunAspect = (g.aspect == null ? 1 : g.aspect);
+				const gunBaseColor = (g.color == null ? 16 : g.color);
 
-				const anglePlusRot = gunAngle + rot;
+				const anglePlusRot = gunAngle + adjustedRot;
 				const cosAnglePlusRot = Math.cos(anglePlusRot);
 				const sinAnglePlusRot = Math.sin(anglePlusRot);
 
-				const directionPlusAnglePlusRot = g.direction + anglePlusRot; // Or g.direction + gunAngle + rot
+				const directionPlusAnglePlusRot = g.direction + anglePlusRot;
 				const cosDirPlusAnglePlusRot = Math.cos(directionPlusAnglePlusRot);
 				const sinDirPlusAnglePlusRot = Math.sin(directionPlusAnglePlusRot);
 
-				// Calculate position
-				// The divisor is 2 if aspect is 1, otherwise 1.
 				const positionDivisor = (gunAspect === 1) ? 2 : 1;
 				const position = positions[i] / positionDivisor;
 
-				// Calculate gx, gy
 				const offsetX = g.offset * cosDirPlusAnglePlusRot;
 				const offsetY = g.offset * sinDirPlusAnglePlusRot;
 				const lengthTerm = g.length / 2 - position;
@@ -1931,167 +1952,151 @@ let drawEntity = function () {
 				const gx = offsetX + lengthTerm * cosAnglePlusRot;
 				const gy = offsetY + lengthTerm * sinAnglePlusRot;
 
-				// Handle color
 				let gColor = mixColors(getColor(gunBaseColor), renderColor, renderBlend);
 				if (invulnTicker) {
 					gColor = mixColors(gColor, color.vlgrey, .5);
 				}
 
 				switch (g.color_unmix) {
-					case 1:
-						setColorsUnmix(context, gColor);
-						break;
-					case 2:
-						setColorsUnmixB(context, gColor);
-						break;
+					case 1: setColorsUnmix(currentContext, gColor); break;
+					case 2: setColorsUnmixB(currentContext, gColor); break;
 					case 0:
-					case null: // Explicitly handling null if it's different from undefined for g.color_unmix
-						setColors(context, gColor);
-						break;
+					case null: setColors(currentContext, gColor); break;
 				}
 
 				handleAnimation({
 					id: instance.id,
-					context: context,
+					context: currentContext,
 					gunColor: gColor,
 					gunIndex: i,
-					guns: m.guns // Consider if only m.guns[i] (i.e., g) is needed by handleAnimation
+					guns: m.guns
 				});
 
 				const gunDrawLength = ((g.length / 2) * 1000 | 0) / 1000;
 				const gunDrawWidth = ((g.width / 2) * 1000 | 0) / 1000;
-				//const pivotX = xx + drawSize * offsetX * cosAnglePlusRot;
-				//const pivotY = yy + drawSize * offsetY * sinAnglePlusRot;
 
-				const key = `${g.length}|${g.width}|${gunAspect}|${g.skin}`
-				let path = gunCache.get(key)
+				const key = `${gunDrawLength}|${gunDrawWidth}|${gunAspect}|${g.skin}`;
+				let path = gunCache.get(key);
 				if (path === undefined) {
-					path = new Path2D()
-					makeGunPath(
-						path,
-						gunDrawLength, // Simplified from: drawSize * (g.length / 2 - ((gunAspect === 1) ? 0 : 0))
-						gunDrawWidth,
-						gunAspect,
-						g.skin || 0
-					);
-					path.closePath()
-					gunCache.set(key, path)
+					path = new Path2D();
+					makeGunPath(path, gunDrawLength, gunDrawWidth, gunAspect, g.skin || 0);
+					path.closePath();
+					gunCache.set(key, path);
 				}
-				context.save()
-				context.translate(xx + drawSize * gx, yy + drawSize * gy);
-				context.rotate(anglePlusRot);
-				context.scale(drawSize, drawSize)
-				context.lineWidth /= drawSize;
-				context.stroke(path);
-				context.lineWidth *= drawSize;
-				context.fill(path);
-				context.restore()
+				currentContext.save();
+				currentContext.translate(tankDrawX + drawSize * gx, tankDrawY + drawSize * gy);
+				currentContext.rotate(anglePlusRot);
+				currentContext.scale(drawSize, drawSize);
+				currentContext.lineWidth /= drawSize;
+				currentContext.stroke(path);
+				currentContext.lineWidth *= drawSize;
+				currentContext.fill(path);
+				currentContext.restore();
 			}
-		} else {
-			console.warn("Mismatching gun numbers:", m.guns, source.guns, m, source); // Added a more descriptive message
-			throw new Error(`Mismatch gun number! Expected: ${m.guns.length} Reality: ${source.guns.length}`);
 		}
 
-		// PROP RENDERING - LAYER 0
+		// --- PROP RENDERING - LAYER 0 ---
 		if (m.props.length) {
 			for (let i = 0; i < m.props.length; i++) {
-				let origM = JSON.parse(JSON.stringify(m))
 				let p = m.props[i];
 				let pColor = mixColors(getColor(p.color == -1 ? instance.color : p.color), renderColor, renderBlend);
 				if (invulnTicker) pColor = mixColors(pColor, color.vlgrey, .5);
-				setColors(context, pColor);
+				setColors(currentContext, pColor);
 				handleAnimation({
 					id: instance.id,
-					context: context,
+					context: currentContext,
 					propColor: pColor,
 					propIndex: i,
 					props: m.props
 				});
-				if (p.layer === 0) drawProp(context, p, pColor, rot, xx, yy, drawSize, m, source);
-				m = origM
+				if (p.layer === 0) drawProp(currentContext, p, pColor, adjustedRot, tankDrawX, tankDrawY, drawSize, m, source);
 			}
 		}
 
-		// BODY RENDERING
-		setColors(context, finalColor);
-		if (shadowRelativeColor) context.shadowColor = context.strokeStyle;
+		// --- BODY RENDERING ---
+		setColors(currentContext, finalColor);
+		if (shadowRelativeColor) currentContext.shadowColor = currentContext.strokeStyle;
 		if (instance.color >= 1000) {
-			ctx.save()
-			ctx.beginPath();
-			drawPoly(context, xx, yy, drawSize / m.size * m.realSize, m.shape, source.widthHeightRatio, ratio, scale, rot, undefined, false);
-			ctx.clip();
-			specialColors[instance.color](ctx, instance)
-			ctx.restore()
+			currentContext.save();
+			currentContext.beginPath();
+			drawPoly(currentContext, tankDrawX, tankDrawY, drawSize / m.size * m.realSize, m.shape, source.widthHeightRatio, ratio, scale, adjustedRot, undefined, false);
+			currentContext.clip();
+			specialColors[instance.color](currentContext, instance);
+			currentContext.restore();
 		} else {
-			drawPoly(context, xx, yy, drawSize / m.size * m.realSize, m.shape, source.widthHeightRatio, ratio, scale, rot);
+			drawPoly(currentContext, tankDrawX, tankDrawY, drawSize / m.size * m.realSize, m.shape, source.widthHeightRatio, ratio, scale, adjustedRot);
 		}
 
-		// PROP RENDERING - LAYER 1
+		// --- PROP RENDERING - LAYER 1 ---
 		if (m.props.length) {
 			for (let i = 0; i < m.props.length; i++) {
-				let origM = JSON.parse(JSON.stringify(m))
 				let p = m.props[i];
 				let pColor = mixColors(getColor(p.color == -1 ? instance.color : p.color), renderColor, renderBlend);
 				if (invulnTicker) pColor = mixColors(pColor, color.vlgrey, .5);
-				setColors(context, pColor);
+				setColors(currentContext, pColor);
 				handleAnimation({
 					id: instance.id,
-					context: context,
+					context: currentContext,
 					propColor: pColor,
 					propIndex: i,
 					props: m.props
 				});
-				if (p.layer === 1) drawProp(context, p, pColor, rot, xx, yy, drawSize, m, source);
-				m = origM
+				if (p.layer === 1) drawProp(currentContext, p, pColor, adjustedRot, tankDrawX, tankDrawY, drawSize, m, source);
 			}
 		}
 
-		// TURRET RENDERING - LAYER 1
-		if (m.isLoading || source.turrets.length === m.turrets.length) {
+		// --- TURRET RENDERING - LAYER 1 ---
+		if (source.turrets.length === m.turrets.length) {
 			for (let i = 0; i < m.turrets.length; i++) {
 				let t = m.turrets[i];
 				if (t.layer === 1) {
-					let ang = t.direction + t.angle + rot,
+					let ang = t.direction + t.angle + adjustedRot,
 						len = t.offset * drawSize;
 					if (source.turrets[i]) source.turrets[i].lerpedFacing = lerpAngle(source.turrets[i].lerpedFacing || source.turrets[i].facing, source.turrets[i].facing, .15);
-					drawEntity(xx + len * Math.cos(ang), yy + len * Math.sin(ang), t, ratio, alpha, drawSize / ratio / t.size * t.sizeFactor, (source?.turrets[i]?.lerpedFacing || 0) + turretsObeyRot * rot, turretsObeyRot, context, source.turrets[i], render);
+					drawEntity(tankDrawX + len * Math.cos(ang), tankDrawY + len * Math.sin(ang), t, ratio, alpha, drawSize / ratio / t.size * t.sizeFactor, (source?.turrets[i]?.lerpedFacing || 0) + turretsObeyRot * adjustedRot, turretsObeyRot, currentContext, source.turrets[i], render);
 				}
 			}
-		} else throw new Error(`Mismatch turret number! Expected: ${m.turrets.length} Reality: ${source.turrets.length}`);
+		}
 
-		// PROP RENDERING - LAYER 2
+		// --- PROP RENDERING - LAYER 2 ---
 		if (m.props.length) {
 			for (let i = 0; i < m.props.length; i++) {
-				let origM = JSON.parse(JSON.stringify(m))
 				let p = m.props[i];
 				let pColor = mixColors(getColor(p.color == -1 ? instance.color : p.color), renderColor, renderBlend);
 				if (invulnTicker) pColor = mixColors(pColor, color.vlgrey, .5);
-				setColors(context, pColor);
+				setColors(currentContext, pColor);
 				handleAnimation({
 					id: instance.id,
-					context: context,
+					context: currentContext,
 					propColor: pColor,
 					propIndex: i,
 					props: m.props
 				});
-				if (p.layer === 2) drawProp(context, p, pColor, rot, xx, yy, drawSize, m, source);
-				m = origM
+				if (p.layer === 2) drawProp(currentContext, p, pColor, adjustedRot, tankDrawX, tankDrawY, drawSize, m, source);
 			}
 		}
-		ctx.globalAlpha = 1
-		if (context !== ctx && turretInfo === 0) {
-            if (context.canvas.width && context.canvas.height) {
-                ctx.save();
-                ctx.globalAlpha = alpha * fade;
-                ctx.drawImage(context.canvas, x - xx, y - yy);
-                ctx.restore();
-            }
-        }
-		if (gunCache.size > 4000) {
-			console.log("[LOG] Cleared client gunCache")
-			gunCache.clear()
+
+		if (useOffscreenCanvas) {
+			// Restore offscreen canvas state.
+			currentContext.restore();
+
+			if (currentContext.canvas.width > 0 && currentContext.canvas.height > 0) {
+				ctx.save();
+				// Apply tank transparency.
+				ctx.globalAlpha = alpha * fade;
+				// Draw offscreen content to main context.
+				ctx.drawImage(currentContext.canvas, Math.round(x - tankDrawX), Math.round(y - tankDrawY));
+				ctx.restore();
+			}
 		}
-		// Path2d cache doesnt need a clear; theres a set amount
+
+		// Restore original globalAlpha.
+		ctx.globalAlpha = originalCtxGlobalAlpha;
+
+		// Clear gun cache if size exceeds limit.
+		if (gunCache.size > 4000) {
+			gunCache.clear();
+		}
 	};
 }();
 
