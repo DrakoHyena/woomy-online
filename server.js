@@ -8194,7 +8194,7 @@ function flatten(data, out, playerContext = null) {
         let finalTwiggle = data.twiggle;
         let finalColor = data.color ?? 0;
 
-        if (playerContext) {
+        if (playerContext && playerContext.body) {
             // Perspective #1: Autospin
             // If the viewing player has autospin on, the twiggle flag is forced true.
             if (playerContext.command.autospin) {
@@ -8203,8 +8203,8 @@ function flatten(data, out, playerContext = null) {
             
             // Perspective #2: FFA Color Override
             // In FFA, if a player's body color is 'FFA_RED', they see their own bullets as their team color.
-            if (playerContext.gameMode === "ffa" && playerContext.body.color === "FFA_RED" && data.masterId === playerContext.body.id) {
-                finalColor = playerContext.teamColor ?? 0;
+            if (playerContext.gameMode === "ffa" && data.color === "FFA_RED" && playerContext.body.color === "FFA_RED" && data.masterId === playerContext.body.id) {
+				finalColor = playerContext.teamColor ?? 0;
             }
         }
         // --- End of Perspective Logic ---
