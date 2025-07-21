@@ -1555,6 +1555,13 @@ const Chain = Chainf;
         	}
 		}else{
 			res = fs.readFileSync(configUrl)
+			if (configSuffix.includes(".json")) {
+        	    gamemodeConfig = JSON.parse(res)
+       		} else if (configSuffix.includes(".js")) {
+        	    gamemodeConfig = eval(res)
+        	} else {
+        	    console.error("Invalid gamemode file type " + configSuffix)
+        	}
 		}
         if (gamemodeConfig.selectable === false) {
             worker.postMessage({ type: "serverStartText", text: "This gamemode is not selectable", tip: "Only modded versions of the game can start a Modded server. Please select a different mode." })
