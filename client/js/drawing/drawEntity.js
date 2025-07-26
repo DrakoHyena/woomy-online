@@ -17,7 +17,14 @@ let drawEntity = function () {
 		let angle = arguments.length > 8 && arguments[8] !== undefined ? arguments[8] : 0,
 			fill = arguments.length > 9 && arguments[9] !== undefined ? arguments[9] : 1;
 		if (sides === -4000) return 0;
-		if (typeof sides === "object") {
+		if (sides instanceof ImageBitmap){
+			context.save();
+			context.translate(centerX, centerY);
+			context.rotate(angle);
+			context.drawImage(sides, -radius * sides.p1, -radius * sides.p2, radius * sides.p3, radius * sides.p4);
+			context.restore();
+			return;
+		} else if (typeof sides === "object") {
 			if (!sides[2]) { // svg
 				let radiusDiv = sides[1] || 1
 				let path = new Path2D(sides[0])

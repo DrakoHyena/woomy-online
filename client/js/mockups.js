@@ -1,3 +1,4 @@
+import { ASSET_MAGIC, loadAsset } from "../../shared/assets.js";
 import { socket } from "./socket.js";
 
 let mockups = {
@@ -69,6 +70,9 @@ let mockups = {
 	},
 	applyDefaults: (data) => {
 		function cleanUpDefaults(rawMockup) {
+			if(rawMockup.shape._assetMagic === ASSET_MAGIC){
+				rawMockup.shape = loadAsset(ASSET_MAGIC, rawMockup.shape.id)
+			}
 			if (typeof rawMockup.shape === 'string') {
 				try {
 					// Store the Path2D object directly
@@ -79,6 +83,10 @@ let mockups = {
 					rawMockup.shape = 0; // Default to circle or another safe shape
 				}
 			}
+			// Recursively process guns and their shapes
+			for(let i = 0; i < rawMockup.guns.length; i++){
+				rawMockup.guns[i].color = rawMockup.guns[i]._assetMagic?loadAsset(rawMockup.guns[i].color._assetMagic, rawMockup.guns[i].color.id):rawMockup.guns[i].color
+			}
 			// Recursively process turrets and their shapes
 			if (rawMockup.turrets) {
 				rawMockup.turrets = rawMockup.turrets.map(cleanUpDefaults);
@@ -86,6 +94,9 @@ let mockups = {
 			// Process prop shapes if they are strings
 			if (rawMockup.props) {
 				rawMockup.props = rawMockup.props.map(p => {
+					if (p.shape._assetMagic === ASSET_MAGIC){
+						p.shape = loadAsset(ASSET_MAGIC, p.shape.id)
+					}
 					if (typeof p.shape === 'string') {
 						try {
 							p.shape = new Path2D(p.shape);

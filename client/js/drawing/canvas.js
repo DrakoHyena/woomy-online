@@ -243,6 +243,7 @@ global._canvas = new (class Canvas {
 					chatBox = document.createElement("input");
 					chatBox.type = "text";
 					chatBox.id = "chatBox";
+					chatBox.setAttribute("autocomplete", "off")
 					chatBox.classList.add("chatBox");
 					chatBox.placeholder = global.mobile ? "Press send to send" : "Press enter to send";
 					chatBox.maxLength = 50;

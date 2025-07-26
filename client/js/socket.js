@@ -9,6 +9,7 @@ import { Smoothbar } from "./util.js";
 import { multiplayer } from "./multiplayer.js";
 import { fasttalk } from "./fasttalk.js";
 import { lerp } from "./lerp.js";
+import { ASSET_MAGIC, loadAsset, setAsset } from "../../shared/assets.js";
 import "./consoleCommands.js"
 
 let socket;
@@ -41,6 +42,12 @@ const convert = {
 				logger.norm(convert.reader.crawlData);
 				throw new Error("Trying to crawl past the end of the provided data!");
 			} else return convert.reader.crawlData[convert.reader.index++];
+		},
+		current: function(){
+			if (convert.reader.index >= convert.reader.crawlData.length) {
+				logger.norm(convert.reader.crawlData);
+				throw new Error("Trying to crawl past the end of the provided data!");
+			} else return convert.reader.crawlData[convert.reader.index-1];
 		},
 		take: amount => {
 			convert.reader.index += amount;
@@ -171,7 +178,7 @@ const process = function () {
 				entity.facing = convert.reader.next();
 				entity.twiggle = (flags & 1);
 				entity.layer = (flags & 2) ? convert.reader.next() : 0;
-				entity.color = convert.reader.next();
+				entity.color = convert.reader.next()._assetMagic === ASSET_MAGIC?loadAsset(ASSET_MAGIC, convert.reader.current().id):convert.reader.current();
 				entity.team = convert.reader.next();
 				if (isNew) {
 					entity.health = (flags & 4) ? (convert.reader.next() / 255) : 1;
@@ -494,7 +501,7 @@ let socketInit = function () {
 			socket.send(message);
 			global._bandwidth._outbound += 1;
 		};
-		socket.onmessage = function (message, parent) {
+		socket.onmessage = async function (message, parent) {
 			global._bandwidth._inbound += 1;
 			let m = fasttalk.decode(message);
 			if (m === -1) throw new Error("Malformed packet!");
@@ -591,6 +598,26 @@ let socketInit = function () {
 						color: m[1] || color.black
 					});
 				}
+					break;
+				case "as":
+					if(window.loadedAssets===undefined)window.loadedAssets = 0;
+					window.loadingTextTooltip = `(${window.loadedAssets}/${m[0]})`
+					if(m[0] !== 0){
+						await setAsset(m[1], m[2], 
+							{
+								path2d:m[3],
+								image:m[4],
+								p1:m[5],
+								p2:m[6],
+								p3:m[7],
+								p4:m[8]
+							})
+						window.loadedAssets++;
+						window.loadingTextTooltip = `(${window.loadedAssets}/${m[0]})`
+					}
+					if(window.loadedAssets === m[0]){
+						window.assetLoadingPromise()
+					}
 					break;
 				case "cs": {
 					let arr = global.chatMessages.get(m[1])

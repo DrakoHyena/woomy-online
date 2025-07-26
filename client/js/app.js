@@ -128,12 +128,17 @@ async function _startGame(gamemodeCode, joinRoomId) {
     if (window.creatingRoom === true) { // Create game
         window.loadingTextStatus = "Downloading server..."
         window.loadingTextTooltip = ""
-        window.serverWorker = new Worker("./server.js");
+        window.serverWorker = new Worker("./server/server.js", {type:"module"});
+		window.serverWorker.onerror = function(err){
+			window.loadingTextStatus = "Failed to start server"
+			window.loadingTextTooltip = "Please reload the page and try again" 
+		}
         window.loadingTextStatus = "Starting server..."
         window.loadingTextTooltip = ""
         console.log("Starting server...")
         await multiplayer.startServerWorker(gamemodeCode)
         console.log("...Server started!")
+		window.serverWorker.onerror = undefined;
         await multiplayer.wrmHost()
         joinRoomId = await multiplayer.getHostRoomId();
         document.getElementById("entityEditor").style.display = "block" // enable editor for host
@@ -141,6 +146,12 @@ async function _startGame(gamemodeCode, joinRoomId) {
     window.loadingTextStatus = "Joining server..."
     window.loadingTextTooltip = ""
     await makeSocket(joinRoomId)
+	window.loadingTextStatus = "Loading assets..."
+	window.loadingTextTooltip = "(0/0)"
+	await new Promise((res, rej)=>{
+		window.assetLoadingPromise = res;
+		socket.talk("as");
+	})
     window.loadingTextStatus = "Loading room..."
     window.loadingTextTooltip = ""
     console.log(socket)
