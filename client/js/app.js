@@ -186,8 +186,9 @@ function _animloop() {
             if (global._gameStart && !global._disconnected) {
                 global.time = Date.now(); //getNow();
                 if (global.time - lastPing > 1000) {
-                    socket.ping();
                     lastPing = global.time;
+                    socket.ping();
+					doingPing = true;
                     metrics._rendertime = renderTimes;
                     renderTimes = 0;
                     metrics._updatetime = updateTimes;

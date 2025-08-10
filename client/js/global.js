@@ -504,6 +504,7 @@ window.getRatio = function () {
 };
 window.upgradeSpin = 0,
 	window.lastPing = 0,
+	window.doingPing = false,
 	window.lastServerStat = 0,
 	window.renderTimes = 0,
 	window.updateTimes = 0;

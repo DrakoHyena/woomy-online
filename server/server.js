@@ -7261,15 +7261,15 @@ const Chain = Chainf;
                 this.velocity.y += this.accel.y*room.lagComp;
                 this.accel.null();
                 this.stepRemaining = c.ARENA_TYPE === 1 ? 1.5 : 1;
-                this.x += (this.stepRemaining * this.velocity.x / room.speed)*room.lagComp;
-                this.y += (this.stepRemaining * this.velocity.y / room.speed)*room.lagComp;
+                this.x += (this.stepRemaining * this.velocity.x / room.speed);
+                this.y += (this.stepRemaining * this.velocity.y / room.speed) ;
             }
             friction() {
-                let motion = this.velocity.length,
-                    excess = (motion - this.maxSpeed) * (c.ARENA_TYPE === 1 ? 1.05 : 1);
+                let motion = this.velocity.length*room.lagComp,
+                    excess = (motion - (this.maxSpeed)) * (c.ARENA_TYPE === 1 ? 1.05 : 1);
                 if (excess > 0 && this.damp) {
-                    let drag = excess / ((this.damp / room.speed + 1)*room.lagComp),
-                        finalvelocity = this.maxSpeed + drag;
+                    let drag = excess / ((this.damp) / room.speed + 1),
+                        finalvelocity = (this.maxSpeed) + drag;
                     this.velocity.x = finalvelocity * this.velocity.x / motion;
                     this.velocity.y = finalvelocity * this.velocity.y / motion;
                 }
@@ -11332,8 +11332,8 @@ function flatten(data, out, playerContext = null) {
                     entitiesLiveLoop(entities[i]);
                 }*/
                 room.lastCycle = util.time();
-                room.mspt = performance.now() - start;
-				room.lagComp = Math.max(1, room.mspt/room.cycleSpeed)
+                room.mspt = (performance.now() - start);
+				room.lagComp = Math.min(5, Math.max(1, room.mspt/room.cycleSpeed))
                 const border = 2150
                 if (c.serverName.includes("Boss Rush") && c.ISSIEGE) {
                     entities.forEach(entity => {

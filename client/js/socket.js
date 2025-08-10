@@ -688,6 +688,7 @@ let socketInit = function () {
 					console.log("Closed socket via packet")
 					break;
 				case "p": {
+					doingPing = false;
 					metrics._latency = global.time - lastPing;
 					if (metrics._latency > 999) rewardManager.unlockAchievement("laaaaaag");
 				}
@@ -800,6 +801,7 @@ let socketInit = function () {
 			socket.talk("k", config.CLIENT_PROTOCOL_VERSION, document.getElementById("tokenInput").value || "", 0, "its local", false);
 			logger.info("Token submitted to the server for validation.");
 			socket.ping = function () {
+				if(window.doingPing === true) return;
 				socket.talk("p");
 			};
 			logger.info("Socket open.");
