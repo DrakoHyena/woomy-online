@@ -1493,7 +1493,7 @@ const Chain = Chainf;
             ],
             "X_GRID": 18,
             "Y_GRID": 18,
-            "DAMAGE_CONSTANT": 0.75,
+            "DAMAGE_CONSTANT": 1,
             "KNOCKBACK_CONSTANT": 1.8,
             "BORDER_FORCE": 0.025,
             "OUTSIDE_ROOM_DAMAGE": 0,
@@ -10312,7 +10312,22 @@ function flatten(data, out, playerContext = null) {
             }
         })();
         global.sockets = sockets
-
+        const maxResistBuff = 2
+        const minResistBuff = 0.5
+        function speedToDamageFunction(value = 0, center = 15/*basic bullet velocity =20*/, minCap = 0.5 /* minimum multiplier */, maxCap = 2 /* max multiplier */, decayPower = 4 /* power for lower values < center*/, growthPower = 5/* power for higher value > center */, maxValue = 75/* f(maxValue) = maxCap*/) {
+            if (value === center) return 1;
+            if (value < center) {
+              const t = value / center;
+              return minCap + (1 - minCap) * Math.pow(t, decayPower);
+            } else {
+              const t = (value - center) / (maxValue - center);
+              return Math.min(1 + (maxCap - 1) * (1 - Math.pow(1 - t, growthPower)), maxCap);
+            }
+          }
+        function getSpeed(entity) {
+            if (!entity.velocity.x || !entity.velocity.y) {return 0};
+            return Math.sqrt(entity.velocity.x**2 + entity.velocity.y**2)
+        }
         const gameLoop = (() => {
             const collide = (() => {
                 if (c.NEW_COLLISIONS) {
@@ -10370,11 +10385,11 @@ function flatten(data, out, playerContext = null) {
 
                             if (!Number.isFinite(speedFactor.instance)) speedFactor.instance = 1;
                             if (!Number.isFinite(speedFactor.other)) speedFactor.other = 1;
-
+                            let speedDmgMultiplier = speedToDamageFunction(Math.abs(getSpeed(instance) - getSpeed(other)))
                             let resistDiff = instance.health.resist - other.health.resist,
                                 damage = {
-                                    instance: c.DAMAGE_CONSTANT * instance.damage * (1 + resistDiff) * (1 + other.heteroMultiplier * (instance.settings.damageClass === other.settings.damageClass)) * ((instance.settings.buffVsFood && other.settings.damageType === 1) ? 3 : 1) * instance.damageMultiplier() * Math.min(2, Math.max(speedFactor.instance, 1) * speedFactor.instance),
-                                    other: c.DAMAGE_CONSTANT * other.damage * (1 - resistDiff) * (1 + instance.heteroMultiplier * (instance.settings.damageClass === other.settings.damageClass)) * ((other.settings.buffVsFood && instance.settings.damageType === 1) ? 3 : 1) * other.damageMultiplier() * Math.min(2, Math.max(speedFactor.other, 1) * speedFactor.other)
+                                    instance: c.DAMAGE_CONSTANT * instance.damage * Math.max(minResistBuff, Math.min(maxResistBuff,(1 + resistDiff))) * (1 + other.heteroMultiplier * (instance.settings.damageClass === other.settings.damageClass)) * ((instance.settings.buffVsFood && other.settings.damageType === 1) ? 3 : 1) * instance.damageMultiplier() * Math.min(2, Math.max(speedFactor.instance, 1) * speedFactor.instance) * speedDmgMultiplier,
+                                    other: c.DAMAGE_CONSTANT * other.damage * Math.max(minResistBuff, Math.min(maxResistBuff,(1 - resistDiff))) * (1 + instance.heteroMultiplier * (instance.settings.damageClass === other.settings.damageClass)) * ((other.settings.buffVsFood && instance.settings.damageType === 1) ? 3 : 1) * other.damageMultiplier() * Math.min(2, Math.max(speedFactor.other, 1) * speedFactor.other) * speedDmgMultiplier
                                 };
                             if (instance.settings.ratioEffects) damage.instance *= Math.min(1, Math.pow(Math.max(instance.health.ratio, instance.shield.ratio), 1 / instance.penetration));
                             if (other.settings.ratioEffects) damage.other *= Math.min(1, Math.pow(Math.max(other.health.ratio, other.shield.ratio), 1 / other.penetration));
@@ -10663,11 +10678,11 @@ function flatten(data, out, playerContext = null) {
                                 };
                                 if (!Number.isFinite(speedFactor._me)) speedFactor._me = 1;
                                 if (!Number.isFinite(speedFactor._n)) speedFactor._n = 1;
-
+                                let speedDmgMultiplier = speedToDamageFunction(Math.abs(getSpeed(my) - getSpeed(n)))
                                 let resistDiff = my.health.resist - n.health.resist,
                                     damage = {
-                                        _me: c.DAMAGE_CONSTANT * my.damage * (1 + resistDiff) * (1 + n.heteroMultiplier * (my.settings.damageClass === n.settings.damageClass)) * ((my.settings.buffVsFood && n.settings.damageType === 1) ? 3 : 1) * my.damageMultiplier(), //Math.min(2, 1),
-                                        _n: c.DAMAGE_CONSTANT * n.damage * (1 - resistDiff) * (1 + my.heteroMultiplier * (my.settings.damageClass === n.settings.damageClass)) * ((n.settings.buffVsFood && my.settings.damageType === 1) ? 3 : 1) * n.damageMultiplier() //Math.min(2, 1)
+                                        _me: c.DAMAGE_CONSTANT * my.damage * Math.max(minResistBuff, Math.min(maxResistBuff,(1 + resistDiff))) * (1 + n.heteroMultiplier * (my.settings.damageClass === n.settings.damageClass)) * ((my.settings.buffVsFood && n.settings.damageType === 1) ? 3 : 1) * my.damageMultiplier() * speedDmgMultiplier, //Math.min(2, 1),
+                                        _n: c.DAMAGE_CONSTANT * n.damage * Math.max(minResistBuff, Math.min(maxResistBuff,(1 - resistDiff))) * (1 + my.heteroMultiplier * (my.settings.damageClass === n.settings.damageClass)) * ((n.settings.buffVsFood && my.settings.damageType === 1) ? 3 : 1) * n.damageMultiplier() * speedDmgMultiplier //Math.min(2, 1)
                                     };
 
                                 if (!my.settings.speedNoEffect) {
@@ -10700,8 +10715,8 @@ function flatten(data, out, playerContext = null) {
                                 stuff = n.health.getDamage(damageToApply._me, false);
                                 deathFactor._n = stuff > n.health.amount ? n.health.amount / stuff : 1;
                                 let finalDmg = {
-                                    my: damage._n * deathFactor._n,
-                                    n: damage._me * deathFactor._me
+                                    my: damage._n * deathFactor._n * 2,//multiplier
+                                    n: damage._me * deathFactor._me * 2
                                 };
                                 if (n.hitsOwnTeam) {
                                     finalDmg.my *= -1;
@@ -10759,8 +10774,8 @@ function flatten(data, out, playerContext = null) {
                                         y: impulse * dir.y
                                     },
                                     modifiers = {
-                                        _me: c.KNOCKBACK_CONSTANT * my.pushability / my.mass * deathFactor._n * .6,
-                                        _n: c.KNOCKBACK_CONSTANT * n.pushability / n.mass * deathFactor._me * .6
+                                        _me: c.KNOCKBACK_CONSTANT * my.pushability / my.mass * deathFactor._n,
+                                        _n: c.KNOCKBACK_CONSTANT * n.pushability / n.mass * deathFactor._me
                                     };
                                 my.accel.x += modifiers._me * force.x;
                                 my.accel.y += modifiers._me * force.y;
