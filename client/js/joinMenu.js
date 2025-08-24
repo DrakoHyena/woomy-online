@@ -156,6 +156,13 @@ listFilter.onclick = roomFilterClick.bind("gallery");
 
 const defaultGamemodes = [
 	{
+		name: "1 v 1",
+		image: "/resources/gamemodes/1v1.webp",
+		description: "Duel random players in a mostly private arena.",
+		players: 0,
+		code: "1v1.js"
+	},
+	{
 		name: "2 TDM",
 		image: "/resources/gamemodes/2tdm.webp",
 		description: "Fight in an all out war against another team!",
@@ -518,7 +525,7 @@ joinSearch.oninput = async function () {
 		hostFilter.click();
 		clearRooms();
 		showGamemodes();
-		gamemodeEles[6].click() // Host default gamemode: 4tdm
+		gamemodeEles[7].click() // Host default gamemode: 4tdm
 	}
 })();
 

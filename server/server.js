@@ -1,4 +1,7 @@
 import { assets, ASSET_MAGIC } from "../shared/assets.js";
+import { oneVsOne } from "./modes/oneVsOne.js";
+
+const modeFuncs = {oneVsOne}
 
 // COMPAT //
 const worker = typeof parentPort==="undefined"?self:parentPort
@@ -1439,6 +1442,7 @@ const Chain = Chainf;
             "HEIGHT": 6500,
             "connectionLimit": 999,
             "MODE": "ffa",
+			"modes": [],
             "serverName": "Free For All",
             "TEAM_AMOUNT": 2,
             "RANDOM_COLORS": false,
@@ -2824,6 +2828,7 @@ const Chain = Chainf;
             for (let i = 0; i < 8; i++) {
                 let o = new Entity(positions[i]);
                 o.define(ran.choose(closers));
+				o.roomLayerless = true;
                 o.team = -100;
                 o.alwaysActive = true;
                 //o.facing += ran.randomRange(.5 * Math.PI, Math.PI); // Does nothing
@@ -5462,7 +5467,6 @@ const Chain = Chainf;
                     x: this.body.x + this.body.size * gx - (this.length*s.x) * lerpComp,
                     y: this.body.y + this.body.size * gy - (this.length*s.y) * lerpComp
                 }, this.master.master);
-                o.roomId = this.body.roomId;
                 o.velocity = s;
                 o.initialBulletSpeed = speed;
                 this.bulletInit(o);
@@ -5656,7 +5660,7 @@ const Chain = Chainf;
             height: room.height
         }, 16, 16, 0);//new hshg.HSHG();*/
 
-        const dirtyCheck = (p, r) => entitiesToAvoid.some(e => Math.abs(p.x - e.x) < r + e.size && Math.abs(p.y - e.y) < r + e.size);
+        const dirtyCheck = (p, r, layer=0) => entitiesToAvoid.some(e => (e.roomLayerless || e.roomLayer === layer) && Math.abs(p.x - e.x) < r + e.size && Math.abs(p.y - e.y) < r + e.size);
 
         /*const purgeEntities = () => entities = entities.filter(e => {
             if (e.isGhost) {
@@ -5770,7 +5774,8 @@ const Chain = Chainf;
                 this.master = master;
                 this.source = this;
                 this.parent = this;
-                this.roomId = master.roomId;
+                this.roomLayer = master.roomLayer||0;
+				this.roomLayerless = master.roomLayerless||false;
                 this.control = {
                     target: new Vector(position.x + (1000*Math.random()-500), position.y + (1000*Math.random()-500)),
                     goal: new Vector(0, 0),
@@ -6475,7 +6480,6 @@ const Chain = Chainf;
                         this.turrets = [];
                         for (let def of set.TURRETS) {
                             let o = new Entity(this, this.master);
-                            o.roomId === this.roomId;
                             if (Array.isArray(def.TYPE)) {
                                 for (let type of def.TYPE) o.define(type);
                             } else o.define(def.TYPE);
@@ -8790,11 +8794,6 @@ function flatten(data, out, playerContext = null) {
                                 util.info("A socket was verified with the token: " + key);
                             }
                         } break;
-                        case "j": { // Rejoin queue
-                            if (this.roomId === "ready") {
-                                this.roomId = null;
-                            }
-                        } break;
                         case "s": {// Spawn request
                             if (!this.status.deceased) {
                                 this.error("spawn", "Trying to spawn while already alive", true);
@@ -9405,6 +9404,8 @@ function flatten(data, out, playerContext = null) {
 												o.define(Class[body.keyFEntity[0]]);
 											}
 											if (body.keyFEntity[2]) o.define({ SIZE: body.keyFEntity[2] });
+											o.roomLayer = body.roomLayer
+											o.roomLayerless = body.roomLayerless
 											setTimeout(() => {
 												o.velocity.null();
 												o.accel.null();
@@ -9492,6 +9493,7 @@ function flatten(data, out, playerContext = null) {
                                 } break;
                                 case 9: { // Kill what your mouse is over
                                     entities.forEach(o => {
+										if(!body.roomLayerless && !o.roomLayerless && o.roomLayer !== body.roomLayer) return;
                                         if (o !== body && util.getDistance(o, {
                                             x: player.target.x + body.x,
                                             y: player.target.y + body.y
@@ -9517,6 +9519,7 @@ function flatten(data, out, playerContext = null) {
                                         let ty = player.body.y + player.target.y;
                                         let pickedUp = [];
                                         entities.forEach(e => {
+											if(!body.roomLayerless && !e.roomLayerless && e.roomLayer !== body.roomLayer) return;
                                             if (!(e.type === "mazeWall" && e.shape === 4) && (e.x - tx) * (e.x - tx) + (e.y - ty) * (e.y - ty) < e.size * e.size * 1.5) {
                                                 pickedUp.push({ e, dx: e.x - tx, dy: e.y - ty });
                                             }
@@ -9667,6 +9670,8 @@ function flatten(data, out, playerContext = null) {
                                     o.color = m[5] === "default" ? o.color : m[5];
                                     o.SIZE = m[6] === "default" ? o.SIZE : m[6];
                                     o.skill.score = m[7] === "default" ? o.skill.score : m[7];
+									o.roomLayer = body.roomLayer
+									o.roomLayerless = body.roomLayerless
                                     if (o.type === "food") o.ACCELERATION = .015 / (o.size * 0.2);
                                 } break;
                                 case 8: { // Change maxChildren value
@@ -9764,6 +9769,10 @@ function flatten(data, out, playerContext = null) {
                                     body.controllers = [];
                                     this.talk("Z", "[INFO] Removed all controllers from you!");
                                 } break;
+								case 23: // Layer shift
+									if(typeof m[1] === "number") body.roomLayer = m[1]
+									body.roomLayerless = !!m[2]
+								break;
                                 default:
                                     this.error("beta-tester console", `Unknown beta-command value (${m[1]})`, true);
                                     return 1;
@@ -9976,9 +9985,6 @@ function flatten(data, out, playerContext = null) {
                     }
                     this.rememberedTeam = player.team;
                     let body = new Entity(loc);
-                    if (c.RANKED_BATTLE) {
-                        body.roomId = this.roomId;
-                    }
                     body.protect();
 
                     switch (c.serverName) {
@@ -10420,8 +10426,8 @@ function flatten(data, out, playerContext = null) {
                             // Inactive should be ignored
                             !instance.isActive || !other.isActive ||
                             // Multi-Room mechanics
-                            (c.RANKED_BATTLE && instance.roomId !== other.roomId) ||
                             (c.SANDBOX && instance.sandboxId !== other.sandboxId) ||
+							(!instance.roomLayerless && !other.roomLayerless && instance.roomLayer !== other.roomLayer) ||
                             // Forced no collision
                             instance.settings.hitsOwnType === "forcedNever" || other.settings.hitsOwnType === "forcedNever" ||
                             // Same master collisions
@@ -11107,8 +11113,8 @@ function flatten(data, out, playerContext = null) {
                         // Inactive should be ignored
                         !instance.isActive || !other.isActive ||
                         // Multi-Room mechanics
-                        (c.RANKED_BATTLE && instance.roomId !== other.roomId) ||
                         (c.SANDBOX && instance.sandboxId !== other.sandboxId) ||
+						(!instance.roomLayerless && !other.roomLayerless && instance.roomLayer !== other.roomLayer) ||
                         // Forced no collision
                         instance.settings.hitsOwnType === "forcedNever" || other.settings.hitsOwnType === "forcedNever" ||
                         // Same master collisions
@@ -11346,6 +11352,11 @@ function flatten(data, out, playerContext = null) {
                 for (let i = 0, l = entities.length; i < l; i++) {
                     entitiesLiveLoop(entities[i]);
                 }*/
+
+				for (let mode of c.modes){
+					modeFuncs[mode].runTick({entities: entities, sockets: sockets})
+				}
+
                 room.lastCycle = util.time();
                 room.mspt = (performance.now() - start);
 				room.lagComp = Math.min(5, Math.max(1, room.mspt/room.cycleSpeed))
@@ -11370,6 +11381,7 @@ function flatten(data, out, playerContext = null) {
                         y: room.height / 2
                     });
                     o.define(Class.moon);
+					o.roomLayerless = true;
                     o.settings.hitsOwnType = "never";
                     o.team = -101;
                     o.protect();
@@ -11389,6 +11401,7 @@ function flatten(data, out, playerContext = null) {
                     } while (dirtyCheck(position, 10 + type.SIZE));
                     let o = new Entity(position);
                     o.define(type);
+					o.roomLayerless = true
                     o.team = -101;
                     o.facing = ran.randomAngle();
                     o.protect();
@@ -11735,6 +11748,7 @@ function flatten(data, out, playerContext = null) {
                             y: (y + realSize * height) + cellSize * posMulti
                         });
                         o.define(Class.mazeObstacle);
+						o.roomLayerless = true;
                         o.SIZE = realSize
                         o.width = width + 0.05
                         o.height = height + 0.05
@@ -11770,6 +11784,7 @@ function flatten(data, out, playerContext = null) {
                         while (dirtyCheck(spot, 500) && max-- > 0);
                         let o = new Entity(spot);
                         o.define(ran.choose(bois));
+						o.roomLayerless = true;
                         o.team = -100;
                         o.name = names[i++];
                     };
@@ -12074,6 +12089,7 @@ function flatten(data, out, playerContext = null) {
 
                     let o = new Entity(spot);
                     o.define(Class[sanc]);
+					o.roomLayerless = true;
                     o.team = -100;
                     o.facing = ran.randomAngle()
                     let ogOnDead = o.onDead
@@ -12151,6 +12167,7 @@ function flatten(data, out, playerContext = null) {
                     for (let i = 0; i < times; i++) {
                         let o = new Entity(spot);
                         o.define(Class[crasher], ran.chance(c.SHINY_CHANCE) ? { isShiny: true } : {});
+						o.roomLayerless = true;
                         o.team = -100;
                         o.damage *= 1 / 2;
                         if (!o.dangerValue) {
@@ -12246,8 +12263,15 @@ function flatten(data, out, playerContext = null) {
                     voidwalkers()
                 }
 
+				for(let mode of c.modes){
+					modeFuncs[mode].initNpcs({Entity: Entity})
+				}
+
                 return () => {
                     if (!room.arenaClosed && !room.modelMode && !c.RANKED_BATTLE) {
+						for(let mode of c.modes){
+							modeFuncs[mode].runNpcs()
+						}
                         if (c.SANDBOX) {
                             for (let i = 0; i < global.sandboxRooms.length; i++) {
                                 let room = global.sandboxRooms[i];
@@ -12518,6 +12542,7 @@ function flatten(data, out, playerContext = null) {
                     }
                     let o = new Entity(location);
                     o.define(Class[type], ran.chance(c.SHINY_CHANCE) ? { isShiny: true } : {});
+					o.roomLayerless = true;
                     o.ACCELERATION = .015 / (o.size * 0.2);
                     o.facing = ran.randomAngle();
                     o.team = -100;
@@ -12720,7 +12745,7 @@ function flatten(data, out, playerContext = null) {
                         !entity.isAlive() ||
                         !entity.settings.drawShape ||
                         (c.SANDBOX && entity.sandboxId !== socket.sandboxId) ||
-                        (c.RANKED_BATTLE && entity.roomId !== socket.roomId) ||
+						(!body.roomLayerless && !entity.roomLayerless && body.roomLayer !== entity.roomLayer) ||
                         (body && !body.seeInvisible && entity.alpha < 0.1) ||
 						(body && entity.id === body.id) // exclude player, see above
                         // Note: The grid query already handled the main distance check.

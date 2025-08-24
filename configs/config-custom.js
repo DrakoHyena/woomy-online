@@ -126,5 +126,6 @@ let map = {
         "BLACKOUT": false,
         //"GAMEMODE_JS": "", // DOES WORK, Changing this will enable the void walkers code. See server.js to add your own.
         //"KILL_SCORE_FORMULA": "Math.min(x, 2_500_000) * 7 / 8" // DOES WORK, optional, taken from growth
+		"modes": [/*"oneVsOne"*/], // New prefered way to do gamemode effects, array of identifiers
 }
 map

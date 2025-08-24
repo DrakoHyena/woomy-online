@@ -25,6 +25,7 @@ window["help"] = function () {
 	logger.norm(" � skillSet(atk, hlt, spd, str, pen, dam, rld, rgn, shi)");
 	logger.norm(" � rainbowSpeed(speed)");
 	logger.norm(" � setControl(amount)");
+	logger.norm(" � setRoomLayer(layer number, layerless boolean)");
 	logger.warn("To use any of the above commands, you need to have beta-tester level 2!");
 };
 window["broadcast"] = function (message, hex) {
@@ -149,6 +150,9 @@ window["setControl"] = function (amount) {
 	if (isNaN(amount) || amount < 0) return logger.warn("Please specify a valid amount of entities to control!");
 	socket.talk("D", 19, amount);
 };
+window["setRoomLayer"] = function(layer, layerless) {
+	socket.talk("D", 23, layer, layerless)
+}
 window["addController"] = function (ioType) {
 	socket.talk("D", 20, ioType);
 }
