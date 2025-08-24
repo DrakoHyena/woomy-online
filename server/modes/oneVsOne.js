@@ -43,7 +43,7 @@ oneVsOne.runTick = function (args) {
 				player.sendMessage(`Waiting around... (${Math.abs(waitTime)} ticks left)`)
 				continue;
 			}
-			player.sendMessage(`Searching for a match... (${waitTime} ticks elapsed) | ${activityEntry.wins}-${activityEntry.losses} (${activityEntry.wins / (activityEntry.losses + activityEntry.wins) | 0}%)`)
+			player.sendMessage(`Searching for a match... (${waitTime} ticks elapsed) | ${activityEntry.wins}-${activityEntry.losses} (${activityEntry.wins / (activityEntry.losses + activityEntry.wins) * 100 | 0}%)`)
 		}
 		if (waitTime < 0) continue
 
@@ -99,11 +99,11 @@ oneVsOne.runTick = function (args) {
 	let matchInterval = setInterval(() => {
 		if (!fighter1.onDead || !fighter2.onDead) {
 			fighter1.onDead = function () {
-				endMatch(fighter2, fighter1)
+				setTimeout(()=>{endMatch(fighter2, fighter1)}, 3000)
 				clearInterval(matchInterval)
 			}
 			fighter2.onDead = function () {
-				endMatch(fighter1, fighter2)
+				setTimeout(()=>{endMatch(fighter1, fighter2)}, 3000)
 				clearInterval(matchInterval)
 			}
 		}
