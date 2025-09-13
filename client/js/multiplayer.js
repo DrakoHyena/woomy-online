@@ -3,7 +3,7 @@ import { PeerWrapper } from "./peer.js";
 
 window.connectedToWRM = false
 
-const WRM = window.location.host==="localhost"?"localhost":"woomy.online"
+const WRM = window.location.host==="localhost"?"localhost":"woomy-2rbx.onrender.com"
 const wsUrl = window.location.protocol === "http:" ? "ws://" : "wss://"
 const httpUrl = window.location.protocol === "http:" ? "http://" : "https://"
 const WRM_WS = `${wsUrl}${WRM}`
