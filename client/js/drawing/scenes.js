@@ -1,7 +1,8 @@
 import { global } from "../global.js";
 import { ctx, drawBar, drawGUIPolygon, drawGuiCircle, drawGuiLine, drawGuiRect, drawGuiRoundRect, drawText, measureText, _clearScreen } from "./canvas.js"
 import { mockups, getEntityImageFromMockup } from "../mockups.js";
-import { color, mixColors } from "../colors.js"
+import { color } from "../colors.js"
+import { mixColors } from "../../shared/mix_colors.js";
 import { drawEntity } from "./drawEntity.js";
 import { socket } from "../socket.js";
 import { bounceyLerp, expLerp } from "../lerp.js";

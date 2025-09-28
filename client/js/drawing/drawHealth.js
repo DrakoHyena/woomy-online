@@ -5,7 +5,6 @@ import {
 	setColor,
 	themes,
 	specialColors,
-	mixColors,
 	getColor,
 	getColorDark,
 	getZoneColor,
@@ -14,6 +13,7 @@ import {
 	setColorsUnmixB,
 	hslToColor
 } from "../colors.js"
+import { mixColors } from "../../shared/mix_colors.js";
 import { util } from "../util.js";
 import { config } from "../config.js";
 import { global } from "../global.js";

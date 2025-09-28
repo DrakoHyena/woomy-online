@@ -3,7 +3,8 @@ import { util } from "./util.js"
 import { logger } from "./debug.js"
 import { config } from "./config.js";
 import { rewardManager } from "./achievements.js"
-import { color, mixColors } from "./colors.js";
+import { color } from "./colors.js";
+import { mixColors } from "../../shared/mix_colors.js";
 import { mockups } from "./mockups.js";
 import { Smoothbar } from "./util.js";
 import { multiplayer } from "./multiplayer.js";
@@ -219,7 +220,7 @@ const process = function () {
 						entity.leash = {x: 0, y: 0, points: []};
 						entity.leash.x = convert.reader.next()
 						entity.leash.y = convert.reader.next()
-						for(let i = 0; i < 11; i++){
+						for(let i = 0; i < 10; i++){
 							entity.leash.points.push(new RopePoint((entity.x+entity.leash.x)/2, (entity.y+entity.leash.y)/2))
 						}
 					}else{
@@ -803,15 +804,21 @@ let socketInit = function () {
 				}
 					break;
 				case "am":
-					let animationsSize = m[0];
-					for (let i = 1; i < animationsSize + 1; i++) {
-						let animId = m[i++],
-							animSize = m[i++];
-
-						_anims[animId] = [];
-						for (let j = 0; j < animSize; j++) {
-							_anims[animId].push(m[i++]);
-						}
+					_anims.clear();
+					for(let i = 0; i < m.length; i+=9){
+						const prev = _anims.get(m[i]);
+						const arr = prev || [];
+						if(!prev) _anims.set(m[i], arr)
+						arr.push({
+							index: m[i+1],
+							size: m[i+2],
+							x: m[i+3],
+							y: m[i+4],
+							angle: m[i+5],
+							layer: m[i+6],
+							shape: typeof m[i+7] === "string" ? JSON.parse(m[i+7]) : m[i+7], // needed for dot to dots
+							color: m[i+8]
+						})
 					}
 					break;
 				case "da":

@@ -1,7 +1,8 @@
 import { util, Smoothbar } from "../util.js";
 import { global } from "../global.js";
 import { ctx, drawBar, drawGUIPolygon, drawGuiCircle, drawGuiLine, drawGuiRect, drawGuiRoundRect, drawText, measureText, _clearScreen, getGradient } from "./canvas.js"
-import { color, mixColors, getColor, getZoneColor, hslToColor } from "../colors.js"
+import { color, getColor, getZoneColor, hslToColor } from "../colors.js"
+import { mixColors } from "../../shared/mix_colors.js";
 import { config } from "../config.js";
 import { lerp, lerpAngle } from "../lerp.js";
 import { drawEntity } from "./drawEntity.js";

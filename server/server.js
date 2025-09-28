@@ -2220,13 +2220,16 @@ const Chain = Chainf;
                         color: p.color,
                         shape: p.shape,
                         fill: p.fill,
+						stroke: p.stroke,
                         loop: p.loop,
                         isAura: p.isAura,
                         rpm: p.rpm,
-                        specific: p.specific,
                         dip: p.dip,
                         ring: p.ring,
-                        arclen: p.arclen
+                        arclen: p.arclen,
+						lockRot: p.lockRot,
+						scaleSize: p.scaleSize,
+						tankOrigin: p.tankOrigin
                     }))
                 };
 
@@ -4192,8 +4195,8 @@ const Chain = Chainf;
 				this.body.leash.x = this.body.source.x;
 				this.body.leash.y = this.body.source.y;
 				if(((this.body.source.x-this.body.x)**2+(this.body.source.y-this.body.y)**2)**.5 > this.body.leash.range){
-					this.body.velocity.x += (this.body.source.x - this.body.x)/this.body.leash.range
-					this.body.velocity.y += (this.body.source.y - this.body.y)/this.body.leash.range
+					this.body.velocity.x += (this.body.source.x - this.body.x)/(this.body.leash.range)
+					this.body.velocity.y += (this.body.source.y - this.body.y)/(this.body.leash.range)
 				}
 			}
 		}
@@ -5517,7 +5520,7 @@ const Chain = Chainf;
                 // Define size
                 o.SIZE = (this.body.size * this.width * this.settings.size * 0.5) * o.squiggle
                 // Define label
-                o.label = this.master.label + (this.label ? " " + this.label : "") + "" + o.label
+                o.label = this.master.label +  "'s " + (this.label ?  + this.label : "") + o.label
 
                 if (o.type === "food") {
                     o.ACCELERATION = .015 / (o.size * 0.2);
@@ -5622,14 +5625,18 @@ const Chain = Chainf;
                 this.layer = pos[4];
                 this.shape = info.SHAPE;
                 this.color = info.COLOR || -1;
-                this.fill = info.FILL == undefined ? true : false;
-                this.loop = info.LOOP == undefined ? true : false;
-                this.isAura = info.IS_AURA == undefined ? false : true;
+                this.fill = info.FILL != undefined ? info.FILL : true;
+				this.stroke = info.STROKE != undefined ? info.STROKE : true;
+                this.loop = info.LOOP != undefined ? info.LOOP : true;
+                this.isAura = info.IS_AURA != undefined ? info.IS_AURA : false;
                 this.ring = info.RING;
-                this.arclen = info.ARCLEN == undefined ? 1 : info.ARCLEN;
-                this.rpm = info.RPM;
-                this.specific = info.SPECIFIC == undefined ? 0 : info.SPECIFIC;
-                this.dip = info.DIP === undefined ? 1 : info.DIP;
+                this.arclen = info.ARCLEN != undefined ? info.ARCLEN : 1;
+                this.rpm = info.RPM != undefined ? info.RPM : false;
+                this.dip = info.DIP != undefined ? info.DIP : 1;
+				this.lockRot = info.LOCK_ROT != undefined ? info.LOCK_ROT : true;
+				this.scaleSize = info.SCALE_SIZE != undefined ? info.SCALE_SIZE : true;
+				this.tankOrigin = info.TANK_ORIGIN != undefined ? info.TANK_ORIGIN : true;
+				if(this.isAura === true) this.stroke = false;
             }
         }
         let bots = [],
@@ -6538,7 +6545,7 @@ const Chain = Chainf;
                         if (this.isArenaCloser) this.immuneToAbilities = true;
                     }
                     this.variables = set.VARIABLES ? JSON.parse(JSON.stringify(set.VARIABLES)) : {};
-                    this.animation = null
+					this.animations = [];
                     if (this.isShiny) {
                         this.color = -1
                         this.skill.score *= 3
@@ -8539,15 +8546,10 @@ function flatten(data, out, playerContext = null) {
                     clients.push(this);
                 }
                 animationsUpdate() {
-                    if (this.animationsToDo.size === 0) {
-                        return;
-                    }
-                    let packet = ["am", this.animationsToDo.size];
-                    this.animationsToDo.forEach((value, key) => {
-                        packet.push(key, value.length, ...value);
-                    });
-                    this.animationsToDo.clear();
-                    this.talk(...packet);
+					let arr = [];
+					this.animationsToDo.forEach((v)=>{arr.push(v.entityId, ...v)})
+					this.talk("am", ...arr);
+					this.animationsToDo.clear();
                 }
                 get readableID() {
                     return `Socket (${this.id}) [${this.name || "Unnamed Player"}]: `;
@@ -8949,7 +8951,9 @@ function flatten(data, out, playerContext = null) {
                                 this.error("Mockup Request", "Non-numeric value")
                                 return 1;
                             }
-                            this.talk("mu", m[0], JSON.stringify(mockups.getMockup(m[0])))
+							let mockup = mockups.getMockup(m[0])
+							if(typeof mockup !== "object") break;
+                            this.talk("mu", m[0], JSON.stringify(mockup))
                             break;
                         case "muEdit":
                             if (typeof m[0] !== "string") {
@@ -12762,9 +12766,13 @@ function flatten(data, out, playerContext = null) {
 					entity.deactivationTimer = 30;
 					entity.isActive = true;
                     
-                    if (entity.animation) {
-                        socket.animationsToDo.set(entity.id, entity.animation);
-                    }
+					for(let animation of entity.animations){
+						if(animation.active && socket.animationsToDo.has(`${entity.id}-${animation.index}`) === false){
+							const arr = animation.toArray();
+							arr.entityId = entity.id
+							socket.animationsToDo.set(`${entity.id}-${animation.index}`, arr)
+						}
+					}
 
 					// Apply necessary checks from the original logic:
                     if (

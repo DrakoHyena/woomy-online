@@ -4,8 +4,10 @@ import { setAsset } from "../shared/assets.js";
 // These can be used for any data
 // Suggest expanding this system in the discord
 
+// Use getAsset("assetName") for certain values in defs
+
 /*
-// For BODY
+// For BODY or PROP.SHAPE
 setAsset("arrowShape", "M16.153 19 21 12l-4.847-7H3l4.848 7L3 19h13.153Z", {path2d: true, path2dDiv: 12})
 
 // For BODY

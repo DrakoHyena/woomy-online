@@ -95,6 +95,9 @@ let mockups = {
 			// Process prop shapes if they are strings
 			if (rawMockup.props) {
 				rawMockup.props = rawMockup.props.map(p => {
+					if(p.color._assetMagic === ASSET_MAGIC){
+						p.color = loadAsset(ASSET_MAGIC, p.color.id)
+					}
 					if (p.shape._assetMagic === ASSET_MAGIC){
 						p.shape = loadAsset(ASSET_MAGIC, p.shape.id)
 					}

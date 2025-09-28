@@ -3,6 +3,7 @@ import { config } from "/js/config.js"
 import { lerp } from "/js/lerp.js"
 import { imageCache } from "./assets.js";
 import { util } from "./util.js";
+import { mixColors } from "../shared/mix_colors.js"
 
 let color = {
 	"teal": "#7ADBBC",
@@ -591,23 +592,6 @@ let themes = {
 		"teal": "#e43939", "lgreen": "#77ec6c", "orange": "#ed657a", "yellow": "#fdf380", "lavender": "#8c00ff", "pink": "#ff8bff", "vlgrey": "#f2f4fd", "lgrey": "#000000", "guiwhite": "#ffffff", "black": "#191919", "blue": "#3e67f4", "green": "#02cf05", "red": "#ca0020", "gold": "#fdef75", "purple": "#7a8bf4", "magenta": "#d952ff", "grey": "#4e4d50", "dgrey": "#353535", "white": "#646262", "guiblack": "#000000", "border": 0.5
 	}
 };
-
-const mixColorsCache = new Map()
-function mixColors(primary, secondary, amount) {
-	const key = `${primary}${secondary}${amount}`;
-	const saved = mixColorsCache.get(key)
-	if (saved !== undefined) return saved;
-	const pr = parseInt(primary.slice(1), 16);
-	const sr = parseInt(secondary.slice(1), 16);
-	const hex = `#${(
-		1 << 24
-		| Math.floor(lerp((pr >> 16) & 255, (sr >> 16) & 255, amount)) << 16
-		| Math.floor(lerp((pr >> 8) & 255, (sr >> 8) & 255, amount)) << 8
-		| Math.floor(lerp(pr & 255, sr & 255, amount))
-	).toString(16).slice(1)}`;
-	mixColorsCache.set(key, hex);
-	return hex;
-}
 
 const specialColors = {}
 function getColor(colorID) {
@@ -1383,7 +1367,6 @@ export {
 	setColor,
 	themes,
 	specialColors,
-	mixColors,
 	getColor,
 	getColorDark,
 	getZoneColor,

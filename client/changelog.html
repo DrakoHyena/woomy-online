@@ -1,9 +1,43 @@
 <div class="patchnoteSection">
-	<p class="patchnoteTitle">Woomy.. BACK ONLINE<span class="patchnoteTime">September 14th, 2025</span></p>
+	<p class="patchnoteTitle">Back Online<span class="patchnoteTime">September 14th, 2025</span></p>
 	<ul class="patchnoteBody">
 		<li>You will now get a message if you fail to connect to a room</li>
 		<li>You will now get a message when the host leaves the room</li>
+		<li>Significantly buffed Surge's EMP health, damage, and penatration</li>
+		<li>Decreased Surge's EMP charge up and cooldown</li>
+		<li>Bloodbath now gains half of its max health instead of its missing health when killing a tank during rampage</li>
+		<li>Bloodbath now gains 0.5 health everytime it deals damage during ramage</li>
+		<li>Bloodbath now moves 75% faster rather than an additive boost during rampage</li>
+		<li>Increased Treatment branch's healing capacity by ~33% and halved their healing rate</li>
+		<li>Fixed Bloodbath bug where your speed would be permanently slower than your normal speed if you upgraded your stats during rampage</li>
 		<li>Added a leash mechanic</li>
+		<li>Baller</li>
+		<ul>
+			<li>New branch</li>
+			<li>Ballin' fr style</li>
+			<li>Swing your balls around dealing damage to anyone they hit</li>
+			<li>Includes Trailwrecker, Rocket Ball, Thisle, and Ballsack</li>
+		</ul>
+		<li>Added a new branch, Baller, which branches off of Lancer</li>
+		<li>Changed featured tanks</li>
+		<li>Refined PROP system</li>
+		<ul>
+			<li>getAsset for prop shapes now supports Path2Ds (svgs)</li>
+			<li>Prop color now supports getAsset</li>
+			<li>Added STROKE parameter which dictates if the prop should have an outline or not. True by default.</li>
+			<li>Added SCALE_SIZE parameter which dictates if the prop should scale with player size. True by defalt.</li>
+			<li>Added LOCK_ROT parameter which dictates if the prop <b>shouldnt</b> copy the players rotation. True by default.</li>
+			<li>Added TANK_ORIGIN parameter which dictates if the prop should move with the players rotation. True by default.</li>
+			<li>Prop drawing has been redone so that parameters apply more generally rather than under specific cases (FILL, RPM, ANGLE, SIZE)</li>
+		</ul>
+		<li>Refined animation system</li>
+		<ul>
+			<li>Replaced Entity.animation with Entity.animations</li>
+			<li>Converted Bloodbath to the new animation system</li>
+			<li>Converted the Treatment branch to the new animation system</li>
+			<li>Redesigned Surge to work better with the new animation system</li>
+			<li>Modders, take a look at the above tanks for examples</li>
+		</ul>
 	</ul>
 </div>
 <div class="patchnoteSection">

@@ -1,7 +1,8 @@
 import { ctx, getGradient } from "./canvas.js";
 import { mockups } from "../mockups.js";
 import { config } from "../config.js";
-import { mixColors, getColor, color, setColors, setColorsUnmixB, setColorsUnmix, specialColors } from "../colors.js"
+import { getColor, color, setColors, setColorsUnmixB, setColorsUnmix, specialColors } from "../colors.js"
+import { mixColors } from "../../shared/mix_colors.js";
 import { lerpAngle, lerp, expLerp } from "../lerp.js"
 import { imageCache } from "../assets.js";
 import { global } from "../global.js";
@@ -1508,44 +1509,31 @@ let drawEntity = function () {
 		}
 	}
 
-	function handleAnimation(animInfo) {
-		if (_anims[animInfo.id] != undefined) {
-			switch (_anims[animInfo.id][0]) {
-				case 0: { // Surge
-					if (animInfo.gunIndex === undefined) return;
-					let surgeTimer = _anims[animInfo.id][1];
-					if (surgeTimer < 1 / 3) setColors(animInfo.context, mixColors(animInfo.gunColor, '#FFFF00', surgeTimer * 3));
-					else if (surgeTimer < 2 / 3) setColors(animInfo.context, mixColors('#FFFF00', '#FF7F00', surgeTimer * 3 - 1));
-					else if (surgeTimer <= 1) setColors(animInfo.context, mixColors('#FF7F00', '#FF0000', surgeTimer * 3 - 2));
-				} break;
-				case 1: { // Bloodbath
-					let startingAmount = _anims[animInfo.id][1];
-					let currentAmount = _anims[animInfo.id][2];
-					let timer = _anims[animInfo.id][3]
-					let alpha = currentAmount / startingAmount
-					if (animInfo.propIndex == 1 || animInfo.propIndex == 2) setColors(animInfo.context, mixColors(animInfo.propColor, '#FF0000', (alpha * timer)));
-					if (animInfo.propIndex == 3) animInfo.props[animInfo.propIndex].size = ((8 * alpha) + 0.5) * timer;
-				} break;
-				case 2: { // Treatment Branch
-					if (animInfo.propIndex === undefined) {
-						return
-					}
-					let alpha = _anims[animInfo.id][1]
-					setColors(animInfo.context, mixColors(animInfo.propColor, "#00c900", 1 * alpha))
-				} break;
-				default:
-					break;
+	function handleAnimations(id, props) {
+		let animations = _anims.get(id);
+		if (animations) {
+			// Props -> reference to global mockup.props -> deref with clone
+			props = structuredClone(props);
+			for(let animation of animations){
+				let prop = props[animation.index]
+				if(!prop) return props;
+				prop.shape = animation.shape;
+				prop.size = animation.size;
+				prop.x = animation.x;
+				prop.y = animation.y;
+				prop.angle = animation.angle;
+				prop.layer = animation.layer;
+				prop.color = animation.color;
 			}
 		}
+		return props
 	}
 
 	const drawProp = (() => {
-		function fixRot(xx, yy, p, rot, x, y) {
-			let angle = (p.rpm == null ? rot : 0) + p.angle;
-			let cos = Math.cos(angle), sin = Math.sin(angle);
+		function addPoints(xx, yy, x, y) {
 			return [
-				x * cos - y * sin + xx,
-				x * sin + y * cos + yy
+				x + xx,
+				y + yy
 			];
 		}
 
@@ -1557,21 +1545,21 @@ let drawEntity = function () {
 			];
 		}
 
-		function drawPropPoints(ctx, xx, yy, rot, drawSize, m, p, scale, angle, c1, c2) {
+		function drawPropPoints(ctx, xx, yy, drawSize, m, p, scale, angle, c1, c2) {
 			let point = pointInit(drawSize, m, p, scale, angle);
 			if (c2 !== undefined) {
 				ctx.bezierCurveTo(
-					...fixRot(xx, yy, p, rot, ...c1),
-					...fixRot(xx, yy, p, rot, ...c2),
-					...fixRot(xx, yy, p, rot, ...point)
+					...addPoints(xx, yy, ...c1),
+					...addPoints(xx, yy, ...c2),
+					...addPoints(xx, yy, ...point)
 				);
 			} else if (c1 !== undefined) {
 				ctx.quadraticCurveTo(
-					...fixRot(xx, yy, p, rot, ...pointInit(drawSize, m, p, ...c1)),
-					...fixRot(xx, yy, p, rot, ...point)
+					...addPoints(xx, yy, ...pointInit(drawSize, m, p, ...c1)),
+					...addPoints(xx, yy, ...point)
 				);
 			} else {
-				ctx.lineTo(...fixRot(xx, yy, p, rot, ...point));
+				ctx.lineTo(...addPoints(xx, yy, ...point));
 			}
 		}
 
@@ -1652,13 +1640,22 @@ let drawEntity = function () {
 		}
 
 		return function (ctx, p, pColor, rot, xx, yy, drawSize, m, source) {
+			ctx.save();
 			ctx.beginPath();
+			let path = p.shape instanceof Path2D ? p.shape : undefined;
 			let rpmAngle = (Date.now() * (p.rpm || 0) / 1000) % (2 * Math.PI);
+			let propRot = p.rpm === false ? p.angle : p.angle+rpmAngle;
+			let finalRot = p.lockRot === true ? propRot : rot+propRot
+			if(p.tankOrigin === true){
+				ctx.translate(xx, yy)
+				ctx.rotate(rot)
+				ctx.translate(-xx, -yy)
+			}
 
 			if (Array.isArray(p.shape)) {
 				for (let [x, y, cx1, cy1, cx2, cy2] of p.shape) {
-					drawPropPoints(ctx, xx, yy, rot, drawSize, m, p,
-						Math.hypot(x, y), Math.atan2(x, y) + rpmAngle,
+					drawPropPoints(ctx, xx, yy, drawSize, m, p,
+						Math.hypot(x, y), Math.atan2(x, y) + finalRot,
 						cx1 !== undefined ? [Math.hypot(cx1, cy1), Math.atan2(cx1, cy1)] : undefined,
 						cx2 !== undefined ? [Math.hypot(cx2, cy2), Math.atan2(cx2, cy2)] : undefined
 					);
@@ -1677,13 +1674,13 @@ let drawEntity = function () {
 				// Regular shape cases
 				if (p.shape > 0) { // Shape
 					for (let i = 0; i < p.shape; i++) {
-						drawPropPoints(ctx, xx, yy, rot, drawSize, m, p,
+						drawPropPoints(ctx, xx, yy, p.scaleSize===true?drawSize+p.size:p.size, m, p,
 							1,
-							2 * Math.PI / p.shape * i + Math.PI / p.shape + rpmAngle
+							i*(2*Math.PI / p.shape) + Math.PI/2 + finalRot
 						);
 					}
 				} else if (p.shape < 0) { // Quadratic curve shape (like traps)
-					let scale = drawSize / m.size * m.realSize * p.size;
+					let scale = p.scaleSize===true?drawSize / m.size * m.realSize * p.size : p.size;
 					let dip = p.dip - 6 / (p.shape * p.shape);
 
 					for (let i = 0; i < -p.shape + 1; i++) {
@@ -1691,30 +1688,24 @@ let drawEntity = function () {
 						let htheta = -(i + 0.5) / p.shape * 2 * Math.PI;
 
 						ctx.quadraticCurveTo(
-							...fixRot(p.x + xx, p.y + yy, p, rot,
-								scale * dip * Math.cos(htheta + rpmAngle),
-								scale * dip * Math.sin(htheta + rpmAngle)
+							...addPoints(p.x + xx, p.y + yy,
+								scale * dip * Math.cos(htheta + finalRot),
+								scale * dip * Math.sin(htheta + finalRot)
 							),
-							...fixRot(p.x + xx, p.y + yy, p, rot,
-								scale * Math.cos(theta + rpmAngle),
-								scale * Math.sin(theta + rpmAngle)
+							...addPoints(p.x + xx, p.y + yy,
+								scale * Math.cos(theta + finalRot),
+								scale * Math.sin(theta + finalRot)
 							)
 						);
 					}
-				} else { // Circle (and other special cases)
-					let r = drawSize / m.size * m.realSize * p.size;
+				} else {
+					let r = p.scaleSize===true?drawSize / m.size * m.realSize * p.size : p.size;
 					let arcStart = rpmAngle + p.angle;
 					let arcEnd = 2 * Math.PI * p.arclen + arcStart;
 
-					ctx.arc(p.x + xx, p.y + yy, r, arcStart, arcEnd, false);
-
-					// Ring
 					if (p.ring !== undefined) {
 						ctx.arc(p.x + xx, p.y + yy, r * p.ring, arcEnd, arcStart, true);
-					}
-
-					// Aura
-					if (p.isAura) {
+					} else if (p.isAura) {
 						let grad = getGradient(pColor)
 
 						let x = p.x + xx | 0;
@@ -1729,25 +1720,36 @@ let drawEntity = function () {
 						ctx.closePath()
 						ctx.fill()
 						ctx.restore()
+						ctx.restore()
 						return; 
+					} else { // circle
+						ctx.arc(p.x + xx, p.y + yy, r, arcStart, arcEnd, false);
 					}
 				}
+			} else if (path){		
+				let radius = (p.scaleSize === true ? drawSize + p.size : p.size) / path.path2dDiv
+				ctx.translate(xx, yy);
+				ctx.scale(radius, radius);
+				ctx.lineWidth /= radius;
+				ctx.rotate(finalRot);
 			}
 
-			if (p.loop) ctx.closePath();
-			if (!p.fill) ctx.lineWidth /= 2;
-			if (!p.isAura) ctx.stroke();
-			if (!p.fill) ctx.lineWidth *= 2;
-
-			if (p.color >= 1000) {
-				ctx.save();
-				ctx.clip();
-				specialColors[p.color](ctx, source);
-				ctx.restore();
-			} else if (p.fill) {
-				ctx.fill();
+			if(path){
+				if (p.stroke) ctx.stroke(path);
+				if (p.fill) ctx.fill(path);
+			}else{
+				if (p.loop) ctx.closePath();
+				if (p.stroke) ctx.stroke();
+				if (p.color >= 1000) {
+					ctx.save();
+					ctx.clip();
+					specialColors[p.color](ctx, source);
+					ctx.restore();
+				} else if (p.fill) {
+					ctx.fill();
+				}
 			}
-
+			ctx.restore();
 			ctx.lineJoin = "round";
 		};
 	})();
@@ -1775,6 +1777,7 @@ let drawEntity = function () {
 
 		// Get mockup data.
 		const m = mockups.get(instance.index);
+		let props = m.props
 
 		let currentContext = assignedContext || ctx;
 		// Coordinates relative to currentContext.
@@ -1943,20 +1946,16 @@ let drawEntity = function () {
 		}
 		
 
+		// --- PROP ANIMATIONS ---
+		props = handleAnimations(instance.id, props)
+
 		// --- PROP RENDERING - LAYER -2 ---
-		if (m.props.length) {
-			for (let i = 0; i < m.props.length; i++) {
-				let p = m.props[i];
+		if (props.length) {
+			for (let i = 0; i < props.length; i++) {
+				let p = props[i];
 				let pColor = getColor(p.color == -1 ? instance.color : p.color);
 				if (invulnTicker) pColor = mixColors(pColor, color.vlgrey, .5);
 				setColors(currentContext, pColor);
-				handleAnimation({
-					id: instance.id,
-					context: currentContext,
-					propColor: pColor,
-					propIndex: i,
-					props: m.props
-				});
 				if (p.layer === -2) drawProp(currentContext, p, pColor, adjustedRot, tankDrawX, tankDrawY, drawSize, m, source);
 			}
 		}
@@ -1976,19 +1975,12 @@ let drawEntity = function () {
 		}
 
 		// --- PROP RENDERING - LAYER -1 ---
-		if (m.props.length) {
-			for (let i = 0; i < m.props.length; i++) {
-				let p = m.props[i];
+		if (props.length) {
+			for (let i = 0; i < props.length; i++) {
+				let p = props[i];
 				let pColor = getColor(p.color == -1 ? instance.color : p.color);
 				if (invulnTicker) pColor = mixColors(pColor, color.vlgrey, .5);
 				setColors(currentContext, pColor);
-				handleAnimation({
-					id: instance.id,
-					context: currentContext,
-					propColor: pColor,
-					propIndex: i,
-					props: m.props
-				});
 				if (p.layer === -1) drawProp(currentContext, p, pColor, adjustedRot, tankDrawX, tankDrawY, drawSize, m, source);
 			}
 		}
@@ -2033,14 +2025,6 @@ let drawEntity = function () {
 					case null: setColors(currentContext, gColor); break;
 				}
 
-				handleAnimation({
-					id: instance.id,
-					context: currentContext,
-					gunColor: gColor,
-					gunIndex: i,
-					guns: m.guns
-				});
-
 				const gunDrawLength = ((g.length / 2) * 1000 | 0) / 1000;
 				const gunDrawWidth = ((g.width / 2) * 1000 | 0) / 1000;
 
@@ -2065,19 +2049,12 @@ let drawEntity = function () {
 		}
 
 		// --- PROP RENDERING - LAYER 0 ---
-		if (m.props.length) {
-			for (let i = 0; i < m.props.length; i++) {
-				let p = m.props[i];
+		if (props.length) {
+			for (let i = 0; i < props.length; i++) {
+				let p = props[i];
 				let pColor = mixColors(getColor(p.color == -1 ? instance.color : p.color), renderColor, renderBlend);
 				if (invulnTicker) pColor = mixColors(pColor, color.vlgrey, .5);
 				setColors(currentContext, pColor);
-				handleAnimation({
-					id: instance.id,
-					context: currentContext,
-					propColor: pColor,
-					propIndex: i,
-					props: m.props
-				});
 				if (p.layer === 0) drawProp(currentContext, p, pColor, adjustedRot, tankDrawX, tankDrawY, drawSize, m, source);
 			}
 		}
@@ -2097,19 +2074,12 @@ let drawEntity = function () {
 		}
 
 		// --- PROP RENDERING - LAYER 1 ---
-		if (m.props.length) {
-			for (let i = 0; i < m.props.length; i++) {
-				let p = m.props[i];
+		if (props.length) {
+			for (let i = 0; i < props.length; i++) {
+				let p = props[i];
 				let pColor = mixColors(getColor(p.color == -1 ? instance.color : p.color), renderColor, renderBlend);
 				if (invulnTicker) pColor = mixColors(pColor, color.vlgrey, .5);
 				setColors(currentContext, pColor);
-				handleAnimation({
-					id: instance.id,
-					context: currentContext,
-					propColor: pColor,
-					propIndex: i,
-					props: m.props
-				});
 				if (p.layer === 1) drawProp(currentContext, p, pColor, adjustedRot, tankDrawX, tankDrawY, drawSize, m, source);
 			}
 		}
@@ -2128,19 +2098,12 @@ let drawEntity = function () {
 		}
 
 		// --- PROP RENDERING - LAYER 2 ---
-		if (m.props.length) {
-			for (let i = 0; i < m.props.length; i++) {
-				let p = m.props[i];
+		if (props.length) {
+			for (let i = 0; i < props.length; i++) {
+				let p = props[i];
 				let pColor = mixColors(getColor(p.color == -1 ? instance.color : p.color), renderColor, renderBlend);
 				if (invulnTicker) pColor = mixColors(pColor, color.vlgrey, .5);
 				setColors(currentContext, pColor);
-				handleAnimation({
-					id: instance.id,
-					context: currentContext,
-					propColor: pColor,
-					propIndex: i,
-					props: m.props
-				});
 				if (p.layer === 2) drawProp(currentContext, p, pColor, adjustedRot, tankDrawX, tankDrawY, drawSize, m, source);
 			}
 		}

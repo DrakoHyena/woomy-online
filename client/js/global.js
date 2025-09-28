@@ -317,7 +317,7 @@ global.player = {
 	lsd: false
 }
 
-window._anims = []
+window._anims = new Map()
 window._gui = {
 	_getStatNames: function (num) {
 		switch (num) {
