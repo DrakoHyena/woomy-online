@@ -217,15 +217,23 @@ const process = function () {
 				entity.widthHeightRatio = [(flags & 256) ? convert.reader.next() : 1, (flags & 512) ? convert.reader.next() : 1];
 				if(flags & 1024){
 					if(!entity.leash){
-						entity.leash = {x: 0, y: 0, points: []};
+						entity.leash = {x: 0, y: 0, points: [], fadeOverride: 1};
 						entity.leash.x = convert.reader.next()
 						entity.leash.y = convert.reader.next()
 						for(let i = 0; i < 10; i++){
 							entity.leash.points.push(new RopePoint((entity.x+entity.leash.x)/2, (entity.y+entity.leash.y)/2))
 						}
 					}else{
+						entity.leash.fadeOverride = 1;
 						entity.leash.x = lerp(entity.leash.x, convert.reader.next(), config.movementSmoothing)
 						entity.leash.y = lerp(entity.leash.y, convert.reader.next(), config.movementSmoothing)
+					}
+				}else{
+					if(entity.leash){
+						entity.leash.fadeOverride *= .7;
+						if(entity.leash.fadeOverride <= .01){
+							entity.leash = undefined;
+						}
 					}
 				}
 				entity.drawsHealth = type & 0x02;

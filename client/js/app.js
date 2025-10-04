@@ -132,6 +132,7 @@ async function _startGame(gamemodeCode, joinRoomId) {
 		window.serverWorker.onerror = function(err){
 			window.loadingTextStatus = "Failed to start server"
 			window.loadingTextTooltip = "Please reload the page and try again" 
+			console.error(err)
 		}
         window.loadingTextStatus = "Starting server..."
         window.loadingTextTooltip = ""

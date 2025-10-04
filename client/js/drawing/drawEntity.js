@@ -1909,8 +1909,8 @@ let drawEntity = function () {
 		if (instance.leash) {
 			currentContext.save();
 			currentContext.strokeStyle = "black";
-			currentContext.lineWidth = drawSize*.45*fade
-			currentContext.globalAlpha = .25*fade; 
+			currentContext.lineWidth = drawSize*.45*(instance.leash.fadeOverride!==1?instance.leash.fadeOverride:fade)
+			currentContext.globalAlpha = .25*(instance.leash.fadeOverride!==1?instance.leash.fadeOverride:fade); 
 			const renderedAnchorX = instance.render?.x ?? instance.x;
 			const renderedAnchorY = instance.render?.y ?? instance.y;
 			for (let i = 0; i < instance.leash.points.length; i++) {

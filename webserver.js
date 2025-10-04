@@ -13,11 +13,15 @@ const PORT = 80;
 // <<< ADDED: TURN Server Configuration >>>
 // =================================================================
 // IMPORTANT: This MUST be the same secret key you set as 'static-auth-secret' in your turnserver.conf
-const TURN_SECRET = process.env.TURN_SECRET||"51d0b940-05cb-41d7-95c9-16d9845b4a19";
+const TURN_SECRET = process.env.TURN_SECRET||"";
 
 // IMPORTANT: Set this to the public IP or domain of your TURN server
-const TURN_SERVER_URI = process.env.TURN_SERVER_URL||"turn:74.208.44.199:3478";
+const TURN_SERVER_URI = process.env.TURN_SERVER_URL||"turn:127.0.0.1:3048";
 
+// Docker should auto fill process.env..
+if(TURN_SECRET === "" || TURN_SERVER_URI === "turn:127.0.0.1:3048"){
+	console.warn(`[CRITICAL WARNING] Invalid or missing TURN_SECRET (${TURN_SECRET}) or TURN_SERVER_URI (${TURN_SERVER_URI})`)
+}
 
 // =================================================================
 // 2. SERVER A LOGIC - Room Management and WebSockets

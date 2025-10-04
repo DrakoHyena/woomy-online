@@ -61,7 +61,7 @@ class PeerWrapper {
 			console.log(`[Peer ${this.id}] Destroying peer, connection took too long`)
 			this.destroy();
 			this._readyRej?.("Connection took too long")
-		}, 3000)
+		}, 15000)
 		conn.on('open', () => {
 			this.conn = conn;
 			this._setupConn(conn);

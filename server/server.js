@@ -4190,13 +4190,15 @@ const Chain = Chainf;
 				this.range = range;
 			}
 			think() {
-				if(!this.body.source.isAlive()) return;
-				if(!this.body.leash) this.body.leash = {x: 0, y: 0, range: this.range};
-				this.body.leash.x = this.body.source.x;
-				this.body.leash.y = this.body.source.y;
+				if(!this.body.leash) this.body.leash = {x: 0, y: 0, range: this.range, leasher: this.body.source};
+				if(!this.body.leash.leasher || !this.body.leash.leasher.isAlive()){
+					this.body.leash.leasher = this.body;
+				}
+				this.body.leash.x = this.body.leash.leasher.x;
+				this.body.leash.y = this.body.leash.leasher.y;
 				if(((this.body.source.x-this.body.x)**2+(this.body.source.y-this.body.y)**2)**.5 > this.body.leash.range){
-					this.body.velocity.x += (this.body.source.x - this.body.x)/(this.body.leash.range)
-					this.body.velocity.y += (this.body.source.y - this.body.y)/(this.body.leash.range)
+					this.body.velocity.x += (this.body.leash.leasher.x - this.body.x)/(this.body.leash.range)
+					this.body.velocity.y += (this.body.leash.leasher.y - this.body.y)/(this.body.leash.range)
 				}
 			}
 		}
@@ -5896,6 +5898,13 @@ const Chain = Chainf;
                 this.accel = new Vector(0, 0);
                 this.damp = .05;
                 this.collisionArray = [];
+				this.collisionArray.update = function(){
+					if(this.lastUpdate !== room.lastCycle){
+						this.length = 0;
+						this.lastUpdate = room.lastCycle;
+					}
+				}
+				this.collisionArray.lastUpdate = -1;
                 this.invuln = false;
                 this.godmode = false;
                 this.passive = false;
@@ -5909,13 +5918,13 @@ const Chain = Chainf;
                 this.intervalID = null;
                 this.rainbowLoop = this.rainbowLoop.bind(this);
                 this.keyFEntity = ["square", 5, 0, false];
-                this.isActive = false
-				this.deactivationTimer = -1;
+                this.isActive = true
+				this.deactivationTimer = 30;
                 this.deactivation = function(){
 					this.deactivationTimer -= 1;
                     if (this.deactivationTimer < 0) {
 						this.deactivationTimer = 30;
-                        this.isActive = this.alwaysActive || this.isPlayer || (this.source && this.source.isActive) || (this.bond && this.bond.isActive) || false
+                        this.isActive = this.alwaysActive || this.isPlayer || (this.source && this.source.isActive) || (this.bond && this.bond.isActive) || (this.master && this.master.isActive) || false
                     }
                 };
                 /*this.activation = (() => {
@@ -10373,6 +10382,8 @@ function flatten(data, out, playerContext = null) {
                         if (dist > instance.realSize + other.realSize) {
                             return;
                         }
+						instance.collisionArray.update();
+						other.collisionArray.update();
                         instance.collisionArray.push(other);
                         other.collisionArray.push(instance);
                         if (doMotion) {
@@ -10668,6 +10679,8 @@ function flatten(data, out, playerContext = null) {
                             }
                         }
                         if (goAhead) {
+							my.collisionArray.update();
+							n.collisionArray.update();
                             my.collisionArray.push(n);
                             n.collisionArray.push(my);
                             if (t) {
@@ -11046,6 +11059,7 @@ function flatten(data, out, playerContext = null) {
                             /*if (bounce.type !== "bullet" && bounce.type !== "drone" && bounce.type !== "minion" && bounce.type !== "swarm" && bounce.type !== "trap") {
                                 if (bounce.collisionArray.some(body => body.type === "mazeWall") && util.getDistance(wall, bounce) < wall.size * 1.25) bounce.kill();
                             } else bounce.kill();*/
+							bounce.collisionArray.update();
                             bounce.collisionArray.push(wall);
                         }
                     } else {
@@ -11346,27 +11360,21 @@ function flatten(data, out, playerContext = null) {
                     });
                 }
 
-                grid.clear();
+				grid.clear();
                 entities.filterToChain(entity => {
+					entity.deactivation();
+				    if (!entity.isActive) return true;
+                    entitiesLiveLoop(entity)
+				
                     if (entity.isGhost === true) return false;
                     if (entity.neverInGrid === true) return true;
                     entity._AABB = grid.getAABB(entity);
                     grid.insert(entity);
-
-                    if (!entity.isActive) return true;
-                    grid.getCollisions(entity, (other) => {
-                        collide(entity, other);
+                	grid.getCollisions(entity, (other) => {
+                    	collide(entity, other);
                     });
-                    return true;
+					return true;
                 });
-
-                entities.forEach(entity => {
-                    entity.deactivation();
-                    if (entity.isActive) {
-                        entitiesLiveLoop(entity)
-                        entity.collisionArray.length = 0;
-                    }
-                })
 
                 room.wallCollisions = []
 
