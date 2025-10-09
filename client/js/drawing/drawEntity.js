@@ -1648,7 +1648,7 @@ let drawEntity = function () {
 	        let propRot = p.rpm === false ? p.angle : p.angle + rpmAngle;
 	        let finalRot = p.lockRot === true ? propRot : rot + propRot;
 
-	        if (p.tankOrigin === true) {
+			if (p.tankOrigin === true) {
 	            ctx.translate(xx, yy);
 	            ctx.rotate(rot);
 	            ctx.translate(-xx, -yy);
@@ -1672,8 +1672,6 @@ let drawEntity = function () {
 	                }
 	                throw new TypeError(`${p.shape} is not a valid prop shape`);
 	            }
-			
-	            // Regular polygon shapes
 	            if (p.shape > 0) {
 	                let size = p.scaleSize === true ? drawSize + p.size : p.size;
 	                for (let i = 0; i < p.shape; i++) {
@@ -1689,7 +1687,6 @@ let drawEntity = function () {
 	                for (let i = 0; i < -p.shape; i++) {
 	                    let theta = -(i + 1) / p.shape * 2 * Math.PI;
 	                    let htheta = -(i + 0.5) / p.shape * 2 * Math.PI;
-
 	                    ctx.quadraticCurveTo(
 	                        ...fixRot(p.x + xx, p.y + yy, finalRot,
 	                            scale * dip * Math.cos(htheta),
@@ -1702,33 +1699,36 @@ let drawEntity = function () {
 	                    );
 	                }
 	            } else { // Circle and other shape: 0 cases
-	                let r = p.scaleSize === true ? drawSize / m.size * m.realSize * p.size : p.size;
-	                let arcStart = finalRot;
-	                let arcEnd = 2 * Math.PI * p.arclen + arcStart;
+                	let r = p.scaleSize === true ? drawSize / m.size * m.realSize * p.size : p.size;
+                	let arcStart = finalRot;
+                	let arcEnd = 2 * Math.PI * p.arclen + arcStart;
+                	let positionScale = drawSize / m.size * m.realSize;
+                	let scaledX = p.x * positionScale;
+                	let scaledY = p.y * positionScale;
+                	const [centerX, centerY] = fixRot(xx, yy, finalRot, scaledX, scaledY);
+                	ctx.arc(centerX, centerY, r, arcStart, arcEnd, false);
 
-	                ctx.arc(p.x + xx, p.y + yy, r, arcStart, arcEnd, false);
+                	if (p.ring !== undefined) {
+                	    ctx.arc(centerX, centerY, r * p.ring, arcEnd, arcStart, true);
+                	}
 
-	                if (p.ring !== undefined) {
-	                    ctx.arc(p.x + xx, p.y + yy, r * p.ring, arcEnd, arcStart, true);
-	                }
-				
-	                if (p.isAura) {
-	                    let grad = getGradient(pColor)
-	                    let x = p.x + xx | 0;
-	                    let y = p.y + yy | 0;
+                	if (p.isAura) {
+                	    let grad = getGradient(pColor)
+                	    let x = centerX | 0;
+                	    let y = centerY | 0;
 
-	                    ctx.save()
-	                    ctx.translate(x, y)
-	                    ctx.scale(r, r)
-	                    ctx.fillStyle = grad;
-	                    ctx.beginPath()
-	                    ctx.arc(0, 0, 1, 0, 2 * Math.PI)
-	                    ctx.closePath()
-	                    ctx.fill()
-	                    ctx.restore()
-	                    ctx.restore() // Corresponds to the main ctx.save() at the top
-	                    return;
-	                }
+                	    ctx.save()
+                	    ctx.translate(x, y)
+                	    ctx.scale(r, r)
+                	    ctx.fillStyle = grad;
+                	    ctx.beginPath()
+                	    ctx.arc(0, 0, 1, 0, 2 * Math.PI)
+                	    ctx.closePath()
+                	    ctx.fill()
+                	    ctx.restore()
+                	    ctx.restore() // Corresponds to the main ctx.save() at the top
+                	    return;
+                	}
 	            }
 	        } else if (path) {
 	            let radius = (p.scaleSize === true ? drawSize + p.size : p.size) / path.path2dDiv
