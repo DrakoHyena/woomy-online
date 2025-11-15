@@ -19,10 +19,10 @@ let compensation = function () {
 	return function () {
 		let strength = metrics._rendergap / (1000 / 30);
 		return {
-			predict: (p1, p2, v1, v2) => lerp(p1 + v1, p2 + v2, .075, 1),
-			predictFacing: (a1, a2) => lerpAngle(a1, a2, .1, 1),
-			predictExtrapolate: (p1, p2, v1, v2) => lerp(p1 + v1, p2 + v2, .075, 1),
-			predictFacingExtrapolate: (a1, a2) => lerpAngle(a1, a2, .12, 1),
+			predict: (p1, p2, v1, v2) => lerp(p1 + v1, p2 + v2, config.movementSmoothing, false),
+			predictFacing: (a1, a2) => lerpAngle(a1, a2, config.movementSmoothing, false),
+			//predictExtrapolate: (p1, p2, v1, v2) => lerp(p1 + v1, p2 + v2, config.movementSmoothing, 1),
+			//predictFacingExtrapolate: (a1, a2) => lerpAngle(a1, a2, .12, 1),
 			getPrediction: () => strength
 		}
 	};
@@ -111,8 +111,8 @@ let gameDraw = function (ratio) {
 		if (!instance.render.draws) continue;
 		let motion = compensation();
 		let isMe = instance.id === _gui._playerid;
-		instance.render.x = motion.predict(instance.render.x, Math.round(instance.x + instance.vx), 0, 0);
-		instance.render.y = motion.predict(instance.render.y, Math.round(instance.y + instance.vy), 0, 0);
+		instance.render.x = motion.predict(instance.render.x, instance.x, 0, 0);
+		instance.render.y = motion.predict(instance.render.y, instance.y, 0, 0);
 
 		let x = ratio * instance.render.x - px;
 		let y = ratio * instance.render.y - py;
@@ -151,12 +151,14 @@ let gameDraw = function (ratio) {
 		if (!config.screenshotMode) frameplate.push([x, y, instance, ratio, global.player._canSeeInvisible ? instance.alpha + .5 : instance.alpha]);
 		ctx.globalAlpha = 1;
 	};
-	// LASERS - Using fillRect (much faster than stroke)
+
+	// LASERS
 	for(let [id, laser] of laserMap){
-	    const lx1 = ratio * laser.x - px;
-	    const ly1 = ratio * laser.y - py;
-	    const lx2 = ratio * laser.x2 - px;
-	    const ly2 = ratio * laser.y2 - py;
+		let shakeAmount = -2.5 + 5 * Math.random()
+	    const lx1 = ratio * (laser.x+shakeAmount*Math.random()) - px;
+	    const ly1 = ratio * (laser.y+shakeAmount*Math.random()) - py;
+	    const lx2 = ratio * (laser.x2+shakeAmount*Math.random()) - px;
+	    const ly2 = ratio * (laser.y2+shakeAmount*Math.random()) - py;
 	
 	    const dx = lx2 - lx1;
 	    const dy = ly2 - ly1;
@@ -178,20 +180,24 @@ let gameDraw = function (ratio) {
 	        const layers = 12;
 	        for(let i = 0; i < layers; i++){
 	            const t = i / (layers - 1);
-	            const layerWidth = width * (1 - t * 0.7);
+	            const layerWidth = (width * (1+(i/layers)*Math.random())) * (1 - t * 0.7);
 	            let lcolor;
 	            if(t < 0.5) {
 	                const blend = t * 2;
-	                lcolor = mixColors(darkColor, mixColors(laserColor, color.white, .8), blend);
+	                lcolor = mixColors(darkColor, color.white, blend);
 	            } else {
 	                const blend = (t - 0.5) * 2;
-	                lcolor = mixColors(mixColors(laserColor, color.white, .8), laserColor, blend);
+	                lcolor = mixColors(color.white, laserColor, blend);
 	            }
 			
 	            ctx.fillStyle = lcolor;
-	            ctx.globalAlpha = .25 + .25/layers
-	            ctx.fillRect(0, -layerWidth / 2, len, layerWidth);
-	        }
+	            ctx.globalAlpha = .15 + .25/layers
+				ctx.beginPath();
+	            ctx.rect(0, -layerWidth / 2, len, layerWidth);
+				ctx.arc(len, 0, layerWidth/1.5, 0, Math.PI * 2);
+				ctx.arc(0, 0, layerWidth, 0, Math.PI * 2);
+				ctx.fill();
+			}
 		
 	        ctx.restore();
 	        ctx.globalAlpha = 1;
@@ -201,8 +207,12 @@ let gameDraw = function (ratio) {
 	        ctx.rotate(angle);
 	        ctx.fillStyle = getColor(laser.color);
 	        ctx.globalAlpha = 0.35;
-	        ctx.fillRect(0, -width / 2, len, width);
-	        ctx.restore();
+			ctx.beginPath()
+	        ctx.rect(0, -width / 2, len, width);
+	        ctx.arc(len, 0, width/1.5, 0, Math.PI*2);
+			ctx.arc(0, 0, width, 0, Math.PI*2)
+			ctx.fill();
+			ctx.restore();
 	        ctx.globalAlpha = 1;
 	    }
 	}
@@ -239,12 +249,14 @@ let gameDraw = function (ratio) {
 	    	const laserColor = getColor(laser.color);
 			const ran = Math.random();
 	    	darknessCtx.save();
-			darknessCtx.lineWidth = (laser.width * (1 + .1 * ran)) * ratio * laser.fade;
+			darknessCtx.lineWidth = (laser.width * (1.25 + .1 * ran)) * ratio * laser.fade;
 	    	darknessCtx.strokeStyle = laserColor;
-	    	darknessCtx.globalAlpha = .04 + .01 * ran
+	    	darknessCtx.globalAlpha = .08 + .01 * ran
 			darknessCtx.beginPath();
+			darknessCtx.arc(lx1, ly1, darknessCtx.lineWidth/1.5, 0, Math.PI * 2);
 			darknessCtx.moveTo(lx1, ly1);
 			darknessCtx.lineTo(lx2, ly2);
+			darknessCtx.arc(lx2, ly2, darknessCtx.lineWidth, 0, Math.PI * 2);
 			darknessCtx.stroke();
 			darknessCtx.restore();
 		}
@@ -313,7 +325,6 @@ let gameDraw = function (ratio) {
 		}else{
 			ctx.globalAlpha = 1;
 		}
-		ctx.imageSmoothingEnabled = false;
 		ctx.globalCompositeOperation = "multiply";
 		ctx.drawImage(darknessCanvas, 0, 0, ctx.canvas.width, ctx.canvas.height);
 		ctx.globalCompositeOperation = "source-over";
@@ -541,11 +552,9 @@ let gameDraw = function (ratio) {
 						drawText("Update Rate: " + metrics._updatetime + "Hz", x + len, y, 14, color.guiwhite, "right");
 						if (global._debug > 3) {
 							y -= 16
-							drawText(`Server MEM usage: ${metrics._serverMemUsage.toFixed(2)}%`, x + len, y, 14, metrics._serverMemUsage > 90 ? color.red : metrics._serverMemUsage > 70 ? color.orange : color.guiwhite, "right")
-							y -= 16
-							drawText(`Server CPU usage: ${metrics._serverCpuUsage.toFixed(2)}%`, x + len, y, 14, metrics._serverCpuUsage > 80 ? color.red : metrics._serverCpuUsage > 65 ? color.orange : color.guiwhite, "right")
-							y -= 16
 							drawText(`${mockups.fetchedMockups}/${mockups.totalMockups} (${((mockups.fetchedMockups / mockups.totalMockups) * 100).toFixed(2)}%) Mockups`, x + len, y, 14, color.guiwhite, "right")
+							y -= 16
+							drawText(`Movement Smoothing: ${config.movementSmoothing.toFixed(3)}`, x + len, y, 14, color.guiwhite, "right")
 						}
 					}
 				}

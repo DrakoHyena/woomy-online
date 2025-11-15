@@ -1,8 +1,6 @@
 import { global } from "./global.js";
 import { PeerWrapper } from "./peer.js";
 
-window.connectedToWRM = false
-
 const WRM = window.location.host==="localhost"?"localhost":"woomy.online"
 const wsUrl = window.location.protocol === "http:" ? "ws://" : "wss://"
 const httpUrl = window.location.protocol === "http:" ? "http://" : "https://"

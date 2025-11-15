@@ -9,7 +9,6 @@ import { global } from "../global.js";
 
 const canvas2 = new OffscreenCanvas(1,1);
 const ctx2 = canvas2.getContext("2d")
-ctx2.imageSmoothingEnabled = false;
 
 const gunCache = new Map()
 const path2dCache = new Map();
@@ -1499,7 +1498,23 @@ let drawEntity = function () {
 				context.lineTo(-length, -h[1]);
 				context.lineTo(length, -h[0]);
 				break;
-
+			case 19: // Laser
+				let count = length*4;
+				const maxCount = count;
+				const unit = length/count
+				context.roundRect(-length, -unit/4, length*2-unit/2, unit/2, 5); // Rod
+				while(count > 0){
+					let alpha = (maxCount - count+1)/maxCount
+					context.roundRect(
+						length*(1-alpha),
+						-height*alpha,
+						unit/2,
+						2*height*alpha,
+						5
+					)
+					count--;
+				}
+				break;
 			case 100: // Tachyon
 				break;
 			default:
@@ -1508,11 +1523,17 @@ let drawEntity = function () {
 		}
 	}
 
-	function handleAnimations(id, props) {
+	function handleAnimations(id, ogProps) {
 		let animations = _anims.get(id);
 		if (animations) {
-			// Props -> reference to global mockup.props -> deref with clone
-			props = structuredClone(props);
+			const props = []
+			for(let obj of ogProps){
+				const newObj = {}
+				for(let key2 in obj){
+					newObj[key2] = obj[key2]
+				}
+				props.push(newObj)
+			}
 			for(let animation of animations){
 				let prop = props[animation.index]
 				if(!prop) return props;
@@ -1524,8 +1545,9 @@ let drawEntity = function () {
 				prop.layer = animation.layer;
 				prop.color = animation.color;
 			}
+			return props
 		}
-		return props
+		return ogProps
 	}
 
 	const drawProp = (() => {

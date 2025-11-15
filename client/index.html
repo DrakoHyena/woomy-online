@@ -8,9 +8,6 @@
 
 <head>
 	<meta charset="UTF-8">
-	<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-	<meta http-equiv="Pragma" content="no-cache" />
-	<meta http-equiv="Expires" content="0" />
 	<title>Woomy-Arras.io</title>
 	<meta name="viewport"
 		content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
@@ -30,7 +27,6 @@
 	<meta name="theme-color" content="#8ABC3F">
 
 	<script src="/js/extLib/peerjs.min.js"></script>
-	<script src="/js/app.js" type="module" defer></script>
 	<link rel="stylesheet" href="./menu.css">
 </head>
 
@@ -52,10 +48,7 @@
 		let loadingMenuInterval = setInterval(() => {
 			dotCounter++
 			let str = ""
-			let text = "";
-			if (window.connectedToWRM !== true) {
-				text = "Connecting..."
-			}
+			let text = "Loading Files...";
 			if (dotCounter === text.length) dotCounter = 0
 			for (let i = 0; i < text.length; i++) {
 				if (dotCounter === i) {
@@ -65,11 +58,48 @@
 				str += text[i]
 			}
 			loadingText.innerHTML = str
-			if (!window.connectedToWRM) {
-				loadingMenu.remove()
-				clearInterval(loadingMenuInterval)
+		}, 100);
+
+		(async () => {
+			const loadModule = async (url, retries = 3) => {
+				for (let i = 0; i < retries; i++) {
+					try {
+						return await new Promise((resolve, reject) => {
+							const script = document.createElement('script');
+							script.type = 'module';
+							script.src = url;
+							script.onload = () => {
+								script.remove(); // Keep the DOM clean
+								resolve();
+							};
+							script.onerror = () => {
+								script.remove();
+								reject();
+							};
+							document.head.appendChild(script);
+						});
+					} catch (error) {
+						if (i === retries - 1) throw new Error(`Failed to load ${url}`);
+						await new Promise(res => setTimeout(res, 500)); // Wait before retry
+					}
+				}
+			};
+
+			try {
+				const filePaths = await (await fetch("/api/getJsFileList")).json();
+
+				await Promise.all(
+					filePaths.map(path => loadModule(`/js/${path.replaceAll("\\", "/")}`))
+				);
+				console.log("All modules pre-loaded successfully.");
+				loadingMenu.remove();
+				clearInterval(loadingMenuInterval);
+				import("/js/app.js");
+
+			} catch (error) {
+				console.error("Module pre-loading failed:", error);
 			}
-		}, 100)
+		})();
 	</script>
 
 	<div id="gameAreaWrapper">

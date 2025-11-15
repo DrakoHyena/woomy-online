@@ -1,10 +1,6 @@
 import { global } from "/js/global.js"
 
 function lerp(a, b, x, syncWithFps = false) {
-	if (syncWithFps) {
-		if (global._fps < 20) global._fps = 20;
-		x /= global._fps / 120;
-	}
 	return a + x * (b - a);
 }
 

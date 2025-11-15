@@ -6,7 +6,6 @@ let map = {
         },
         "networkUpdateFactor": 24,
         "maxPlayers": 100, // Room manager has a hard cap of 100 players per server
-        "visibleListInterval": 75,
         "gameSpeed": 1.25,
         "runSpeed": 1.75,
         "WIDTH": 3000,

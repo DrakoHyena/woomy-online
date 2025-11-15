@@ -23,7 +23,6 @@ let map = {
         // "BETA": 0,
         //"networkFrontlog": 1,
         //"networkFallbackTime": 150,
-        "visibleListInterval": 75,
         "gameSpeed": 1.25,
         "runSpeed": 1.75,
         //"maxHeartbeatInterval": 1000,

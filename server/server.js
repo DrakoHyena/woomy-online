@@ -1437,7 +1437,7 @@ const Chain = Chainf;
             "BETA": 0,
             "networkFrontlog": 1,
             "networkFallbackTime": 150,
-            "visibleListInterval": 26.6,
+            "visibleListInterval": 38,
             "gameSpeed": 1,
             "runSpeed": 1.75,
             "maxHeartbeatInterval": 1000,
@@ -4309,7 +4309,7 @@ const Chain = Chainf;
 				const master = body.master.master;
 				const pos = body.aiSettings.SKYNET ? body : master;
 				const myTeam = master.team;
-				const { FARMER, IGNORE_SHAPES, view360 } = body.aiSettings;
+				const { FARMER, IGNORE_SHAPES, view360, TARGET_EVERYTHING } = body.aiSettings;
 				const { seeInvisible, isArenaCloser, firingArc } = body;
 				const canSeeInvis = seeInvisible || isArenaCloser;
 
@@ -4340,7 +4340,7 @@ const Chain = Chainf;
 					switch (entity.type) {
 						case "drone": case "minion": case 'tank': case 'miniboss': case 'crasher': break;
 						case 'food': if (IGNORE_SHAPES) return; break;
-						default: return;
+						default: if(!TARGET_EVERYTHING) return;
 					}
 
 
@@ -5341,7 +5341,7 @@ const Chain = Chainf;
                     this.canShoot = false
                 }
             }
-			getEnd(speedVec = {x: 0, y: 0}, lerpComp = .75){
+			getEnd(speedVec = {x: 0, y: 0}, lerpComp = 2){
 				const gx = this.offset * Math.cos(this.direction + this.angle + this.body.facing) + (1.35 * this.length - this.width * this.settings.size / 2) * Math.cos(this.angle + this.master.facing)
 				const gy = this.offset * Math.sin(this.direction + this.angle + this.body.facing) + (1.35 * this.length - this.width * this.settings.size / 2) * Math.sin(this.angle + this.master.facing)
 				return {
@@ -5450,6 +5450,9 @@ const Chain = Chainf;
                         });
                         child.refreshBodyAttributes();
                     })
+					this.laserMap.forEach((laser)=>{
+						laser.refreshStats()
+					})
                 }
             }
             fire(gx, gy, sk) {
@@ -5476,7 +5479,7 @@ const Chain = Chainf;
                 }
 
 				if(this.bulletTypes[0].TYPE === "laser"){
-					new Laser(this, this.getEnd());
+					new Laser(this, this.getEnd(), 0, typeof this.bulletTypes[1] === "object" ? Object.assign(this.bulletTypes[0], this.bulletTypes[1]) : this.bulletTypes[0])
 					return;
 				}else{
                 	let o = new Entity(this.getEnd(s), this.master.master);
@@ -5753,30 +5756,36 @@ const Chain = Chainf;
 
 		class Laser {
 		    constructor(gun, startPos, angle, settings = {}) {
+		        this.id = laserId++;
+				this.settings = settings;
 				this.setGun(gun);
 				this.skills = {
-					dmg: this.master.skill.dam,
-                	len: this.master.skill.spd,
-                	dur: this.master.skill.str,
-                	prc: this.master.skill.pen,
+					dmg: this.master?.skill?.dam ?? 0,
+                	len: this.master?.skill?.spd ?? 0,
+                	dur: this.master?.skill?.str ?? 0,
+                	prc: this.master?.skill?.pen ?? 0,
 				}
-				this.color = this.master?.color ?? 16;
-				this.team = this.master?.team ?? -101;
-		        this.id = laserId++;
+				this.scaleWidth = settings.SCALE_WIDTH ?? true;
+				this.refreshStats()
+				this.label = settings.LABEL ?? "Laser";
+				this.persistsAfterDeath = settings.PERSISTS_AFTER_DEATH ?? false;
+				this.clearOnMasterUpgrade = settings.CLEAR_ON_MASTER_UPGRADE ?? true;
+
+				this.color = this.master?.master?.color ?? this.master?.color ?? 16;
+				this.team = this.master?.master?.team ?? this.master?.team ?? -101;
 		        this.hitEntities = new Set();
-			
+		
+				this.followGun = this.settings.FOLLOW_GUN ?? true;
+		        this.layer = this.settings.LAYER ?? this.master?.LAYER ?? 0;
+
 		        this.angle = (angle || 0) + Math.PI / 2;
+				if(this.followGun !== true && this.master){
+					this.angle += this.master.facing
+				}
             	this.startPoint = this.gun ? this.gun.getEnd() : { x: startPos.x, y: startPos.y };
 			
-				this.followGun = settings.FOLLOW_GUN ?? true;
-		        this.layer = settings.LAYER ?? 0;
-		        this.width = settings.WIDTH ?? (this.master.size * gun.settings.size) ?? 5;
-		        this.range = (settings.RANGE ?? 300) + 60 * this.skills.len;
-		        this.duration = (settings.DURATION ?? 300) + 25 * this.skills.dur;
-		        this.maxDuration = this.duration;
-		        this.pierce = Math.round((settings.PIERCE ?? 1) + this.skills.prc/1.5);
-		        this.damage = (settings.DAMAGE ?? .1) + 2 * this.skills.dmg;
-	
+				this.onDealtDamage = this.settings.ON_DEALT_DAMAGE;
+				this.onDealtDamageUniv = this.settings.ON_DEALT_DAMAGE_UNIVERSAL;
 
 		        this.endPoint = { x: 0, y: 0 };
 				this.calcEndPoint();
@@ -5784,17 +5793,28 @@ const Chain = Chainf;
 		        
 				lasers.add(this);
 			}
+
+			refreshStats() {
+		        this.width = (this.scaleWidth ? (this.settings.WIDTH??0) + (this.master?.size * this.gun?.width) : this.settings.WIDTH) ?? 5;
+		        this.range = (this.settings.RANGE ?? 300) * (this.skills.len*5);
+		        this.duration = (this.settings.DURATION ?? 300) * (this.skills.dur*20);
+		        this.maxDuration = this.duration;
+		        this.pierce = Math.round((this.settings.PIERCE ?? 1) * this.skills.prc);
+		        this.damage = (this.settings.DAMAGE ?? .1) * (this.skills.dmg/2);
+			}
 		
 		    calcEndPoint() {
 				let angle = this.angle;
-                if(this.gun){
-                    // Anchor start to muzzle without the velocity/lerp offset so
-                    // the laser follows the gun precisely and doesn't 'snap'.
-                    this.startPoint = this.gun.getEnd({x:this.master.velocity.x, y:this.master.velocity.y}, 1);
-                    angle += this.gun.angle;
-                }
-				if(this.master){
-					angle += this.master.facing;
+				if(this.followGun === true){
+                	if(this.gun){
+                	    // Anchor start to muzzle without the velocity/lerp offset so
+                	    // the laser follows the gun precisely and doesn't 'snap'.
+                	    this.startPoint = this.gun.getEnd({x:0,y:0}, 0);
+                	    angle += this.gun.angle;
+						if(this.gun.master){
+							angle += this.gun.master.facing;
+						}
+                	}
 				}
 		        this.endPoint.x = this.startPoint.x + this.range * Math.sin(angle);
 		        this.endPoint.y = this.startPoint.y - this.range * Math.cos(angle);
@@ -5835,25 +5855,25 @@ const Chain = Chainf;
 		        // 1. Traverse grid to gather all potential targets along the laser's path
 		        const dx = this.endPoint.x - this.startPoint.x;
 		        const dy = this.endPoint.y - this.startPoint.y;
-		        let cellX = this.startPoint.x >> grid.cellShift;
-		        let cellY = this.startPoint.y >> grid.cellShift;
-		        const endCellX = this.endPoint.x >> grid.cellShift;
-		        const endCellY = this.endPoint.y >> grid.cellShift;
-		        const stepX = Math.sign(dx);
-		        const stepY = Math.sign(dy);
+		        let cellX = Math.floor(this.startPoint.x / (1 << grid.cellShift));
+		        let cellY = Math.floor(this.startPoint.y / (1 << grid.cellShift));
+		        const endCellX = Math.floor(this.endPoint.x / (1 << grid.cellShift));
+		        const endCellY = Math.floor(this.endPoint.y / (1 << grid.cellShift));
+		        const stepX = dx === 0 ? 0 : (dx > 0 ? 1 : -1);
+		        const stepY = dy === 0 ? 0 : (dy > 0 ? 1 : -1);
 		        const cellSize = 1 << grid.cellShift;
 		        const tDeltaX = dx === 0 ? Infinity : Math.abs(cellSize / dx);
 		        const tDeltaY = dy === 0 ? Infinity : Math.abs(cellSize / dy);
 		        const nextBoundaryX = (cellX + (stepX > 0 ? 1 : 0)) * cellSize;
 		        const nextBoundaryY = (cellY + (stepY > 0 ? 1 : 0)) * cellSize;
-		        let tMaxX = dx === 0 ? Infinity : (nextBoundaryX - this.startPoint.x) / dx;
-		        let tMaxY = dy === 0 ? Infinity : (nextBoundaryY - this.startPoint.y) / dy;
+		        let tMaxX = dx === 0 ? Infinity : Math.abs((nextBoundaryX - this.startPoint.x) / dx);
+		        let tMaxY = dy === 0 ? Infinity : Math.abs((nextBoundaryY - this.startPoint.y) / dy);
 			
                 const processCell = (cx, cy) => {
                     const cellContent = grid.getCell(cx * cellSize, cy * cellSize);
                     if (cellContent) {
                         for (const entity of cellContent){
-							if (entity.team === this.team || this.hitEntities.has(entity)) return;
+							if (entity.team === this.team || this.hitEntities.has(entity)) continue;
              				this.hitEntities.add(entity);
 		            		const collisionDetails = this.getCollisionDetails(entity);
 		            		if (collisionDetails){
@@ -5876,7 +5896,8 @@ const Chain = Chainf;
 		        }
 			
 		        // 3. Sort hits by distance to handle piercing correctly
-		        collectedHits.sort((a, b) => a.distanceSq - b.distanceSq);
+		        //collectedHits.sort((a, b) => a.distanceSq - b.distanceSq);
+				// Might not be needed by nature of how arrays works
 			
 		        // 4. Apply damage to pierced targets and update visual end point
                 const piercedCount = Math.min(collectedHits.length, this.pierce);
@@ -5919,6 +5940,19 @@ const Chain = Chainf;
 		
             collide(entity) {
                 entity.damageReceived += this.damage;
+				entity.collisionArray.push(this)
+				if(this.master){
+            		if (this.onDealtDamage) {
+            		    this.onDealtDamage(this, entity, this.damage);
+            		}
+            		if (this.onDealtDamageUniv) {
+            		    this.onDealtDamageUniv(this, entity, this.damage);
+            		}
+            		if (this.master && this.master.onDealtDamageUniv) {
+            		    this.master.onDealtDamageUniv(this.master, entity, this.damage);
+            		}
+				}
+				if (entity.onDamaged) entity.onDamaged(entity, null, this.damage)
             }
 
             addToPacket(packetArr, playerContext) {
@@ -5928,7 +5962,7 @@ const Chain = Chainf;
                     this.startPoint.y,
                     this.visualEndPoint.x,
                     this.visualEndPoint.y,
-					(this.master && playerContext.gameMode === "ffa" && this.color === "FFA_RED" && playerContext.body.color === "FFA_RED" && this.master.id === playerContext.body.id) === true ?  playerContext.teamColor??0 : this.color,
+					(this.master && playerContext.gameMode === "ffa" && this.color === "FFA_RED" && playerContext.body.color === "FFA_RED" && (this.master.id === playerContext.body.id)||(this.master.master.id === playerContext.body.id)) === true ?  playerContext.teamColor??0 : this.color,
                     this.width,
                     this.maxDuration,
                     this.duration
@@ -6473,9 +6507,6 @@ const Chain = Chainf;
                     if (set.FACING_TYPE != null) this.facingType = set.FACING_TYPE;
                     if (set.DRAW_HEALTH != null) this.settings.drawHealth = set.DRAW_HEALTH;
                     if (set.DRAW_SELF != null) this.settings.drawShape = set.DRAW_SELF;
-                    if (set.DAMAGE_EFFECTS != null) this.settings.damageEffects = set.DAMAGE_EFFECTS;
-                    if (set.RATIO_EFFECTS != null) this.settings.ratioEffects = set.RATIO_EFFECTS;
-                    if (set.MOTION_EFFECTS != null) this.settings.motionEffects = set.MOTION_EFFECTS;
                     if (set.GIVE_KILL_MESSAGE != null) this.settings.givesKillMessage = set.GIVE_KILL_MESSAGE;
                     if (set.CAN_GO_OUTSIDE_ROOM != null) this.settings.canGoOutsideRoom = set.CAN_GO_OUTSIDE_ROOM;
                     if (set.HITS_OWN_TYPE != null) this.settings.hitsOwnType = set.HITS_OWN_TYPE;
@@ -6800,8 +6831,6 @@ const Chain = Chainf;
                     y: this.y,
                     cx: this.altCameraSource?this.altCameraSource[0]:this.x,
                     cy: this.altCameraSource?this.altCameraSource[1]:this.y,
-                    vx: this.velocity.x,
-                    vy: this.velocity.y,
                     size: this.size,
                     rsize: this.realSize,
                     status: 1,
@@ -6892,6 +6921,11 @@ const Chain = Chainf;
                             o.kill();
                         }
                     });
+					this.laserMap.forEach(laser => {
+			            if (laser.clearOnMasterUpgrade) {
+                        	laser.destroy();
+                        }
+					})
                     //for (let o of entities)
                     //    if (o.settings.clearOnMasterUpgrade && o.master.id === this.id && o.id !== this.id && o !== this) o.kill();
                     this.skill.update();
@@ -6948,6 +6982,11 @@ const Chain = Chainf;
                         o.kill();
                     }
                 });
+				this.laserMap.forEach(laser => {
+		            if (laser.clearOnMasterUpgrade) {
+                    	laser.destroy();
+                    }
+				})
                 if (this.stealthMode) {
                     this.settings.leaderboardable = this.settings.givesKillMessage = false;
                     this.alpha = this.ALPHA = 0;
@@ -7778,7 +7817,7 @@ const Chain = Chainf;
                         let gun = this.guns[i];
                         if (gun.shootOnDeath) {
 							const gunEnd = gun.getEnd()
-                            gun.fire(gunEnd.x-gun.master.x, gunEnd.y-gun.master.y, this.skill);
+                            gun.fire(gunEnd.x, gunEnd.y, this.skill);
                         }
                     }
                     // Explosions, phases and whatnot
@@ -7798,7 +7837,6 @@ const Chain = Chainf;
                     // Just in case one of the onDead events revives the tank from death (like dominators), don't run it
                     if (this.isDead()) {
                         let killers = [],
-                            killTools = [],
                             notJustFood = false,
                             name = this.master.name === "" ? this.master.type === "tank" ? "An unnamed player's " + this.label : this.master.type === "miniboss" ? "a visiting " + this.label : util.addArticle(this.label) : this.master.name + "'s " + this.label,
                             jackpot = Math.round(util.getJackpot(this.skill.score) / this.collisionArray.length);
@@ -7808,23 +7846,24 @@ const Chain = Chainf;
                             if (o.type === "wall" || o.type === "mazeWall") {
                                 continue;
                             }
-                            if (o.master.isDominator || o.master.isArenaCloser || o.master.label === "Base Protector") {
-                                if (!killers.includes(o.master)) {
-                                    killers.push(o.master);
+							let master = o.master?.master ?? o.master
+							if(!master) continue;
+                            if (master.isDominator || master.isArenaCloser || master.label === "Base Protector") {
+                                if (!killers.includes(master)) {
+                                    killers.push(master);
                                 }
                             }
-                            if (o.master.settings.acceptsScore) {
-                                if (o.master.type === "tank" || o.master.type === "miniboss") {
+                            if (master.settings.acceptsScore) {
+                                if (master.type === "tank" || master.type === "miniboss") {
                                     notJustFood = true;
                                 }
-                                o.master.skill.score += jackpot;
-                                if (!killers.includes(o.master)) {
-                                    killers.push(o.master);
+                                master.skill.score += jackpot;
+                                if (!killers.includes(master)) {
+                                    killers.push(master);
                                 }
                             } else if (o.settings.acceptsScore) {
                                 o.skill.score += jackpot;
                             }
-                            killTools.push(o);
                         }
                         // Now process that information
                         let killText = notJustFood ? "" : "You have been killed by ",
@@ -7995,6 +8034,11 @@ const Chain = Chainf;
                     child.source = child
                     if (!child.settings.persistsAfterDeath) {
                         child.destroy()
+                    }
+                };
+                for (let [key, laser] of this.laserMap) {
+                    if (!laser.persistsAfterDeath) {
+                        laser.destroy()
                     }
                 };
                 /*this.childrenMap.forEach(instance => {
@@ -10511,7 +10555,9 @@ function flatten(data, out, playerContext = null) {
         }
         const gameLoop = (() => {
             const collide = (() => {
-                if (c.NEW_COLLISIONS) {
+                // Currently unused
+				// Worth reviewing to determine if it should be used
+				/*if (c.NEW_COLLISIONS) {
                     function bounce(instance, other, doDamage, doMotion) {
                         let dist = Math.max(1, util.getDistance(instance, other));
                         if (dist > instance.realSize + other.realSize) {
@@ -10567,15 +10613,13 @@ function flatten(data, out, playerContext = null) {
                             if (!Number.isFinite(speedFactor.instance)) speedFactor.instance = 1;
                             if (!Number.isFinite(speedFactor.other)) speedFactor.other = 1;
                             let speedDmgMultiplier = speedToDamageFunction(Math.abs(getSpeed(instance) - getSpeed(other)))
-                            let resistDiff = instance.health.resist - other.health.resist,
-                                damage = {
+                            let resistDiff = instance.health.resist - other.health.resist;
+                            let damage = {
                                     instance: c.DAMAGE_CONSTANT * instance.damage * Math.max(minResistBuff, Math.min(maxResistBuff,(1 + resistDiff))) * (1 + other.heteroMultiplier * (instance.settings.damageClass === other.settings.damageClass)) * ((instance.settings.buffVsFood && other.settings.damageType === 1) ? 3 : 1) * instance.damageMultiplier() * Math.min(2, Math.max(speedFactor.instance, 1) * speedFactor.instance) * speedDmgMultiplier,
                                     other: c.DAMAGE_CONSTANT * other.damage * Math.max(minResistBuff, Math.min(maxResistBuff,(1 - resistDiff))) * (1 + instance.heteroMultiplier * (instance.settings.damageClass === other.settings.damageClass)) * ((other.settings.buffVsFood && instance.settings.damageType === 1) ? 3 : 1) * other.damageMultiplier() * Math.min(2, Math.max(speedFactor.other, 1) * speedFactor.other) * speedDmgMultiplier
                                 };
-                            if (instance.settings.ratioEffects) damage.instance *= Math.min(1, Math.pow(Math.max(instance.health.ratio, instance.shield.ratio), 1 / instance.penetration));
-                            if (other.settings.ratioEffects) damage.other *= Math.min(1, Math.pow(Math.max(other.health.ratio, other.shield.ratio), 1 / other.penetration));
-                            if (instance.settings.damageEffects) damage.instance *= (1 + (componentNorm - 1) * (1 - depth.other) / instance.penetration) * (1 + pen.other.sqrt * depth.other - depth.other) / pen.other.sqrt;
-                            if (other.settings.damageEffects) damage.other *= (1 + (componentNorm - 1) * (1 - depth.instance) / other.penetration) * (1 + pen.instance.sqrt * depth.instance - depth.instance) / pen.instance.sqrt;
+                            damage.instance *= (1 + (componentNorm - 1) * (1 - depth.other) / instance.penetration) * (1 + pen.other.sqrt * depth.other - depth.other) / pen.other.sqrt;
+                            damage.other *= (1 + (componentNorm - 1) * (1 - depth.instance) / other.penetration) * (1 + pen.instance.sqrt * depth.instance - depth.instance) / pen.instance.sqrt;
                             if (!Number.isFinite(damage.instance)) damage.instance = 1;
                             if (!Number.isFinite(damage.other)) damage.other = 1;
                             let damageToApply = {
@@ -10614,7 +10658,7 @@ function flatten(data, out, playerContext = null) {
                             doMotion = true;
                         bounce(instance, other, doDamage, doMotion);
                     }
-                }
+                }*/
                 // Collision Functions
                 function simpleCollide(my, n) {
                     let diff = (1 + util.getDistance(my, n) / 2) * room.speed;
@@ -10874,10 +10918,8 @@ function flatten(data, out, playerContext = null) {
                                     damage._n *= Math.min(2, Math.max(speedFactor._n, 1) * speedFactor._n);
                                 }
 
-                                if (my.settings.ratioEffects) damage._me *= Math.min(1, Math.pow(Math.max(my.health.ratio, my.shield.ratio), 1 / my.penetration));
-                                if (n.settings.ratioEffects) damage._n *= Math.min(1, Math.pow(Math.max(n.health.ratio, n.shield.ratio), 1 / n.penetration));
-                                if (my.settings.damageEffects) damage._me *= (1 + (componentNorm - 1) * (1 - depth._n) / my.penetration) * (1 + pen._n.sqrt * depth._n - depth._n) / pen._n.sqrt;
-                                if (n.settings.damageEffects) damage._n *= (1 + (componentNorm - 1) * (1 - depth._me) / n.penetration) * (1 + pen._me.sqrt * depth._me - depth._me) / pen._me.sqrt;
+                                damage._me *= (1 + (componentNorm - 1) * (1 - depth._n) / my.penetration) * (1 + pen._n.sqrt * depth._n - depth._n) / pen._n.sqrt;
+                            	damage._n *= (1 + (componentNorm - 1) * (1 - depth._me) / n.penetration) * (1 + pen._me.sqrt * depth._me - depth._me) / pen._me.sqrt;
                                 let damageToApply = {
                                     _me: damage._me,
                                     _n: damage._n
@@ -10944,8 +10986,7 @@ function flatten(data, out, playerContext = null) {
                                 n.accel.y += nIsFirmCollide * (component * dir.y + combinedDepth.up);
                             } else {
                                 let elasticity = 2 - 4 * Math.atan(my.penetration * n.penetration) / Math.PI;
-                                if (doInelastic && my.settings.motionEffects && n.settings.motionEffects) elasticity *= savedHealthRatio._me / pen._me.sqrt + savedHealthRatio._n / pen._n.sqrt;
-                                else elasticity *= 2;
+                                elasticity *= 2;
                                 let spring = 2 * Math.sqrt(savedHealthRatio._me * savedHealthRatio._n) / room.speed,
                                     elasticImpulse = Math.pow(combinedDepth.down, 2) * elasticity * component * my.mass * n.mass / (my.mass + n.mass),
                                     springImpulse = c.KNOCKBACK_CONSTANT * spring * combinedDepth.up,
@@ -11390,7 +11431,7 @@ function flatten(data, out, playerContext = null) {
                         // Player collision
                         case (!isSameTeam && !instance.hitsOwnTeam && !other.hitsOwnTeam):
                         case (isSameTeam && (instance.hitsOwnTeam || other.hitsOwnTeam) && instance.master.source.id !== other.master.source.id): {
-                            advancedCollide(instance, other, true, true);
+                            advancedCollide(instance, other, true, false);
                         } break;
                         // Never collide
                         case (instance.settings.hitsOwnType === "never" || other.settings.hitsOwnType === "never"): { } break;
@@ -12863,8 +12904,6 @@ function flatten(data, out, playerContext = null) {
                 if (body != null && body.isAlive()) { // We are alive
                     camera.x = body.altCameraSource?body.altCameraSource[0]:photo.cx;
                     camera.y = body.altCameraSource?body.altCameraSource[1]:photo.cy;
-                    camera.vx = photo.vx;
-                    camera.vy = photo.vy;
                     fov = body.fov;
                 }else{ // We are dead/spectating
 					if(body.spectating){
@@ -12878,8 +12917,6 @@ function flatten(data, out, playerContext = null) {
 							const spectatePhoto = body.spectating.camera()
 							camera.x = spectatePhoto.x;
 							camera.y = spectatePhoto.y;
-							camera.vx = spectatePhoto.vx;
-							camera.vy = spectatePhoto.vy;
 							fov = body.spectating.fov;
 						}
 					}

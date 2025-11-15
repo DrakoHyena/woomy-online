@@ -139,8 +139,6 @@ function getEntityImageFromMockup(index, color) {
 		index: index,
 		x: mockup.x,
 		y: mockup.y,
-		vx: 0,
-		vy: 0,
 		size: mockup.size,
 		widthHeightRatio: [1, 1],
 		realSize: mockup.realSize,

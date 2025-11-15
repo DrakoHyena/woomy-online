@@ -40,6 +40,7 @@ class PeerWrapper {
 				this.id = id;
 				resolve();
 			});
+			this.peer.on("disconnected", console.error)
 			this.peer.on('error', (err)=>{
 				console.log("Error initlaizing peer")
 				reject(err)

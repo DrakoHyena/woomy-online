@@ -1,5 +1,5 @@
-const ASSET_MAGIC = Number.MIN_SAFE_INTEGER;
-let id = 0;
+const ASSET_MAGIC = 4294967296 // U32 max int
+let id = 0; 
 const assets = {
 
 }

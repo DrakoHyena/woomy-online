@@ -69,10 +69,80 @@ function getTurnCredentials(username) {
   };
 }
 
-
 // =================================================================
 // 3. COMBINED SERVER CREATION
 // =================================================================
+
+// Static file serving constants
+const MIME_TYPES = {
+	'.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript',
+	'.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg',
+	'.gif': 'image/gif', '.svg': 'image/svg+xml',
+};
+
+/**
+ * Handles serving static files with ETag-based caching and 304 Not Modified responses.
+ * @param {http.IncomingMessage} req The request object.
+ * @param {http.ServerResponse} res The response object.
+ */
+function serveStaticFile(req, res) {
+	const pathname = req.url?.split('?')[0] || '/';
+	const initialPath = (pathname === '/') ? '/client/index.html' : pathname;
+	
+	// Define primary and fallback paths based on original logic
+	const primaryPath = path.join(__dirname, initialPath);
+	const fallbackPath = path.join(__dirname, 'client', pathname);
+
+	// Security: Normalize paths and ensure they are within the project directory
+	const safeBase = path.normalize(__dirname);
+	if (!path.normalize(primaryPath).startsWith(safeBase) || !path.normalize(fallbackPath).startsWith(safeBase)) {
+		res.writeHead(403, { 'Content-Type': 'text/plain' });
+		res.end('Forbidden');
+		return;
+	}
+	
+	const tryPath = (filePath) => {
+		fs.stat(filePath, (statErr, stats) => {
+			// Handle file not found or other errors
+			if (statErr) {
+				// If the primary path failed and there's a different fallback path, try it.
+				if (statErr.code === 'ENOENT' && filePath === primaryPath && primaryPath !== fallbackPath) {
+					tryPath(fallbackPath);
+				} else { // All attempts failed
+					res.writeHead(404, { 'Content-Type': 'text/plain' });
+					res.end('Not Found');
+				}
+				return;
+			}
+
+			// Generate a strong ETag from file stats. ETags must be quoted.
+			const etag = `"${crypto.createHash('sha1').update(`${stats.mtime.getTime()}-${stats.size}`).digest('base64')}"`;
+
+			// Check if the browser sent an ETag and if it matches our current one.
+			if (req.headers['if-none-match'] === etag) {
+				console.log(`[304 Not Modified] ${pathname}`);
+				res.writeHead(304);
+				res.end();
+				return;
+			}
+
+			// File has changed or is being requested for the first time.
+			// Set headers and send the file via a memory-efficient stream.
+			const ext = path.extname(filePath);
+			const contentType = MIME_TYPES[ext] || 'text/plain';
+
+			res.setHeader('Content-Type', contentType);
+			res.setHeader('ETag', etag);
+			// 'no-cache' instructs the client to always re-validate with the server, enabling the 304 response.
+			//res.setHeader("Cache-Control", "max-age=3600, must-revalidate" )
+			res.writeHead(200);
+			fs.createReadStream(filePath).pipe(res);
+		});
+	};
+
+	tryPath(primaryPath);
+}
+
 
 // The main request handler that decides what to do with each request
 const handleRequest = (req, res) => {
@@ -149,58 +219,18 @@ const handleRequest = (req, res) => {
             res.writeHead(200, { "Content-Type": "application/json" });
             res.end(JSON.stringify(credentials));
             return;
-        }
+        } else if (pathname === "/api/getJsFileList"){
+			res.writeHead(200, { "Content-Type": "application/json"});
+			res.end(JSON.stringify(fs.readdirSync(path.join(__dirname, "client", "js"), {recursive:true}).filter(p=>p.endsWith(".js"))))
+			return;
+		}
 	}
 
 	// --- STATIC FILE SERVING (from Server B) ---
-	const requestedPath = pathname === '/' ? '/client/index.html' : pathname;
-	const filePath = path.join(__dirname, requestedPath);
-
-	if (!filePath.startsWith(__dirname)) {
-		res.writeHead(403, { 'Content-Type': 'text/plain' });
-		res.end('Forbidden');
-		return;
-	}
-
-	fs.readFile(filePath, (err, data) => {
-		if (err) {
-			if (err.code === 'ENOENT') {
-				const clientFilePath = path.join(__dirname, 'client', pathname);
-				if (filePath !== clientFilePath) {
-					fs.readFile(clientFilePath, (clientErr, clientData) => {
-						if (clientErr) {
-							res.writeHead(404, { 'Content-Type': 'text/plain' });
-							res.end('Not Found');
-						} else {
-							sendFile(res, clientFilePath, clientData);
-						}
-					});
-				} else {
-					res.writeHead(404, { 'Content-Type': 'text/plain' });
-					res.end('Not Found');
-				}
-			} else {
-				res.writeHead(500, { 'Content-Type': 'text/plain' });
-				res.end(`Server Error: ${err.message}`);
-			}
-		} else {
-			sendFile(res, filePath, data);
-		}
-	});
+	// All non-API requests are handled by our new static file server.
+	serveStaticFile(req, res);
 };
 
-function sendFile(res, filePath, data) {
-	const ext = path.extname(filePath);
-	let contentType = 'text/plain';
-	const mimeTypes = {
-		'.html': 'text/html', '.css': 'text/css', '.js': 'text/javascript',
-		'.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg',
-		'.gif': 'image/gif', '.svg': 'image/svg+xml',
-	};
-	contentType = mimeTypes[ext] || contentType;
-	res.writeHead(200, { 'Content-Type': contentType });
-	res.end(data);
-}
 
 const server = http.createServer(handleRequest);
 
@@ -225,7 +255,7 @@ wss.on('connection', function connection(ws, req) {
 					console.log(`Failed to send hearbeat to room ${room.id} (readyState = ${ws.readyState})`)
 				}else{
 					ws.send(JSON.stringify({type:"ping"}))
-					setTimeout(sendHeartbeat, 30000)
+					setTimeout(sendHeartbeat, 10000)
 				}
 			}
 			sendHeartbeat()

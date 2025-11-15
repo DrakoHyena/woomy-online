@@ -639,7 +639,6 @@ global._canvas = new (class Canvas {
 
 let c = global._canvas._cv;
 let ctx = c.getContext("2d");
-ctx.imageSmoothingEnabled = false;
 
 function _clearScreen(clearColor, alpha) {
 	ctx.fillStyle = clearColor;

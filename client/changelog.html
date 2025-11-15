@@ -1,18 +1,41 @@
 <div class="patchnoteSection">
 	<p class="patchnoteTitle">IMA FIRIN MAH LAZOR<span class="patchnoteTime">???, 2025</span></p>
 	<ul class="patchnoteBody">
-		<li>Added a Performance Mode setting which sacrifices as much as possible (within reason) to increase performance</li>
-		<li>Added a Fake Aim setting</li>
-		<ul>
-			<li>Aimming has been changed to reflect your <i>actual</i> aim in game</li>
-			<li>Previously it was based off your mouse position in the client</li>
-			<li>This led to various issues which can be seen in a number of things in the game, particuarly lasers. Most properties are smoothed and affected by latency so having something that instantly responds can make other things look choppy or out of sync.</li>
-		</ul>
-		<li>Fixed nearestDifferentMaster (any AI mechanic) not working correctly</li>
 		<li>Lasers</li>
 		<ul>
-			<li>Added Animated Lasers setting, true by default</li>
-			<li></li>
+		</ul>
+		<li>Added Animated Lasers setting, true by default</li>
+		<li>Added a Fake Aim setting</li>
+		<ul>
+			<li>Aimming has been changed to reflect your <i>actual</i> aim on the server by default</li>
+			<li>Previously it was based off your mouse position on your device</li>
+			<li>Lasers, being seperate from the player, cannot have their position update as fast casuing them to look janky</li>
+			<li>In any sense, I figured this was for the better because knowing your server sided aim is probably more valuable even though the controls might appear less responsive</li>
+		</ul>
+		<li>Added a Performance Mode setting which sacrifices as much as possible (within reason) to increase FPS</li>
+		<li>Removed Server CPU and Server Mem from the L menu because they served no purpose</li>
+		<li>Added Movement Smoothing to the L menu</li>
+		<li>Fixed nearestDifferentMaster (any AI mechanic) not targeting correctly in some cases</li>
+		<li>Fixed the play button not working sometimes (hence the loading menu)</li>
+		<li>Fixed movment smoothing in the client to work as intended</li>
+		<ul>
+			<li>Now it will only smooth based off how many frames can be rendered between view packets</li>
+			<li>Or rather, if your internet is dog, you probably have more time to render frames than youre receiving frames, therefore it has time to be animated without affecting "actual" gameplay</li>
+		</ul>
+		<li>Removed DAMAGE_EFFECTS and is now true by default</li>
+		<ul>
+			<li>All entities now take the amount of penatration into account when calculating damage</li>
+			<li>It didn't make sense for this to be selective with the only exceptions being a handful of entities (like food?)</li>
+		</ul>
+		<li>Removed RATIO_EFFECTS and is now false by default</li>
+		<ul>
+			<li>This was a special form of damage reduction only used by bosses, minibosses, dominators, and a few others</li>
+			<li>This is better done by adjusting the entity's stats</li>
+		</ul>
+		<li>Removed MOTION_EFFECTS and is now false by default</li>
+		<ul>
+			<li>This was used by almost every entity was only applicable when two entities of the same team were colliding to adjust the amount of pushback when based off both penatration AND health</li>
+			<li>Niche to say the least</li>
 		</ul>
 	</ul>
 </div>

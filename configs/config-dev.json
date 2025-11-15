@@ -7,6 +7,5 @@
     "RANDOM_COLORS": false,
     "BOTS": 15,
     "IS_DEV_SERVER": true,
-    "tabLimit": 1000,
-    "NEW_COLLISIONS": false
+    "tabLimit": 1000
 }
