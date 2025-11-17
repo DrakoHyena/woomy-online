@@ -6932,6 +6932,9 @@ const Chain = Chainf;
                         this.damp = -.0125;
                         this.DAMAGE -= 10; // .05, 1, 2
                         break;
+					case "sonicAccel":
+                        this.damp = -.021;
+                        break;
                     case "glideBall":
                         this.maxSpeed = this.topSpeed;
                         if (this.topSpeed) this.damp = a / this.topSpeed;
