@@ -1752,8 +1752,9 @@ let drawEntity = function () {
                 	}
 	            }
 	        } else if (path) {
-	            let radius = (p.scaleSize === true ? drawSize + p.size : p.size) / path.path2dDiv
-	            ctx.translate(xx, yy);
+	            let radius = p.scaleSize === true ? drawSize / m.size * m.realSize * p.size / path.path2dDiv : p.size
+				let positionScale = drawSize / m.size * m.realSize;
+	            ctx.translate(p.x * positionScale + xx, p.y * positionScale + yy);
 	            ctx.scale(radius, radius);
 	            ctx.lineWidth /= radius;
 	            ctx.rotate(finalRot);
