@@ -61,7 +61,7 @@ let mockups = {
 				x: 0,
 				y: 0,
 			},
-			axis: 0
+			axis: 1
 		},
 		guns: [],
 		turrets: [],
@@ -133,7 +133,7 @@ window.sendMockupEdit = (code) => {
 function getEntityImageFromMockup(index, color) {
 	let mockup = mockups.get(index);
 	if (!mockup) throw new Error("Failed to find mockup " + index);
-	color = mockup.color == null || mockup.color === 16 ? arguments[1] : mockup.color;
+	color = mockup.color === 16 ? arguments[1] : mockup.color;
 	return {
 		time: 0,
 		index: index,

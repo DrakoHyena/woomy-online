@@ -6740,7 +6740,6 @@ const Chain = Chainf;
                     }
                     if (set.ON_DEFINED) set.ON_DEFINED(this, entities, sockets, Entity);
                 } catch (e) {
-                    if (this.isBot) console.error(this.tank);
                     console.error("An error occured while trying to set " + trimName(this.name) + "'s parent entity, aborting! Index: " + this.index + "." + " Export: " + global.exportNames[this.index]);
                     this.sendMessage("An error occured while trying to set your parent entity!");
                     console.error(e.stack);
@@ -6872,14 +6871,24 @@ const Chain = Chainf;
             }
             upgrade(number) {
                 if (c.serverName.includes("Corrupted Tanks")) {
+                    const lastTank = this.tank;
                     if (number == null) {
-                        this.define(Class[global.gamemodeCode.generateNewTank()])
+						const newTank = global.gamemodeCode.generateNewTank();
+                        this.define(Class[newTank]);
+						this.tank = newTank
                         this.skill.score = 59212
                     } else {
                         this.childrenMap.forEach(c => c.kill())
-                        this.define(Class[this.upgrades[number].class])
+						const newTank = this.upgrades[number].class
+                        this.define(Class[newTank]);
+						this.tank = newTank;
                     }
-                    this.upgrades = []
+					this.upgrades.push({
+						class: lastTank,
+						level: 0,
+						index: Class[lastTank].index,
+						tier: 4
+					})
                     for (let i = 0; i < 3; i++) {
                         let newTank = Class[global.gamemodeCode.generateNewTank()]
                         this.upgrades.push({
@@ -6892,9 +6901,15 @@ const Chain = Chainf;
                     return
                 }
                 if (number < this.upgrades.length && this.skill.level >= this.upgrades[number].level) {
-                    let tank = Class[this.upgrades[number].class];
+                    let tank = this.upgrades[number].class;
                     this.upgrades = [];
-                    this.define(tank);
+                    this.define(Class[tank]);
+					this.upgrades.unshift({
+						class: this.tank,
+						level: 0,
+						index: Class[this.tank].index,
+						tier: 4
+					})
                     this.tank = tank;
                     if (this.switcherooID === 0 || (this.bossTierType !== -1 && this.bossTierType !== 16)) this.sendMessage("Press Q to switch tiers. There is a 1 second cooldown.");
                     if (this.scoped) this.sendMessage("Right click or press shift to move the camera to your mouse.");
@@ -6953,7 +6968,13 @@ const Chain = Chainf;
             }
             upgradeTank(tank) {
                 this.upgrades = [];
-                this.define(tank);
+                this.define(Class[tank]);
+				this.upgrades.unshift({
+					class: this.tank,
+					level: 0,
+					index: Class[this.tank].index,
+					tier: 4
+				})
                 this.tank = tank;
                 if (this.switcherooID === 0 || (this.bossTierType !== -1 && this.bossTierType !== 16)) this.sendMessage("Press Q to switch tiers. There is a 1 second cooldown.");
                 if (this.scoped) this.sendMessage("Right click or press shift to move the camera to your mouse.");
@@ -8124,7 +8145,7 @@ const Chain = Chainf;
                             controlledBody.skill.score = this.skill.score;
                             controlledBody.skill.level = this.skill.level;
                         }
-                        if (controlledBody.tank !== this.tank) controlledBody.upgradeTank(this.tank);
+                        if (controlledBody.tank !== this.tank) controlledBody.upgradeTank(this.tank.constructor.name);
                         controlledBody.tank = this.tank;
                         controlledBody.FOV = .1;
                         controlledBody.refreshFOV();
@@ -9449,7 +9470,7 @@ function flatten(data, out, playerContext = null) {
                                 if (!isAlive || body.underControl)
                                     return;
                                 let score = body.skill.score
-                                body.upgradeTank(Class.basic);
+                                body.upgradeTank("basic");
                                 body.skill.score = score;
                                 let i;
                                 while (i = body.skill.maintain()) {
@@ -9472,7 +9493,7 @@ function flatten(data, out, playerContext = null) {
                             } else if (this.betaData.permissions === 0) {
                                 if (c.SANDBOX && m[0] === 2) {
                                     body.define(Class.genericTank);
-                                    body.upgradeTank(Class.basic);
+                                    body.upgradeTank("basic");
                                     for (let [key, value] of body.childrenMap) {
                                         value.kill()
                                     }
@@ -9486,13 +9507,13 @@ function flatten(data, out, playerContext = null) {
                                     body.define(Class.basic);
                                     switch (this.betaData.permissions) {
                                         case 1: {
-                                            body.upgradeTank(Class.testbed_beta);
+                                            body.upgradeTank("testbed_beta");
                                         } break;
                                         case 2: {
-                                            body.upgradeTank(Class.testbed_admin);
+                                            body.upgradeTank("testbed_admin");
                                         } break;
                                         case 3: {
-                                            body.upgradeTank(Class.testbed);
+                                            body.upgradeTank("testbed");
                                             body.health.amount = body.health.max;
                                             body.shield.amount = body.shield.max;
                                         } break;
@@ -9509,7 +9530,7 @@ function flatten(data, out, playerContext = null) {
                                 } break;
                                 case 2: { // Reset to Basic
                                     body.define(Class.genericTank);
-                                    body.upgradeTank(Class.basic);
+                                    body.upgradeTank("basic");
                                     if (this.betaData.permissions === 3) {
                                         body.health.amount = body.health.max;
                                         body.shield.amount = body.shield.max;
@@ -9705,7 +9726,7 @@ function flatten(data, out, playerContext = null) {
                                     });
                                 } break;
                                 case 8: { // Tank journey
-                                    body.upgradeTank(Class[global.exportNames[body.index + 2]]);
+                                    body.upgradeTank(global.exportNames[body.index + 2]);
                                 } break;
                                 case 9: { // Kill what your mouse is over
                                     entities.forEach(o => {
@@ -9855,7 +9876,7 @@ function flatten(data, out, playerContext = null) {
                                     body.SIZE = m[1];
                                 } break;
                                 case 5: { // Define tank
-                                    body.upgradeTank(isNaN(m[1]) ? Class[m[1]] : Class[m[1]]);
+                                    body.upgradeTank(m[1]);
 
                                 } break;
                                 case 6: { // Set stats
@@ -10010,52 +10031,52 @@ function flatten(data, out, playerContext = null) {
                             if (labelMap.has(body.label) && body.bossTierType !== 16) body.tierCounter = labelMap.get(body.label);
                             switch (body.bossTierType) {
                                 case 0:
-                                    body.upgradeTank(Class[`eggBossTier${++body.tierCounter}`]);
+                                    body.upgradeTank(`eggBossTier${++body.tierCounter}`);
                                     break;
                                 case 1:
-                                    body.upgradeTank(Class[`squareBossTier${++body.tierCounter}`]);
+                                    body.upgradeTank(`squareBossTier${++body.tierCounter}`);
                                     break;
                                 case 2:
-                                    body.upgradeTank(Class[`triangleBossTier${++body.tierCounter}`]);
+                                    body.upgradeTank(`triangleBossTier${++body.tierCounter}`);
                                     break;
                                 case 3:
-                                    body.upgradeTank(Class[`pentagonBossTier${++body.tierCounter}`]);
+                                    body.upgradeTank(`pentagonBossTier${++body.tierCounter}`);
                                     break;
                                 case 4:
-                                    body.upgradeTank(Class[`hexagonBossTier${++body.tierCounter}`]);
+                                    body.upgradeTank(`hexagonBossTier${++body.tierCounter}`);
                                     break;
                                 case 5:
-                                    body.upgradeTank(Class[`heptagonBossTier${++body.tierCounter}`]);
+                                    body.upgradeTank(`heptagonBossTier${++body.tierCounter}`);
                                     break;
                                 case 6:
-                                    body.upgradeTank(Class[`rocketBossTier${++body.tierCounter}`]);
+                                    body.upgradeTank(`rocketBossTier${++body.tierCounter}`);
                                     break;
                                 case 7:
-                                    body.upgradeTank(Class[`obp${++body.tierCounter}`]);
+                                    body.upgradeTank(`obp${++body.tierCounter}`);
                                     break;
                                 case 8:
-                                    body.upgradeTank(Class[`AWP_${++body.tierCounter}`]);
+                                    body.upgradeTank(`AWP_${++body.tierCounter}`);
                                     break;
                                 case 9:
-                                    body.upgradeTank(Class[`defender${++body.tierCounter}`]);
+                                    body.upgradeTank(`defender${++body.tierCounter}`);
                                     break;
                                 case 10:
-                                    body.upgradeTank(Class[`switcheroo${++body.tierCounter}`]);
+                                    body.upgradeTank(`switcheroo${++body.tierCounter}`);
                                     break;
                                 case 11:
-                                    body.upgradeTank(Class[`chk${++body.tierCounter}`]);
+                                    body.upgradeTank(`chk${++body.tierCounter}`);
                                     break;
                                 case 12:
-                                    body.upgradeTank(Class[`greenBossTier${++body.tierCounter}`]);
+                                    body.upgradeTank(`greenBossTier${++body.tierCounter}`);
                                     break;
                                 case 13:
-                                    body.upgradeTank(Class[`nk${++body.tierCounter}`]);
+                                    body.upgradeTank(`nk${++body.tierCounter}`);
                                     break;
                                 case 14:
-                                    body.upgradeTank(Class[`hewnPuntUpg${++body.tierCounter}`]);
+                                    body.upgradeTank(`hewnPuntUpg${++body.tierCounter}`);
                                     break;
                                 case 15:
-                                    body.upgradeTank(Class[`soulless${++body.tierCounter}`]);
+                                    body.upgradeTank(`soulless${++body.tierCounter}`);
                                     break;
                                 case 16:
                                     entities.forEach(o => {
@@ -10081,16 +10102,16 @@ function flatten(data, out, playerContext = null) {
                                             }
                                     break;
                                 case 17:
-                                    body.upgradeTank(Class[`twinRailgun${++body.tierCounter}`]);
+                                    body.upgradeTank(`twinRailgun${++body.tierCounter}`);
                                     break;
                                 case 18:
-                                    body.upgradeTank(Class[`eggQueenTier${++body.tierCounter}`]);
+                                    body.upgradeTank(`eggQueenTier${++body.tierCounter}`);
                                     break;
                                 case 19:
-                                    body.upgradeTank(Class[`eggSpiritTier${++body.tierCounter}`]);
+                                    body.upgradeTank(`eggSpiritTier${++body.tierCounter}`);
                                     break;
                                 case 20:
-                                    body.upgradeTank(Class[`redStarTier${++body.tierCounter}`]);
+                                    body.upgradeTank(`redStarTier${++body.tierCounter}`);
                                     break;
                                 default:
                                     this.error("tier cycle", `Unknown Q tier value (${body.bossTierType})`, true);

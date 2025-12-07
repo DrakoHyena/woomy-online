@@ -70,7 +70,7 @@ oneVsOne.runTick = function (args) {
 		activityEntry.isFighting = true;
 		fighter.sendMessage("Match found! Prepare yourself!")
 		fighter.define(Class.genericTank);
-		fighter.upgradeTank(Class.basic);
+		fighter.upgradeTank("basic");
 		fighter.roomLayer = newLayer;
 		fighter.skill.score = 59_212;
 		fighter.sendMessage("Set up your build then kill your opponent within 2 minutes")

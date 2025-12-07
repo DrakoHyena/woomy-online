@@ -1780,7 +1780,6 @@ let drawEntity = function () {
 	    };
 	})();
 
-
 	return function (x, y, instance, ratio, alpha) {
 		let scale = arguments.length > 5 && arguments[5] !== undefined ? arguments[5] : 1,
 			rot = arguments.length > 6 && arguments[6] !== undefined ? arguments[6] : 0,
@@ -1788,21 +1787,28 @@ let drawEntity = function () {
 			assignedContext = arguments.length > 8 && arguments[8] !== undefined ? arguments[8] : 0,
 			turretInfo = arguments.length > 9 && arguments[9] !== undefined ? arguments[9] : 0,
 			render = arguments.length > 10 && arguments[10] !== undefined ? arguments[10] : instance.render,
+			maxSize = arguments.length > 11 && arguments[11] !== undefined ? arguments[11] : 0,
 			source = turretInfo === 0 ? instance : turretInfo;
-
-		// Preserve original main context globalAlpha.
-		const originalCtxGlobalAlpha = ctx.globalAlpha;
 
 		if (config.hideMiniRenders === true && !render.real) return;
 
 		let fade = turretInfo ? 1 : render.status.getFade(instance.size);
 		if (fade === 0 || alpha === 0) return;
 
-		let drawSize = scale * ratio * (turretInfo ? instance.size : render.size);
-		if (config.lerpSize) drawSize = drawSize * fade;
-
 		// Get mockup data.
 		const m = mockups.get(instance.index);
+
+		let drawSize = scale * ratio * (turretInfo ? instance.size : render.size);
+		
+		// Adjust scale to fit perfectly within maxSize if specified (only for root entity, not turrets)
+		if (maxSize > 0 && turretInfo === 0) {
+			const entitySize = drawSize * m.position.axis;
+			const scaleFactor = maxSize / entitySize;
+			scale *= scaleFactor;
+			//ratio *= scaleFactor;
+			drawSize *= scaleFactor;
+		}
+		if (config.lerpSize) drawSize = drawSize * fade;
 		let props = m.props
 
 		let currentContext = assignedContext || ctx;
@@ -2145,17 +2151,15 @@ let drawEntity = function () {
 			currentContext.restore();
 
 			if (currentContext.canvas.width > 0 && currentContext.canvas.height > 0) {
-				ctx.save();
+				let oldContext = assignedContext || ctx
+				oldContext.save();
 				// Apply tank transparency.
-				ctx.globalAlpha = alpha * fade;
+				oldContext.globalAlpha = alpha * fade;
 				// Draw offscreen content to main context.
-				ctx.drawImage(currentContext.canvas, Math.round(x - tankDrawX), Math.round(y - tankDrawY));
-				ctx.restore();
+				oldContext.drawImage(currentContext.canvas, Math.round(x - tankDrawX), Math.round(y - tankDrawY));
+				oldContext.restore();
 			}
 		}
-
-		// Restore original globalAlpha.
-		ctx.globalAlpha = originalCtxGlobalAlpha;
 
 		// Clear gun cache if size exceeds limit.
 		if (gunCache.size > 4000) {

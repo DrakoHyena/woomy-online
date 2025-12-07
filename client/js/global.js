@@ -6,6 +6,8 @@ import { Smoothbar } from "./util.js";
 
 // must be var because its gets defiend immediately
 var global = {
+	debug: false, // Detailed logging
+
 	_selectedServer: 0,
 	mobile: navigator.userAgentData?.mobile ?? /Mobi/i.test(navigator.userAgent),
 	guiMouse: {

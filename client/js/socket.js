@@ -13,7 +13,7 @@ import { lerp } from "./lerp.js";
 import { ASSET_MAGIC, loadAsset, setAsset } from "../../shared/assets.js";
 import "./consoleCommands.js"
 import { drawVignette } from "./drawing/vignette.js";
-
+import { player } from "./player.js";
 
 
 let socket;
@@ -449,7 +449,7 @@ function convertFastGui() {
 	if (indices.upgrades) {
 		const upgrades = [];
 		for (let i = 0, len = convert.reader.next(); i < len; i++) upgrades.push(convert.reader.next());
-
+		player.upgrades = upgrades;
 		if (upgrades.toString() !== _gui._realUpgrades.toString()) {
 			_gui._realUpgrades = upgrades;
 			_gui._upgrades = upgrades;

@@ -13,6 +13,7 @@ import "./mainmenu.js";
 import "./joinMenu.js";
 import { config } from "./config.js";
 import { drawVignette } from "./drawing/vignette.js";
+import { drawLoop } from "./drawing/drawLoop.js";
 
 if ('serviceWorker' in navigator) {
 	window.addEventListener('load', () => {
@@ -121,6 +122,7 @@ function RememberScriptingIsBannable() {
 util._retrieveFromLocalStorage("nameInput")
 util._retrieveFromLocalStorage("tokenInput")
 async function _startGame(gamemodeCode, joinRoomId, maxPlayers, maxBots) {
+	drawLoop.start();
 	document.getElementById("legalDisclaimer")?.remove?.()
     if (!global.animLoopHandle) _animloop();
     document.getElementById("mainWrapper").style.zIndex = -100;
