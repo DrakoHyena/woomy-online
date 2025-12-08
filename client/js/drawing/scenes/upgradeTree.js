@@ -46,14 +46,15 @@ upgradeTree.utilityFuncts.set("fade", calcFade)
 let gradient = undefined;
 function recreateBackground({canvas, ctx}){
 	gradient = ctx.createRadialGradient(canvas.width/2, canvas.height/2, 0, canvas.width/2, canvas.height/2, Math.max(canvas.width, canvas.height)/2);
-	gradient.addColorStop(0, "rgba(0,0,0,0)");
-	gradient.addColorStop(1, "rgba(0,0,0,.8)")
+	gradient.addColorStop(0, "rgba(255,255,255,.6)");
+	gradient.addColorStop(.35, "rgba(255,255,255,.4)");
+	gradient.addColorStop(1, "rgba(0,0,0,.4)")
 }
 upgradeTree.resizeFuncts.set("gradient", recreateBackground)
 
 function drawBackground({canvas, ctx, delta}){
 	if(gradient === undefined) recreateBackground({canvas: canvas, ctx: ctx});
-	ctx.globalAlpha = .75*fade;
+	ctx.globalAlpha = fade;
 	ctx.fillStyle = gradient;
 	ctx.fillRect(0,0,canvas.width,canvas.height);
 }
