@@ -218,11 +218,7 @@ function renderNode(drawArgs, node, skipChildren, angleOffset, _angle = 0, _tier
 	}
 }
 
-function buildNode(mockup, node, renderDistance=0){
-	if (renderDistance === 1) return;
-}
-
-function buildNodeTree(){
+function buildInitalNodeTree(){
 	if(global.debug === true){
 		console.log(`[UPGRADETREE] Rebuilding Node Tree`)
 	}
@@ -239,7 +235,7 @@ function renderAllNodes(drawArgs){
 	if(player.mockup !== lastMockup || player.upgrades[player.upgrades.length-1] !== lastUpgrade){
 		lastMockup = player.mockup;
 		lastUpgrade = player.upgrades[player.upgrades.length-1]
-		buildNodeTree();
+		buildInitalNodeTree();
 	}
 	if(player.upgrades.length === 0){
 		fadeGoal = 0;
