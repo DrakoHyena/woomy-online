@@ -65,7 +65,8 @@ let mockups = {
 		},
 		guns: [],
 		turrets: [],
-		props: []
+		props: [],
+		upgrades: []
 	},
 	applyDefaults: (data) => {
 		function cleanUpDefaults(rawMockup) {
@@ -197,7 +198,8 @@ function getEntityImageFromMockup(index, color) {
 		}),
 		props: {
 			length: mockup.props.length
-		}
+		},
+		upgrades: mockup.upgrades
 	};
 }
 
