@@ -5550,9 +5550,9 @@ const Chain = Chainf;
                     sk = this.body.skill,
                     out = {
                         SPEED: shoot.maxSpeed * sk.spd,
-                        HEALTH: 0.64 * shoot.health * sk.str,
+                        HEALTH: 1.25 * shoot.health * sk.str,
                         RESIST: shoot.resist + sk.rst,
-                        DAMAGE: 1.65 * shoot.damage * sk.dam,
+                        DAMAGE: 1 * shoot.damage * sk.dam,
                         PENETRATION: Math.max(1, shoot.pen * sk.pen),
                         RANGE: shoot.range / Math.sqrt(sk.spd),
                         DENSITY: shoot.density * sk.pen * sk.pen / sizeFactor,
