@@ -1,3 +1,7 @@
+
+import * as fs from "node:fs"
+import { parentPort } from "worker_threads"
+
 import { assets, ASSET_MAGIC } from "../shared/assets.js";
 import { oneVsOne } from "./modes/oneVsOne.js";
 
@@ -2217,7 +2221,6 @@ const Chain = Chainf;
                         shape: p.shape,
                         fill: p.fill,
 						stroke: p.stroke,
-						borderless: p.borderless,
                         loop: p.loop,
                         isAura: p.isAura,
                         rpm: p.rpm,
@@ -5550,9 +5553,9 @@ const Chain = Chainf;
                     sk = this.body.skill,
                     out = {
                         SPEED: shoot.maxSpeed * sk.spd,
-                        HEALTH: 1.25 * shoot.health * sk.str,
+                        HEALTH: shoot.health * sk.str,
                         RESIST: shoot.resist + sk.rst,
-                        DAMAGE: 1 * shoot.damage * sk.dam,
+                        DAMAGE: shoot.damage * sk.dam,
                         PENETRATION: Math.max(1, shoot.pen * sk.pen),
                         RANGE: shoot.range / Math.sqrt(sk.spd),
                         DENSITY: shoot.density * sk.pen * sk.pen / sizeFactor,
@@ -5593,7 +5596,6 @@ const Chain = Chainf;
                 this.color = info.COLOR || -1;
                 this.fill = info.FILL != undefined ? info.FILL : true;
 				this.stroke = info.STROKE != undefined ? info.STROKE : true;
-				this.borderless = info.BORDERLESS != undefined ? info.BORDERLESS : false;
                 this.loop = info.LOOP != undefined ? info.LOOP : true;
                 this.isAura = info.IS_AURA != undefined ? info.IS_AURA : false;
                 this.ring = info.RING;
@@ -5603,7 +5605,7 @@ const Chain = Chainf;
 				this.lockRot = info.LOCK_ROT != undefined ? info.LOCK_ROT : true;
 				this.scaleSize = info.SCALE_SIZE != undefined ? info.SCALE_SIZE : true;
 				this.tankOrigin = info.TANK_ORIGIN != undefined ? info.TANK_ORIGIN : true;
-				if(this.isAura === true) this.borderless = false;
+				if(this.isAura === true) this.stroke = false;
             }
         }
         let bots = [];
@@ -6755,7 +6757,7 @@ const Chain = Chainf;
                 }
             }
             refreshBodyAttributes() {
-                let speedReduce = Math.pow(this.size / this.SIZE, 1);
+                let speedReduce = Math.pow(this.size / this.SIZE, 0.75);
                 this.acceleration = c.runSpeed * this.ACCELERATION / speedReduce;
                 if (this.settings.reloadToAcceleration) this.acceleration *= this.skill.acl;
                 this.topSpeed = c.runSpeed * this.SPEED * this.skill.mob / speedReduce;
@@ -6764,8 +6766,7 @@ const Chain = Chainf;
                 this.health.resist = 1 - 1 / (Math.max(1, this.RESIST + this.skill.brst) / 1.15);
                 this.shield.set(((this.settings.healthWithLevel ? .6 * this.skill.level : 0) + this.SHIELD) * this.skill.shi * (this.settings.reloadToAcceleration ? .85 : 1), Math.max(0, (((this.settings.healthWithLevel ? .006 * this.skill.level : 0) + 1) * this.REGEN) * this.skill.rgn) * (this.settings.reloadToAcceleration ? 0.9 : 1));
                 this.damage = this.DAMAGE * (this.settings.reloadToAcceleration ? this.skill.atk * 1.1 /*1.1*/ /*1.25*/ : this.skill.atk);
-                this.penetration = this.PENETRATION + 1.5 * (this.skill.brst + 0.8 * (this.skill.atk - 1));//this.PENETRATION + 1.5 * (this.skill.brst + .8 * (this.skill.atk - 1)) * .4;//(this.settings.reloadToAcceleration ? .1 : 1);
-                this.range = this.RANGE;
+                this.penetration = this.PENETRATION + 1.5 * (this.skill.brst /*+ 0.8 * (this.skill.atk - 1)*/);                this.range = this.RANGE;
                 this.fov = 250 * this.FOV * Math.sqrt(this.size) * (1 + .003 * this.skill.level);
                 this.density = (1 + 0.08 * this.skill.level) * this.DENSITY;//(1 + .08 * this.skill.level) * this.DENSITY * 2.334;//(this.settings.reloadToAcceleration ? 5 : 1);
                 this.stealth = this.STEALTH;
@@ -7101,9 +7102,6 @@ const Chain = Chainf;
                         this.maxSpeed = this.topSpeed;
                         this.damp = -.0125;
                         this.DAMAGE -= 10; // .05, 1, 2
-                        break;
-					case "sonicAccel":
-                        this.damp = -.021;
                         break;
                     case "glideBall":
                         this.maxSpeed = this.topSpeed;
