@@ -1788,6 +1788,7 @@ let drawEntity = function () {
 			turretInfo = arguments.length > 9 && arguments[9] !== undefined ? arguments[9] : 0,
 			render = arguments.length > 10 && arguments[10] !== undefined ? arguments[10] : instance.render,
 			maxSize = arguments.length > 11 && arguments[11] !== undefined ? arguments[11] : 0,
+			cacheCanvas = arguments[12],
 			source = turretInfo === 0 ? instance : turretInfo;
 
 		if (config.hideMiniRenders === true && !render.real) return;
@@ -2159,6 +2160,14 @@ let drawEntity = function () {
 				oldContext.drawImage(currentContext.canvas, Math.round(x - tankDrawX), Math.round(y - tankDrawY));
 				oldContext.restore();
 			}
+		}
+
+		if(cacheCanvas){
+			cacheCanvas.width = currentContext.canvas.width;
+			cacheCanvas.height = currentContext.canvas.height;
+			cacheCanvas.ctx.drawImage(currentContext.canvas, 0, 0);
+			cacheCanvas.tankCenterX = tankDrawX;
+			cacheCanvas.tankCenterY = tankDrawY;
 		}
 
 		// Clear gun cache if size exceeds limit.

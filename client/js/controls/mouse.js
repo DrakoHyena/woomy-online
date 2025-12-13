@@ -10,8 +10,8 @@ const mouse = {
 	}
 }
 mouse._updatePos = function(mouseMoveEvent){
-	mouse.x = mouseMoveEvent.x;
-	mouse.y = mouseMoveEvent.y;
+	mouse.x = mouseMoveEvent.clientX;
+	mouse.y = mouseMoveEvent.clientY;
 }
 
 mouse._updateButtons = function(mouseEvent){
