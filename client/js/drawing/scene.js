@@ -8,7 +8,7 @@ class Scene{
 		this.active = true;
 		this.drawingDisabled = false;
 		this.canvas = canvas;
-		this.maxFps = 1000;
+		this.maxFps = 75;
 		this.utilityFuncts = new Map();
 		this.resizeFuncts = new Map();
 		this.drawFuncts = new Map();
@@ -34,16 +34,16 @@ class Scene{
 			if(global.debug === true){
 				console.log(`[SCENE] Utilizing ${utilityFunctLabel}...`)
 			}
-			utilityFunct({canvas: this.canvas, ctx: this._ctx});
-		}
-		if(this.drawingDisabled === true){
-			if(global.debug === true){
-				console.log(`[SCENE] Drawing disabled`)
-			}
-			return;
+			utilityFunct({canvas: this.canvas, ctx: this._ctx, delta: delta});
 		}
 		if(ignoreFps === true || delta >= 1){
 			this._lastDraw = drawTime;
+			if(this.drawingDisabled === true){
+				if(global.debug === true){
+					console.log(`[SCENE] Drawing disabled`)
+				}
+				return;
+			}
 			for(let [drawFunctLabel, drawFunct] of this.drawFuncts){
 				if(global.debug === true){
 					console.log(`[SCENE] Drawing ${drawFunctLabel} (${delta} delta)...`)

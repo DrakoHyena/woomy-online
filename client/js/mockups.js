@@ -112,6 +112,7 @@ let mockups = {
 					return p;
 				});
 			}
+			rawMockup.isLoading = false;
 			return rawMockup;
 		}
 		data.turrets = (data.turrets || []).map(mockups.applyDefaults);
@@ -199,7 +200,8 @@ function getEntityImageFromMockup(index, color) {
 		props: {
 			length: mockup.props.length
 		},
-		upgrades: mockup.upgrades
+		upgrades: mockup.upgrades,
+		isLoading: mockup.isLoading
 	};
 }
 
