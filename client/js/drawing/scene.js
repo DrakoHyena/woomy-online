@@ -29,7 +29,7 @@ class Scene{
 	}
 	draw(ignoreFps = false){
 		const drawTime = performance.now();
-		const delta = ((drawTime - this._lastDraw)) / (1000 / this.maxFps);
+		const delta = Math.min(1, Math.max(0.05, ((drawTime - this._lastDraw)) / (1000 / this.maxFps)));
 		for(let [utilityFunctLabel, utilityFunct] of this.utilityFuncts){
 			if(global.debug === true){
 				console.log(`[SCENE] Utilizing ${utilityFunctLabel}...`)

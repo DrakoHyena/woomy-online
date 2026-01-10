@@ -304,7 +304,12 @@ const server = http.createServer(handleRequest);
 // 4. WEBSOCKET SERVER ATTACHMENT
 // =================================================================
 
-const wss = new wsLib.WebSocketServer({ server, maxPayload: 1024 * 1024 });
+const wss = new wsLib.WebSocketServer({ 
+	server, 
+	maxPayload: 1024 * 1024,
+	clientTracking: true,
+	perMessageDeflate: false // Reduce overhead for frequent heartbeats
+});
 
 wss.on('connection', function connection(ws, req) {
 	const type = req.url.split("/")[1];
@@ -315,22 +320,18 @@ wss.on('connection', function connection(ws, req) {
 			let room = new Room(ws);
 			console.log(`New room hosted with ID: ${room.id}`);
 
-			function sendHeartbeat(){
-				if(ws.readyState !== 1){
-					console.log(`Failed to send hearbeat to room ${room.id} (readyState = ${ws.readyState})`)
-				}else{
-					ws.send(JSON.stringify({type:"ping"}))
-					setTimeout(sendHeartbeat, 10000)
-				}
-			}
-			sendHeartbeat()
-
 
 			ws.on("close", room.removeFromRooms.bind(room));
 			ws.on("message", (msg) => {
 				try {
-					const { players, maxPlayers, name, desc, ping } = JSON.parse(msg.toString());
-					if (ping === true) return;
+					const { players, maxPlayers, name, desc, type } = JSON.parse(msg.toString());
+					
+					// Handle client heartbeat
+					if (type === "clientPing") {
+						ws.send(JSON.stringify({type: "pong"}));
+						return;
+					}
+					
 					if (players !== undefined) room.players = Number(players) || 0;
 					if (maxPlayers !== undefined) room.maxPlayers = Number(maxPlayers) || 99;
 					if (name) room.gamemodeCode = `${name}`.substring(0, 25);

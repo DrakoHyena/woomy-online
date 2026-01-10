@@ -54,15 +54,25 @@ multiplayer.wrmHost = async function () {
 				case "hostRoomId":
 					this.hostRoomId = data
 					break;
-				case "ping":
-					this.roomWs.send(JSON.stringify({ping:true}))
+				case "pong":
+					// Server acknowledged our ping
 					break;
 			}
 		} catch (err) {
 			console.error(err)
 		}
 	}
+	// Client-side heartbeat - send ping every 15 seconds to prevent idle timeout
+	const clientHeartbeat = setInterval(() => {
+		if (this.roomWs && this.roomWs.readyState === WebSocket.OPEN) {
+			this.roomWs.send(JSON.stringify({type: "clientPing"}));
+		} else {
+			clearInterval(clientHeartbeat);
+		}
+	}, 15000);
+
 	this.roomWs.onclose = async () => {
+		clearInterval(clientHeartbeat);
 		console.log("Room socket closed with room manager. Retrying in 5 seconds.")
 		this.hostRoomId = undefined
 		setTimeout(async ()=>{

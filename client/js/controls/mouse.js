@@ -1,4 +1,5 @@
 import { global } from "../global.js";
+import { lerp } from "../lerp.js";
 
 const mouse = {
 	x: 0,
@@ -7,7 +8,9 @@ const mouse = {
 		left: false,
 		middle: false,
 		right: false
-	}
+	},
+	scrollY: 0,
+	scrollX: 0
 }
 mouse._updatePos = function(mouseMoveEvent){
 	mouse.x = mouseMoveEvent.clientX;
@@ -29,6 +32,15 @@ mouse._updateButtons = function(mouseEvent){
 	}
 }
 
+mouse._updateScroll = function(wheelEvent){
+	mouse.scrollX = wheelEvent.deltaX;
+	mouse.scrollY = wheelEvent.deltaY;
+}
+setInterval(()=>{
+	mouse.scrollX = lerp(mouse.scrollX, 0, .075);
+	mouse.scrollY = lerp(mouse.scrollY, 0, .075);
+})
+
 mouse.posRelativeToScene = function(scene){
 	const canvas = scene.canvas;
 	const rect = canvas.getBoundingClientRect();
@@ -43,5 +55,6 @@ mouse.posRelativeToScene = function(scene){
 window.addEventListener("mousemove", mouse._updatePos);
 window.addEventListener("mousedown", mouse._updateButtons);
 window.addEventListener("mouseup", mouse._updateButtons);
+window.addEventListener("wheel", mouse._updateScroll);
 
 export { mouse }

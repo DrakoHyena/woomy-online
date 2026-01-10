@@ -1,6 +1,7 @@
 import { drawLoop } from "../drawLoop.js";
 import { Scene } from "../scene.js";
 import { closeUpgradeMenu, openUpgradeMenu, toggleUpgradeMenu } from "./upgradeTree.js";
+import { closeSettingsMenu, openSettingsMenu, toggleSettingsMenu } from "./settings.js";
 import { clickableActive } from "./clickable.js";
 import { lerp } from "../../lerp.js";
 
@@ -14,7 +15,7 @@ const TOPLEFTBUTTONS_CONFIG = {
 
 const buttons = [
 	newButton(toggleUpgradeMenu, "#a6d469", "#749f34"),
-	newButton(toggleUpgradeMenu, "#797979ff", "#696969ffff"),
+	newButton(toggleSettingsMenu, "#797979ff", "#696969ff"),
 
 ]
 function newButton(clickFunct, color, strokeColor){
@@ -27,8 +28,8 @@ function newButton(clickFunct, color, strokeColor){
 	}
 }
 
-const frameCache = {
-	fadeGoal: 1
+const state = {
+	width: 0,
 }
 
 const topLeftButtons = new Scene(document.getElementById("topLeftButtonsCanvas"));
@@ -42,8 +43,10 @@ function draw({canvas, ctx, delta}){
 	let x = TOPLEFTBUTTONS_CONFIG.MARGIN;
 	let y = TOPLEFTBUTTONS_CONFIG.MARGIN;
 	ctx.lineWidth = TOPLEFTBUTTONS_CONFIG.MARGIN/2;
+	state.width = 0;
 	for(let button of buttons){
 		const size = canvas.height * TOPLEFTBUTTONS_CONFIG.SIZE_MULT * button.hoverMult
+		if(x + size > state.width) state.width = x + size;
 		ctx.fillStyle = button.color;
 		ctx.strokeStyle = button.strokeColor;
 		ctx.beginPath();
@@ -69,3 +72,5 @@ topLeftButtons.drawFuncts.set("drawTLButtons", draw)
 function openTLButtonMenu(){}
 
 function closeTLButtonMenu(){}
+
+export { state as topLeftButtonsState, TOPLEFTBUTTONS_CONFIG }
