@@ -21,6 +21,7 @@ const SETTINGS_CONFIG = {
 
 const state = {
 	open: true,
+	showEntityEditor: false,
 	fade: 0
 }
 
@@ -332,8 +333,8 @@ settings.drawFuncts.set("settingsMenu", ({ canvas, ctx, delta }) => {
 
 	text = renderText("Neon Mode", SETTINGS_CONFIG.SETTING_TEXT_SIZE)
 	ctx.drawImage(text, x+SETTINGS_CONFIG.PADDING, y);
-	renderInput("neonMode", "checkbox", settings, (x+width)-SETTINGS_CONFIG.PADDING-text.height, y, text.height, text.height, currentSettings.neon.value.enabled, ()=>{
-		currentSettings.neon.value.enabled = !currentSettings.neon.value.enabled
+	renderInput("neonMode", "checkbox", settings, (x+width)-SETTINGS_CONFIG.PADDING-text.height, y, text.height, text.height, currentSettings.neonMode.value.enabled, ()=>{
+		currentSettings.neonMode.value.enabled = !currentSettings.neonMode.value.enabled
 	}, () => {
 		showTextBox("Neon Mode", "For a Neon Experience")
 	})
@@ -410,13 +411,22 @@ settings.drawFuncts.set("settingsMenu", ({ canvas, ctx, delta }) => {
 	})
 	y += text.height + SETTINGS_CONFIG.PADDING
 
-	text = renderText("Debug", SETTINGS_CONFIG.TITLE_TEXT_SIZE);
+	text = renderText("Advanced Settings", SETTINGS_CONFIG.TITLE_TEXT_SIZE);
 	y += SETTINGS_CONFIG.PADDING;
 	ctx.drawImage(text, x+width/2-text.width/2, y)
 	y += text.height*.5;
 	renderLine(x, y, x+width/2-text.width/2, y)
 	renderLine(x+width/2+text.width/2, y, x+width, y)
 	y += text.height*.5;
+
+	if(state.showEntityEditor){
+		text = renderText("Entity Editor", SETTINGS_CONFIG.SETTING_TEXT_SIZE)
+		ctx.drawImage(text, x+SETTINGS_CONFIG.PADDING, y);
+		renderInput("debugInputElements", "button", settings, (x+width)-SETTINGS_CONFIG.PADDING-text.height, y, text.height, text.height, "Open", ()=>{
+			window.open("/editor.html", "_blank", "width=600,height=400,top=0,left=0");
+		})
+		y += text.height + SETTINGS_CONFIG.PADDING
+	}
 
 	text = renderText("Debug Input Elements", SETTINGS_CONFIG.SETTING_TEXT_SIZE)
 	ctx.drawImage(text, x+SETTINGS_CONFIG.PADDING, y);
@@ -454,4 +464,4 @@ function toggleSettingsMenu(){
 	}
 }
 
-export { openSettingsMenu, closeSettingsMenu, toggleSettingsMenu }
+export { openSettingsMenu, closeSettingsMenu, toggleSettingsMenu, state as settingsState }

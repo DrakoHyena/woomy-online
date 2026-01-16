@@ -1,8 +1,8 @@
 import { global } from "./global.js";
-import { _startGame } from "./app.js";
 import { multiplayer } from "./multiplayer.js";
 import { openModBrowser } from "./mainmenu.js";
 import { util } from "./util.js";
+import { startGame } from "./drawing/scenes/game.js";
 
 /*
 == NOTE ==
@@ -109,7 +109,7 @@ joinButton.onclick = function () {
 	openJoinScreen(true);
 	if (global._disconnected && global._gameStart) return;
 	window.gameLaunched = true;
-	_startGame(selectedGamemode, selectedRoomId, maxPlayers, maxBots);
+	startGame(selectedGamemode, selectedRoomId, maxPlayers, maxBots);
 }
 document.addEventListener("keydown", function eh (e) {
 	if (global._disconnected && global._gameStart) return;

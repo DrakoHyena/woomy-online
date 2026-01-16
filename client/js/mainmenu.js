@@ -44,7 +44,6 @@
 		{ rivetGamemode: "blackoutvwalk.js", serverGamemode: "Blackout Void Walkers" },
 		{ rivetGamemode: "custom.js", serverGamemode: "Modded" }
 	]
-	window.preloadsDoneCooking = true
 })();
 
 const popup = document.querySelector(".popup");

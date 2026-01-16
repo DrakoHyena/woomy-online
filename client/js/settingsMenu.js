@@ -172,10 +172,6 @@ const initSettingsMenu = function () {
 			config.firstLoad = false;
 		};
 
-		let entityEditor = document.getElementById("entityEditor")
-		entityEditor.onclick = () => {
-			window.open("/editor.html", "_blank", "width=600,height=400,top=0,left=0");
-		}
 
 		resultField.addEventListener("keydown", event => {
 			if (event.key == "Enter") inportButton.click();

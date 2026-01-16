@@ -1,6 +1,5 @@
 import { global } from "/js/global.js"
 import { logger } from "/js/debug.js"
-import { config } from "./config.js";
 import { lerp } from "./lerp.js"
 
 const util = {};

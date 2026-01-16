@@ -1,11 +1,11 @@
 import { ctx, getGradient } from "./canvas.js";
 import { mockups } from "../mockups.js";
-import { config } from "../config.js";
 import { getColor, color, setColors, setColorsUnmixB, setColorsUnmix, specialColors } from "../colors.js"
 import { mixColors } from "../../shared/mix_colors.js";
 import { lerpAngle, lerp, expLerp } from "../lerp.js"
 import { imageCache } from "../assets.js";
 import { global } from "../global.js";
+import { currentSettings } from "../settings.js";
 
 const canvas2 = new OffscreenCanvas(1,1);
 const ctx2 = canvas2.getContext("2d")
@@ -1791,7 +1791,7 @@ let drawEntity = function () {
 			cacheCanvas = arguments[12],
 			source = turretInfo === 0 ? instance : turretInfo;
 
-		if (config.hideMiniRenders === true && !render.real) return;
+		if (currentSettings.hideMiniRenders.value.enabled === true && !render.real) return;
 
 		let fade = turretInfo ? 1 : render.status.getFade(instance.size);
 		if (fade === 0 || alpha === 0) return;
@@ -1809,7 +1809,7 @@ let drawEntity = function () {
 			//ratio *= scaleFactor;
 			drawSize *= scaleFactor;
 		}
-		if (config.lerpSize) drawSize = drawSize * fade;
+		if (currentSettings.lerpSize.value.enabled) drawSize = drawSize * fade;
 		let props = m.props
 
 		let currentContext = assignedContext || ctx;
@@ -1835,17 +1835,17 @@ let drawEntity = function () {
 			currentContext.globalAlpha = 1;
 		} else {
 			// Apply globalAlpha for main context drawing.
-			currentContext.globalAlpha = (config.glassMode ? .7 : 1);
+			currentContext.globalAlpha = (currentSettings.glassMode.value.enabled ? .7 : 1);
 		}
 
 		// Apply common canvas settings.
 		currentContext.lineCap = "round";
-		currentContext.lineJoin = config.pointy ? "miter" : "round";
+		currentContext.lineJoin = currentSettings.pointy.value.enabled ? "miter" : "round";
 
 		// Apply shader settings.
 		let shadowRelativeColor = false;
 		if (render.real) {
-			switch (config.shaders) {
+			switch (currentSettings.shaders.value.selected) {
 				case "Disabled":
 					currentContext.shadowBlur = 0;
 					currentContext.shadowColor = "rgba(0,0,0,0)";
@@ -1930,7 +1930,7 @@ let drawEntity = function () {
 		let adjustedRot = rot;
 		if (fade > 0) adjustedRot += (((90 * Math.PI) / 180) * (1 - fade)) * Math.sign(rot);
 
-		currentContext.lineWidth = ratio * config.borderChunk * fade;
+		currentContext.lineWidth = ratio * currentSettings.borderWidth.value.number * fade;
 		if (scale < 1) {
 			currentContext.lineWidth *= scale;
 		}

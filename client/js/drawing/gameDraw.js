@@ -10,6 +10,7 @@ import { drawHealth } from "./drawHealth.js";
 import { mockups, getEntityImageFromMockup } from "../mockups.js";
 import { rewardManager } from "../achievements.js";
 import { player } from "../player.js";
+import { currentSettings } from "../settings.js";
 
 let upgradeBarSpeed = 0.4;
 let statMenu = Smoothbar(0, 0.075),
@@ -20,8 +21,8 @@ let compensation = function () {
 	return function () {
 		let strength = metrics._rendergap / (1000 / 30);
 		return {
-			predict: (p1, p2, v1, v2) => lerp(p1 + v1, p2 + v2, config.movementSmoothing, false),
-			predictFacing: (a1, a2) => lerpAngle(a1, a2, config.movementSmoothing, false),
+			predict: (p1, p2, v1, v2) => lerp(p1 + v1, p2 + v2, window.movementSmoothing, false),
+			predictFacing: (a1, a2) => lerpAngle(a1, a2, window.movementSmoothing, false),
 			//predictExtrapolate: (p1, p2, v1, v2) => lerp(p1 + v1, p2 + v2, config.movementSmoothing, 1),
 			//predictFacingExtrapolate: (a1, a2) => lerpAngle(a1, a2, .12, 1),
 			getPrediction: () => strength
@@ -34,7 +35,7 @@ let ska = function () {
 		return Math.log(4 * x + 1) / Math.log(5);
 	}
 	let a = [];
-	for (let i = 0; i < config.expectedMaxSkillLevel * 2; i++) a.push(make(i / config.expectedMaxSkillLevel));
+	for (let i = 0; i < 9 * 2; i++) a.push(make(i / 9));
 	return function (x) {
 		return a[x];
 	};
@@ -53,9 +54,9 @@ let gameDraw = function (ratio) {
 
 	// MAP
 	if (global._mapType !== 1) {
-		let W = roomSetup[0].length,
-			H = roomSetup.length,
-			i = 0;
+		const W = roomState.cells[0].length;
+		const H = roomState.cells.length;
+		let i = 0;
 		ctx.globalAlpha = 1;
 		for (let j = 0; j < roomSetup.length; j++) {
 			let row = roomSetup[j],
@@ -126,7 +127,7 @@ let gameDraw = function (ratio) {
 			global.player.team = instance.team;
 			player.mockup = mockups.get(instance.index);
 
-			if(config.clientSideAim === true){
+			if(currentSettings.clientSideAim.value.enabled === true){
 				instance.render.facing = (!instance.twiggle && !global._died && !global._forceTwiggle) ? Math.atan2(global._target._y - y, global._target._x - x) : motion.predictFacing(instance.render.facing, instance.facing);
 			} else {
 				instance.render.facing = motion.predictFacing(instance.render.facing, instance.facing);
@@ -144,14 +145,14 @@ let gameDraw = function (ratio) {
 		}
 
 		ctx.globalAlpha = 1;
-		instance.render.size = config.lerpSize ? lerp(instance.render.size, instance.size, 0.3) : instance.size;
+		instance.render.size = currentSettings.lerpSize.value.enabled ? lerp(instance.render.size, instance.size, 0.3) : instance.size;
 		// Empty bars
 		if (instance.render.status.getFade(instance.size) !== 1) {
 			instance.render.health.set(0);
 			instance.render.shield.set(0);
 		}
 		drawEntity(x, y, instance, ratio, global.player._canSeeInvisible ? instance.alpha + .5 : instance.alpha, 1.1, instance.render.facing);
-		if (!config.screenshotMode) frameplate.push([x, y, instance, ratio, global.player._canSeeInvisible ? instance.alpha + .5 : instance.alpha]);
+		if (!currentSettings.screenshotMode.value.enabled) frameplate.push([x, y, instance, ratio, global.player._canSeeInvisible ? instance.alpha + .5 : instance.alpha]);
 		ctx.globalAlpha = 1;
 	};
 
@@ -177,14 +178,14 @@ let gameDraw = function (ratio) {
 	    ctx.save();
 	    ctx.translate(lx1, ly1);
 	    ctx.rotate(angle);
-	    if (config.performanceMode === false && config.animatedLasers === true) {
+	    if (currentSettings.performanceMode.value.enabled === false && currentSettings.animatedLasers.value.enabled === true) {
 	        const layers = 6;
 	        for(let i = 0; i < layers; i++){
 	            const t = i / (layers - 1);
 	            const layerWidth = (width * (1+(i/layers)*Math.random())) * (1 - t * 0.7);
 	            let lcolor;
 	            if(t < 0.5) {
-					const blend = Math.min(1, (t*2)/(config.borderChunk/4));
+					const blend = Math.min(1, (t*2)/(currentSettings.borderWidth.value.number/4));
 	                lcolor = mixColors(darkColor, color.white, blend);
 	            } else {
 	                const blend = (t - 0.5) * 2;
@@ -327,7 +328,7 @@ let gameDraw = function (ratio) {
 
 	// SKILL BARS
 	ctx.translate(global._screenWidth / -2, global._screenHeight / -2);
-	ratio = util._getScreenRatio() * config.uiScale;
+	ratio = util._getScreenRatio() * currentSettings.uiScale.value.number;
 	let scaleScreenRatio = (by, unset) => {
 		global._screenWidth /= by;
 		global._screenHeight /= by;
@@ -338,7 +339,7 @@ let gameDraw = function (ratio) {
 
 	let alcoveSize = 200 / ratio; // / drawRatio * global.screenWidth;
 	let spacing = 20;
-	if (!config.screenshotMode) {
+	if (!currentSettings.screenshotMode.value.enabled) {
 		scaleScreenRatio(ratio, true);
 		_gui._skill.update();
 		{
@@ -367,11 +368,11 @@ let gameDraw = function (ratio) {
 					statBars[ticker - 1].set(ska(level))
 					if (cap) {
 						len = save;
-						let _max = config.expectedMaxSkillLevel,
+						let _max = 9,
 							extension = cap > _max,
 							blocking = cap < maxLevel;
 						if (extension) _max = cap;
-						drawBar(x + height / 2, x - height / 2 + len * ska(cap), y + height / 2, height - 3 + config.barChunk, color.black);
+						drawBar(x + height / 2, x - height / 2 + len * ska(cap), y + height / 2, height - 3 + currentSettings.barWidth.value.number, color.black);
 						drawBar(x + height / 2, x + height / 2 + (len - gap) * ska(cap), y + height / 2, height - 3, color.grey);
 						drawBar(x + height / 2, x + height / 2 + ((len - gap) * statBars[ticker - 1].get()), y + height / 2, height - 3.5, col);
 						if (blocking) {
@@ -405,13 +406,13 @@ let gameDraw = function (ratio) {
 					max = _gui._leaderboard._display.length ? _gui._leaderboard._display[0].score : false,
 					level = _gui._skill.getLevel();
 				ctx.lineWidth = 1;
-				drawBar(x, x + len, y + height / 2, height - 3 + config.barChunk, color.black);
+				drawBar(x, x + len, y + height / 2, height - 3 + currentSettings.barWidth.value.number, color.black);
 				drawBar(x, x + len, y + height / 2, height - 3, color.grey);
 				drawBar(x, x + len * (level > 59 ? 1 : _gui._skill.getProgress()), y + height / 2, height - 3.5, color.gold);
 				drawText("Level " + level + " " + global.player._label, x + len / 2, y + height / 2, height - 4, color.guiwhite, "center", 1);
 				height = 14;
 				y -= height + spacing;
-				drawBar(x + len * .1, x + len * .9, y + height / 2, height - 3 + config.barChunk, color.black);
+				drawBar(x + len * .1, x + len * .9, y + height / 2, height - 3 + currentSettings.barWidth.value.number, color.black);
 				drawBar(x + len * .1, x + len * .9, y + height / 2, height - 3, color.grey);
 				drawBar(x + len * .1, x + len * (0.1 + .8 * (max ? Math.min(1, _gui._skill.getScore() / max) : 1)), y + height / 2, height - 3.5, color.green);
 				drawText("Score: " + util._formatLargeNumber(Math.round(_gui._skill.getScore())), x + len / 2, y + height / 2, height - 2, color.guiwhite, "center", 1);
@@ -548,7 +549,7 @@ let gameDraw = function (ratio) {
 							y -= 16
 							drawText(`${mockups.fetchedMockups}/${mockups.totalMockups} (${((mockups.fetchedMockups / mockups.totalMockups) * 100).toFixed(2)}%) Mockups`, x + len, y, 14, color.guiwhite, "right")
 							y -= 16
-							drawText(`Movement Smoothing: ${config.movementSmoothing.toFixed(3)}`, x + len, y, 14, color.guiwhite, "right")
+							drawText(`Movement Smoothing: ${window.movementSmoothing.toFixed(3)}`, x + len, y, 14, color.guiwhite, "right")
 						}
 					}
 				}
@@ -589,7 +590,7 @@ let gameDraw = function (ratio) {
 				_gui._leaderboard._display = _gui._leaderboard._display.sort((a, b) => b.score - a.score);
 				for (let i = 0; i < _gui._leaderboard._display.length && (!global.mobile || i < 6); i++) {
 					let entry = _gui._leaderboard._display[i];
-					drawBar(x, x + len, y + height / 2, height - 3 + config.barChunk, color.black);
+					drawBar(x, x + len, y + height / 2, height - 3 + currentSettings.barWidth.value.number, color.black);
 					drawBar(x, x + len, y + height / 2, height - 3, color.grey);
 					let shift = Math.min(1, entry.score / _gui._leaderboard._display[0].score);
 					drawBar(x, x + len * shift, y + height / 2, height - 3.5, entry.barColor);
@@ -615,7 +616,7 @@ let gameDraw = function (ratio) {
 
 			// GAME/SYSTEM MESSAGES
 			{
-				if (!config.disableGameMessages) {
+				if (!currentSettings.disableGameMessages.value.enabled) {
 					let vspacing = 4,
 						height = 18,
 						x = global._screenWidth / 2,
@@ -825,7 +826,7 @@ let gameDraw = function (ratio) {
 	}
 
 	// FILTERS
-	ctx.filter = ["none", "contrast(1000%)", "grayscale(100%)", "grayscale(28%)", "invert(100%)", "sepia(75%)"][["Disabled", "Saturated", "Grayscale", "Dramatic", "Inverted", "Sepia"].indexOf(config.filter)];
+	ctx.filter = ["none", "contrast(1000%)", "grayscale(100%)", "grayscale(28%)", "invert(100%)", "sepia(75%)"][["Disabled", "Saturated", "Grayscale", "Dramatic", "Inverted", "Sepia"].indexOf(currentSettings.filter.value.selected)];
 	if (ctx.filter !== "none") ctx.drawImage(global._canvas._cv, 0, 0, global._screenWidth, global._screenHeight);
 	ctx.filter = "none";
 	metrics._lastrender = getNow();

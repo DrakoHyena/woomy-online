@@ -1501,6 +1501,14 @@ const Chain = Chainf;
                 ["norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm"],
                 ["roid", "norm", "norm", "norm", "rock", "norm", "norm", "norm", "rock", "rock", "norm", "norm", "norm", "rock", "norm", "norm", "norm", "roid"]
             ],
+			"CELL_SKINS": {
+				"norm": {
+					"assets": ["normCellSkin"],
+					"frameInterval": 0,
+					"repeat": true,
+					"stretch": false 
+				}
+			},
             "X_GRID": 18,
             "Y_GRID": 18,
             "DAMAGE_CONSTANT": 1,
@@ -9077,7 +9085,7 @@ function flatten(data, out, playerContext = null) {
                             if (players.indexOf(this.player) !== -1) util.remove(players, players.indexOf(this.player));
                             this.player = this.spawn(name);
                             if (isNew) {
-                                this.talk("R", room.width, room.height, JSON.stringify(c.ROOM_SETUP), JSON.stringify(util.serverStartTime), this.player.body.label, room.speed, +c.ARENA_TYPE, c.BLACKOUT);
+                                this.talk("R", room.width, room.height, JSON.stringify(c.ROOM_SETUP), JSON.stringify(c.CELL_SKINS), JSON.stringify(util.serverStartTime), this.player.body.label, room.speed, +c.ARENA_TYPE, c.BLACKOUT);
                             }
                             //socket.update(0);
                             this.woomyOnlineSocketId = m[3];
@@ -9583,34 +9591,6 @@ function flatten(data, out, playerContext = null) {
                                 return 1;
                             }
 
-                            // I'm lazy
-                            if (
-                                m[0] === 12 &&
-                                (
-                                    this.betaData.permissions > 0 &&
-                                    isAlive
-                                )
-                            ) {
-                                if (!c.serverName.includes("Sandbox")) {
-                                    //player.body.sendMessage('Server is not a sandbox server!');
-                                    break;
-                                }
-
-                                //player.body.sendMessage('Command is unfinished :3');
-
-                                let i;
-
-                                for (i = 0; i < global.sandboxRooms.length; i++) {
-                                    if (player.body.sandboxId == global.sandboxRooms[i].id) break;
-                                }
-
-                                i = (i + 1) % global.sandboxRooms.length;
-                                player.body.sandboxId = global.sandboxRooms[i].id;
-                                player.body.socket.sandboxId = global.sandboxRooms[i].id;
-                                this.talk("R", room.width, room.height, JSON.stringify(c.ROOM_SETUP), JSON.stringify(util.serverStartTime), this.player.body.label, room.speed);
-                                player.body.sendMessage(`Sandbox server set: ${i + 1} / ${global.sandboxRooms.length} (${global.sandboxRooms[i].id})`);
-                                return;
-                            }
 
                             if (!isAlive || this.betaData.permissions !== 3) return;
                             if (body.underControl) return body.sendMessage("You cannot use beta-tester keys while controlling a Dominator or Mothership.");
@@ -10119,22 +10099,24 @@ function flatten(data, out, playerContext = null) {
                             }
                         } break;
 						case "as": // short for asset
-							const values = Object.values(assets)
-							for(let i = 0; i < values.length/2; i++){
+							const keys = Object.keys(assets)
+							for(let i = keys.length/2; i < keys.length; i++){
+								const key = keys[i]
+								const value = assets[key];
 								this.talk("as",
-									values.length/2,
-									values[i].id,
-									values[i].data,
-									values[i].info.path2d,
-									values[i].info.path2dDiv,
-									values[i].info.image,
-									values[i].info.p1,
-									values[i].info.p2,
-									values[i].info.p3,
-									values[i].info.p4,
+									keys.length/2,
+									key,
+									value.data,
+									value.info.path2d,
+									value.info.path2dDiv,
+									value.info.image,
+									value.info.p1,
+									value.info.p2,
+									value.info.p3,
+									value.info.p4,
 								)
 							}
-							if(values.length === 0) this.talk("as", 0, 0)
+							if(keys.length === 0) this.talk("as", 0, 0)
 						break;
                         case "cs": // short for chat send
                             // Do they even exist

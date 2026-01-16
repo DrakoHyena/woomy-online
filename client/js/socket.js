@@ -1,7 +1,6 @@
 import { global } from "./global.js";
 import { util } from "./util.js"
 import { logger } from "./debug.js"
-import { config } from "./config.js";
 import { rewardManager } from "./achievements.js"
 import { color } from "./colors.js";
 import { mixColors } from "../../shared/mix_colors.js";
@@ -14,6 +13,9 @@ import { ASSET_MAGIC, loadAsset, setAsset } from "../../shared/assets.js";
 import "./consoleCommands.js"
 import { drawVignette } from "./drawing/vignette.js";
 import { player } from "./player.js";
+import { currentSettings } from "./settings.js";
+import { loadingScreenState } from "./drawing/scenes/loadingScreen.js";
+import { roomState } from "./state/room.js";
 
 
 let socket;
@@ -28,7 +30,7 @@ let lag = function () {
 		add: function (l) {
 			sum += l;
 			entries++;
-			if (entries > config.memory){
+			if (entries > 5){
 				sum -= sum/entries;
 				entries--;
 			}
@@ -130,10 +132,10 @@ function Status() {
 			}
 		},
 		getFade: function (entitySize) {
-			return state === "killed" ? (config.deathAnimations?1 - Math.min(1, (getNow() - time) / 300):0) : 1;
+			return state === "killed" ? (currentSettings.deathAnimations.value.enabled?1 - Math.min(1, (getNow() - time) / 300):0) : 1;
 		},
 		getColor: function () {
-			return config.tintedDamage ? mixColors(color.red, color.guiblack, 0.2) : "#FFFFFF";
+			return currentSettings.tintedDamage.value.enabled ? mixColors(color.red, color.guiblack, 0.2) : "#FFFFFF";
 		},
 		getBlend: function () {
 			const val = 80 * 6
@@ -186,8 +188,8 @@ const process = function () {
 				}
 				const flags = convert.reader.next();
 				entity.index = convert.reader.next();
-				entity.x = isNew?convert.reader.next():lerp(entity.render.lastx, convert.reader.next(), config.movementSmoothing);
-				entity.y = isNew?convert.reader.next():lerp(entity.render.lasty, convert.reader.next(), config.movementSmoothing);
+				entity.x = isNew?convert.reader.next():lerp(entity.render.lastx, convert.reader.next(), window.movementSmoothing);
+				entity.y = isNew?convert.reader.next():lerp(entity.render.lasty, convert.reader.next(), window.movementSmoothing);
 				entity.size = convert.reader.next();
 				entity.facing = convert.reader.next();
 				entity.twiggle = (flags & 1);
@@ -223,8 +225,8 @@ const process = function () {
 						}
 					}else{
 						entity.leash.fadeOverride = 1;
-						entity.leash.x = lerp(entity.leash.x, convert.reader.next(), config.movementSmoothing)
-						entity.leash.y = lerp(entity.leash.y, convert.reader.next(), config.movementSmoothing)
+						entity.leash.x = lerp(entity.leash.x, convert.reader.next(), window.movementSmoothing)
+						entity.leash.y = lerp(entity.leash.y, convert.reader.next(), window.movementSmoothing)
 					}
 				}else{
 					if(entity.leash){
@@ -348,16 +350,16 @@ function convertLasers(){
 			}
 		}else{
 			laser._x = convert.reader.next();
-			laser.x = lerp(laser.x, laser._x, config.movementSmoothing)
+			laser.x = lerp(laser.x, laser._x, window.movementSmoothing)
 			laser._y = convert.reader.next();
-			laser.y = lerp(laser.y, laser._y, config.movementSmoothing)
+			laser.y = lerp(laser.y, laser._y, window.movementSmoothing)
 			laser._x2 = convert.reader.next();
-			laser.x2 = lerp(laser.x2, laser._x2, config.movementSmoothing)
+			laser.x2 = lerp(laser.x2, laser._x2, window.movementSmoothing)
 			laser._y2 = convert.reader.next();
-			laser.y2 = lerp(laser.y2, laser._y2, config.movementSmoothing)
+			laser.y2 = lerp(laser.y2, laser._y2, window.movementSmoothing)
 			laser.color = convert.reader.next();
 			laser._width = convert.reader.next();
-			laser.width = lerp(laser.width, laser._width, config.movementSmoothing)
+			laser.width = lerp(laser.width, laser._width, window.movementSmoothing)
 			laser.maxDur = convert.reader.next();
 			laser.dur = convert.reader.next();
 		}
@@ -368,7 +370,7 @@ function convertLasers(){
 	for(let [_, laser] of laserMap){
 		laser.shouldDie++;
 		if(laser.shouldDie > 1){
-			laser.fade = lerp(laser.fade, 0, config.movementSmoothing)
+			laser.fade = lerp(laser.fade, 0, window.movementSmoothing)
 			if(laser.fade < 0.01){
 				laserMap.delete(laser.id);
 			}
@@ -593,6 +595,7 @@ let socketInit = function () {
 			if (m === -1) throw new Error("Malformed packet!");
 			global._receivedPackets++
 			let packet = m.shift();
+			let i = 0;
 			switch (packet) {
 				case "mu": {
 					mockups.pendingMockupRequests.delete(m[0])
@@ -652,15 +655,18 @@ let socketInit = function () {
 					global.gamemodeAlteration = m[0];
 				} break;
 				case "R": {
+//	this.talk("R", room.width, room.height, JSON.stringify(c.ROOM_SETUP), JSON.stringify(c.CELL_SKINS), JSON.stringify(util.serverStartTime), this.player.body.label, room.speed, +c.ARENA_TYPE, c.BLACKOUT);
 					window.gameStarted = true
-					global._gameWidth = m[0];
-					global._gameHeight = m[1];
-					roomSetup = JSON.parse(m[2]);
-					serverStart = JSON.parse(m[3]);
-					global.searchName = m[4];
-					config.roomSpeed = m[5];
-					global._mapType = m[6] || 0;
-					global._blackout = m[7];
+					roomState.width = m[i++];
+					roomState.height = m[i++];
+					roomState.cells = JSON.parse(m[i++]);
+					roomState.cellSkins = Object.assign(roomState.cellSkins, JSON.parse(m[i++]))
+					serverStart = JSON.parse(m[i++]);
+					i++
+					i++
+					//config.roomSpeed = m[5];
+					roomState.mapType = m[i++] || 0;
+					global._blackout = m[i++];
 					logger.info("Room data recieved! Starting game...");
 					global._gameStart = true;
 					global.message = "";
@@ -700,7 +706,7 @@ let socketInit = function () {
 								p4:m[9]
 							})
 						window.loadedAssets++;
-						window.loadingTextTooltip = `(${window.loadedAssets}/${m[0]})`
+						loadingScreenState.subtitle = `(${window.loadedAssets}/${m[0]})`
 					}
 					if(window.loadedAssets === m[0]){
 						window.assetLoadingPromise()
@@ -720,7 +726,7 @@ let socketInit = function () {
 							global.chatMessages.delete(m[1])
 						}
 					}
-					setTimeout(removeChatMessage, config.chatMessageDuration * 1000 - 50)
+					setTimeout(removeChatMessage, currentSettings.chatMessageDuration.value.number * 1000 - 50)
 				}
 				break;
 				case "nrid": // new room id - happens bc host can dc from manager
@@ -747,14 +753,14 @@ let socketInit = function () {
 						convert.reader.set(m, 5);
 						const currentFP = Math.max(1, metrics._rendergap / Math.max(1, 1000/metrics._rendertime));
 						let perFrameAlpha = Math.max(0, .95 / currentFP);
-						config.movementSmoothing = lerp(config.movementSmoothing, perFrameAlpha, 0.05);
+						window.movementSmoothing = lerp(window.movementSmoothing||1, perFrameAlpha, 0.05);
 						convert.fastGui();
 						convert.lasers();
 						convert.data();
 						// If the camera is slightly slower it gives the feeling that the player is moving more/faster
 						// Its better if the camera is behind the real spot because it has to "react" which has a certain feel
-						global.player._cx = lerp(global.player._cx||cam.x, cam.x, config.movementSmoothing*.7);
-						global.player._cy = lerp(global.player._cy||cam.y, cam.y, config.movementSmoothing*.7);
+						global.player._cx = lerp(global.player._cx||cam.x, cam.x, window.movementSmoothing*.7);
+						global.player._cy = lerp(global.player._cy||cam.y, cam.y, window.movementSmoothing*.7);
 						global.player._view = cam.FoV;
 						if (isNaN(global.player._renderv) || global.player._renderv === 0) global.player._renderv = 2000;
 						metrics._lastlag = metrics._lag;
@@ -867,7 +873,6 @@ let socketInit = function () {
 					break;
 				case "am":
 					_anims.clear();
-					let i = 0;
 					while(i < m.length){
 						const prev = _anims.get(m[i]);
 						const arr = prev || [];
@@ -903,7 +908,7 @@ let socketInit = function () {
 		socket.onopen = function () {
 			socket.open = 1;
 			global.message = "Please wait while a connection attempt is being made.";
-			socket.talk("k", config.CLIENT_PROTOCOL_VERSION, document.getElementById("tokenInput").value || "", 0, "its local", false);
+			socket.talk("k", currentSettings.networkProtocolVersion.value.number, document.getElementById("tokenInput").value || "", 0, "its local", false);
 			logger.info("Token submitted to the server for validation.");
 			socket.ping = function () {
 				if(window.doingPing === true) return;

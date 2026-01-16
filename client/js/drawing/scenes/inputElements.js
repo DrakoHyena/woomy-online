@@ -256,6 +256,19 @@ function drawDropdownOptions(ctx, scene, element, options, selectedValue, origin
 // Input Type Renderers
 // ============================================================================
 
+function renderButton(ctx, element, x, y, width, height, text, click, clickCallback) {
+	if (click.left === true && canDebounce(element)) {
+		resetDebounce(element);
+		clickCallback();
+	}
+
+	drawBorder(ctx, x, y, width, height);
+	drawBackground(ctx, x, y, width, height, click.left === true);
+
+	const textImage = renderText(text, height * 0.65);
+	drawCenteredText(ctx, textImage, x, y, width, height);
+}
+
 function renderCheckbox(ctx, element, x, y, width, height, value, click, inputCallback) {
 	if (click.left === true && canDebounce(element)) {
 		resetDebounce(element);
@@ -461,6 +474,10 @@ function renderInput(uniqueId, type, scene, x, y, width, height, value, inputCal
 
 	// Render based on input type
 	switch (type) {
+		case "button":
+			renderButton(ctx, element, x, y, width, height, value, click, inputCallback);
+			break;
+
 		case "checkbox":
 			renderCheckbox(ctx, element, x, y, width, height, value, click, inputCallback);
 			break;

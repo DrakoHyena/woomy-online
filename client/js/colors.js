@@ -1,9 +1,8 @@
 import { global } from "./global.js"
-import { config } from "/js/config.js"
-import { lerp } from "/js/lerp.js"
 import { imageCache } from "./assets.js";
 import { util } from "./util.js";
 import { mixColors } from "../shared/mix_colors.js"
+import { currentSettings } from "./settings.js";
 
 let color = {
 	"teal": "#7ADBBC",
@@ -1250,10 +1249,10 @@ function getColor(colorID) {
 }
 
 function getColorDark(givenColor) {
-	if (config.noBorders) return givenColor;
-	if (config.rgbBorders) return getColor(global._tankMenuColor);
-	let dark = (config.neon | config.inverseBorderColor) ? color.white : color.black;
-	return config.darkBorders ? dark : mixColors(givenColor, dark, color.border);
+	if (currentSettings.noBorders.value.enabled) return givenColor;
+	if (currentSettings.rgbBorders.value.enabled) return getColor(global._tankMenuColor);
+	let dark = (currentSettings.neonMode.value.enabled | currentSettings.inverseBorderColor.value.enabled) ? color.white : color.black;
+	return currentSettings.darkBorders.value.enabled ? dark : mixColors(givenColor, dark, color.border);
 }
 
 function getZoneColor(cell, real, seed = 1) {
@@ -1330,7 +1329,7 @@ function getZoneColor(cell, real, seed = 1) {
 }
 
 function setColors(context, givenColor) {
-	if (config.neon) {
+	if (currentSettings.neonMode.value.enabled) {
 		context.fillStyle = getColorDark(givenColor);
 		context.strokeStyle = givenColor;
 	} else {

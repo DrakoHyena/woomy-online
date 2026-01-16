@@ -1,5 +1,5 @@
 import { global } from "../global.js";
-import { config } from "../config.js";
+import { currentSettings } from "../settings.js";
 
 let canvas = undefined;
 let ctx = undefined;
@@ -23,10 +23,10 @@ function drawVignette(scalar=.85, fillStyle){
 	scalar = global.vignetteScalarSocket??scalar
 	const w = canvas.width;
 	const h = canvas.height;
-	if(color === lastColor && scalar === lastScalar && config.vignetteStrength === lastStrength && lastW === w && lastH === h) return;
+	if(color === lastColor && scalar === lastScalar && currentSettings.vignetteStrength.value.number === lastStrength && lastW === w && lastH === h) return;
 	lastColor = color;
 	lastScalar = scalar;
-	lastStrength = config.vignetteStrength;
+	lastStrength = currentSettings.vignetteStrength.value.number;
 	lastW = w;
 	lastH = h;
 	console.log("Redrawing vignette")
@@ -44,7 +44,7 @@ function drawVignette(scalar=.85, fillStyle){
 	grad.addColorStop(1, color);
 
 	ctx.fillStyle = grad;
-	ctx.globalAlpha = .25*(config.vignetteStrength??1)
+	ctx.globalAlpha = .25*(currentSettings.vignetteStrength.value.number??1)
 	ctx.fillRect(0, 0, w, h);
 }
 

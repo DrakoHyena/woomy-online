@@ -1,22 +1,14 @@
-import { ctx, drawBar, drawGUIPolygon, drawGuiCircle, drawGuiLine, drawGuiRect, drawGuiRoundRect, drawText, measureText, _clearScreen } from "./canvas.js"
+import { ctx, drawBar, drawText, measureText, _clearScreen } from "./canvas.js"
 import { mockups } from "../mockups.js";
 import {
-	color,
-	setColor,
-	themes,
-	specialColors,
 	getColor,
-	getColorDark,
-	getZoneColor,
-	setColors,
-	setColorsUnmix,
-	setColorsUnmixB,
+	color,
 	hslToColor
 } from "../colors.js"
 import { mixColors } from "../../shared/mix_colors.js";
 import { util } from "../util.js";
-import { config } from "../config.js";
 import { global } from "../global.js";
+import { currentSettings } from "../settings.js";
 
 function drawHealth(x, y, instance, ratio, alpha) {
 	let health = instance.render.health.get(),
@@ -30,22 +22,22 @@ function drawHealth(x, y, instance, ratio, alpha) {
 		let yy = y + 1.1 * realSize + 22;
 		ctx.globalAlpha = (1 - (health * shield - 0.96) / 0.04) * (alpha*fade)*(health === 0?0:1);
 		size *= 1.1;
-		let mixc = config.coloredHealthBars ? mixColors(getColor(instance.color), color.guiwhite, .5) : config.tintedHealth ? mixColors(color.lgreen, color.red, 1 - health) : color.lgreen;
-		if (config.shieldbars) {
-			drawBar(x - size, x + size, yy, 6 + config.barChunk, color.black);
+		let mixc = currentSettings.coloredHealthBars.value.enabled ? mixColors(getColor(instance.color), color.guiwhite, .5) : currentSettings.tintedHealth.value.enabled ? mixColors(color.lgreen, color.red, 1 - health) : color.lgreen;
+		if (currentSettings.shieldbars.value.enabled) {
+			drawBar(x - size, x + size, yy, 6 + currentSettings.barWidth.value.number, color.black);
 			if (shield) {
 				if (health > 0.01) drawBar(x - size, x - size + 2 * size * health, yy + 1.5, 3, mixc);
 				ctx.globalAlpha *= 0.7;
-				if (shield > 0.01) drawBar(x - size, x - size + 2 * size * shield, yy - 1.5, 3, config.coloredHealthBars ? mixColors(getColor(instance.color), color.dgrey, .8) : color.dgrey);
+				if (shield > 0.01) drawBar(x - size, x - size + 2 * size * shield, yy - 1.5, 3, currentSettings.coloredHealthBars.value.enabled ? mixColors(getColor(instance.color), color.dgrey, .8) : color.dgrey);
 			} else {
 				if (health > 0.01) drawBar(x - size, x - size + 2 * size * health, yy, 4, mixc);
 			}
 		} else {
-			drawBar(x - size, x + size, yy, 3 + config.barChunk, color.black);
+			drawBar(x - size, x + size, yy, 3 + currentSettings.barWidth.value.number, color.black);
 			if (health > 0.01) drawBar(x - size, x - size + 2 * size * health, yy, 3, mixc);
 			if (shield) {
 				ctx.globalAlpha *= 0.7;
-				if (shield > 0.01) drawBar(x - size, x - size + 2 * size * shield, yy, 3, config.coloredHealthBars ? mixColors(getColor(instance.color), color.dgrey, .8) : color.dgrey);
+				if (shield > 0.01) drawBar(x - size, x - size + 2 * size * shield, yy, 3, currentSettings.coloredHealthBars.value.enabled ? mixColors(getColor(instance.color), color.dgrey, .8) : color.dgrey);
 				ctx.globalAlpha = 1;
 			}
 		}
@@ -77,7 +69,7 @@ function drawHealth(x, y, instance, ratio, alpha) {
 
 	// draw chat messages
 	let messages = global.chatMessages.get(instance.id)
-	const msgFadeTime = config.chatMessageDuration*1000*.025
+	const msgFadeTime = currentSettings.chatMessageDuration.value.number*1000*.025
 	if (messages) {
 		let nameRatio = ((ratio * instance.size) / 20)*fade;
 		let nameplateOffset = y - 6 - (instance.nameplate&&instance.name!==""?30 * nameRatio:0)
@@ -99,8 +91,8 @@ function drawHealth(x, y, instance, ratio, alpha) {
 			let msgFade = performance.now()-msg[1]
 			if(msgFade < msgFadeTime){
 				msgFade /= msgFadeTime
-			}else if((config.chatMessageDuration*1000)-msgFade < msgFadeTime ){
-				msgFade = ((config.chatMessageDuration*1000)-msgFade)/msgFadeTime
+			}else if((currentSettings.chatMessageDuration.value.number*1000)-msgFade < msgFadeTime ){
+				msgFade = ((currentSettings.chatMessageDuration.value.number*1000)-msgFade)/msgFadeTime
 			}else{
 				msgFade = 1
 			}

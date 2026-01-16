@@ -4,7 +4,7 @@ const defaultSettings = {
 	networkProtocolVersion: 2,
 
 	// Boolean settings
-	neon: false,
+	neonMode: false,
 	darkBorders: false,
 	rgbBorders: false,
 	glassMode: false,
@@ -55,7 +55,7 @@ const settingTypes = {
 	networkProtocolVersion: "number",
 
 	// Boolean settings
-	neon: "checkbox",
+	neonMode: "checkbox",
 	darkBorders: "checkbox",
 	rgbBorders: "checkbox",
 	glassMode: "checkbox",
@@ -76,7 +76,7 @@ const settingTypes = {
 	performanceMode: "checkbox",
 	animatedLasers: "checkbox",
 	clientSideAim: "checkbox",
-	mainMenuStyle: "checkbox",
+	darkModeMenu: "checkbox",
 
 	// Number settings
 	chatMessageDuration: "number",
@@ -128,7 +128,7 @@ const settingLimits = {
 	barStyleOptions: ["Circle", "Square", "Triangle"],
 	resolutionScaleOptions: ["Very Low (35%)", "Low (50%)", "Medium (75%)", "High (100%)"],
 	fontFamilyOptions: ["Ubuntu", "Alfa Slab One", "Bebas Neue", "Bungee", "Cutive Mono", "Dancing Script", "Fredoka One", "Indie Flower", "Nanum Brush Script", "Pacifico", "Passion One", "Permanent Marker", "Zen Dots", "Rampart One", "Roboto Mono", "Share Tech Mono", "Syne Mono", "wingdings", "serif", "sans-serif", "cursive", "system-ui"],
-	themeOptions: ["todo: add themes"],
+	themeOptions: ["normal", "classic", "dark", "natural", "ocean", "midnight", "pastel", "space", "halloween", "christmas", "neon", "retro", "forest", "cyber", "fantasy"],
 	shadersOptions: ["Disabled", "Light Blur", "Dark Blur", "Colorful Blur", "Light", "Dark", "Colorful Dense", "Fake 3D", "Dynamic Fake 3D"],
 	filterOptions: ["Disabled", "Saturated", "Grayscale", "Dramatic", "Inverted", "Sepia"],
 
@@ -150,6 +150,14 @@ function updateSettingsFromLocalStorage(){
 		}
 	}else{
 		settingsInfo = JSON.parse(settingsInfo);
+	}
+	// Ensure the active profile exists, otherwise fallback to "Default Profile"
+	if(!settingsInfo.profiles[settingsInfo.activeProfile]){
+		console.warn(`Profile "${settingsInfo.activeProfile}" not found. Falling back to default profile.`);
+		settingsInfo.activeProfile = "Default Profile";
+		if(!settingsInfo.profiles[settingsInfo.activeProfile]){
+			settingsInfo.profiles[settingsInfo.activeProfile] = defaultSettings;
+		}
 	}
 	currentSettings = convertSettings(settingsInfo.profiles[settingsInfo.activeProfile])
 }

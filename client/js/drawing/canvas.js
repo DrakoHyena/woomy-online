@@ -1,9 +1,9 @@
 import { global, resizeEvent } from "../global.js";
-import { config } from "../config.js";
 import { util, getWOSocketId } from "../util.js";
 import { socket } from "../socket.js";
 import { color } from "../colors.js"
-import { Smoothbar } from "../util.js";
+import { currentSettings } from "../settings.js";
+import { player } from "../player.js";
 
 global.mobileClickables = [function () { // Toggle menu
 	let clickdata = global.clickables.mobileClicks.get()
@@ -322,10 +322,8 @@ global._canvas = new (class Canvas {
 				case global.KEY_ENTER:
 					if (global._diedAt - Date.now() > 0 || (global._disconnected && global._gameStart)) return;
 					if (global._died) {
-						let socketOut = global.playerName.split('');
-						for (let i = 0; i < socketOut.length; i++) socketOut[i] = socketOut[i].charCodeAt();
-						socket.talk("s", global.party || 0, socketOut.toString(), 0, getWOSocketId());
-						if (config.autoUpgrade) for (let i = 0; i < 75; i++) setTimeout(() => socket.talk('L'), i * 25);
+						socket.talk("s", 0, player.socketName.toString(), 0, getWOSocketId());
+						if (currentSettings.autoUpgrade.value.enabled) for (let i = 0; i < 75; i++) setTimeout(() => socket.talk('L'), i * 25);
 						global._diedAt = Date.now()
 						global._deathScreenState = 1
 						global._died = false;
@@ -535,7 +533,7 @@ global._canvas = new (class Canvas {
 			let socketOut = util._cleanString(global.playerName, 25).split('');
 			for (let i = 0; i < socketOut.length; i++) socketOut[i] = socketOut[i].charCodeAt();
 			socket.talk("s", global.party || 0, socketOut.toString(), 0, getWOSocketId());
-			if (config.autoUpgrade) {
+			if (currentSettings.autoUpgrade.value.enabled) {
 				for (let i = 0; i < 75; i++) {
 					setTimeout(() => socket.talk('L'), i * 25);
 				}
@@ -650,25 +648,25 @@ function _clearScreen(clearColor, alpha) {
 	ctx.globalAlpha = 1;
 }
 const measureText = (() => {
-	return (text, fontSize, twod = false, font = config.fontFamily) => {
-		fontSize += config.fontSizeBoost - 8.75;
-		ctx.font = (config.fontFamily === "Ubuntu" ? "bold" : "") + ' ' + fontSize + 'px ' + font;
+	return (text, fontSize, twod = false, font = currentSettings.fontFamily.value.selected) => {
+		fontSize += currentSettings.fontSizeBoost.value.number - 8.75;
+		ctx.font = (currentSettings.fontFamily.value.selected === "Ubuntu" ? "bold" : "") + ' ' + fontSize + 'px ' + font;
 		return (twod) ? {
 			width: ctx.measureText(text).width,
 			height: fontSize
 		} : ctx.measureText(text).width;
 	};
 })();
-const drawText = (function draw(text, x, y, size, fill, align = 'left', center = false, fade = 1, stroke = false, context = ctx, font = config.fontFamily) {
+const drawText = (function draw(text, x, y, size, fill, align = 'left', center = false, fade = 1, stroke = false, context = ctx, font = currentSettings.fontFamily.value.selected) {
 	let xx = 0;
 	let yy = 0;
-	size += config.fontSizeBoost - 8.75;
+	size += currentSettings.fontSizeBoost.value.number - 8.75;
 	let offset = size / 5;
 	let ratio = 1;
 	let transform = null;
 	context.getTransform && (transform = ctx.getTransform(), ratio = transform.d, offset *= ratio);
 	if (ratio !== 1) size *= ratio;
-	context.font = (config.fontFamily === "Ubuntu" ? "bold" : "") + " " + size + 'px ' + font;
+	context.font = (currentSettings.fontFamily.value.selected === "Ubuntu" ? "bold" : "") + " " + size + 'px ' + font;
 	let dim = ctx.measureText(text, false, font);
 	// Redraw it
 	switch (align) {
@@ -683,8 +681,8 @@ const drawText = (function draw(text, x, y, size, fill, align = 'left', center =
 	}
 	yy = (size + 2 * offset) / 2;
 	// Draw it
-	context.lineWidth = ((size + 1) / config.fontStrokeRatio);
-	context.font = (config.fontFamily === "Ubuntu" ? "bold" : "") + ' ' + size + 'px ' + font;
+	context.lineWidth = ((size + 1) / currentSettings.fontStrokeRatio.value.number);
+	context.font = (currentSettings.fontFamily.value.selected === "Ubuntu" ? "bold" : "") + ' ' + size + 'px ' + font;
 	context.textAlign = align;
 	context.textBaseline = 'middle';
 	context.strokeStyle = stroke ? stroke : color.black;
@@ -769,7 +767,7 @@ function drawBar(x1, x2, y, width, color) {
 	ctx.beginPath();
 	ctx.roundRect(x1, y, (x2 - x1) || 1, 1, 0)
 	ctx.lineWidth = width;
-	ctx.lineJoin = config.barStyle === "Square" ? "miter" : config.barStyle === "Triangle" ? "bevel" : "round"
+	ctx.lineJoin = currentSettings.barStyle.value.selected === "Square" ? "miter" : currentSettings.barStyle.value.selected === "Triangle" ? "bevel" : "round"
 	ctx.strokeStyle = color;
 	ctx.closePath();
 	ctx.stroke();

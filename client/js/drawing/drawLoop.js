@@ -6,7 +6,7 @@ const drawLoop = {
 }
 drawLoop.start = function(){
 	drawLoop._active = true;
-	requestAnimationFrame(drawLoop.drawScenes)
+	drawLoop.drawScenes()
 }
 drawLoop.stop = function(){
 	drawLoop._active = false;

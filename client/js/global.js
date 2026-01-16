@@ -1,8 +1,8 @@
 import { color, getColor } from "/js/colors.js";
 import { lerp } from "./lerp.js";
-import { config } from "./config.js";
 import { mockups, getEntityImageFromMockup } from "./mockups.js";
 import { Smoothbar } from "./util.js";
+import { currentSettings } from "./settings.js";
 
 // must be var because its gets defiend immediately
 var global = {
@@ -463,7 +463,7 @@ window._gui = {
 function resizeEvent() {
 	if (!global._canvas) return
 	let scale = window.devicePixelRatio;
-	scale *= [0.15, 0.5, 0.75, 1, 0.08][["Very Low (35%)", "Low (50%)", "Medium (75%)", "High (100%)", "PixelMode (8%)"].indexOf(config.resolutionScale)];
+	scale *= [0.15, 0.5, 0.75, 1, 0.08][["Very Low (35%)", "Low (50%)", "Medium (75%)", "High (100%)", "PixelMode (8%)"].indexOf("High (100%)")];
 	global._canvas._cv.width = global._screenWidth = window.innerWidth * scale;
 	global._canvas._cv.height = global._screenHeight = window.innerHeight * scale;
 	global._canvas.vignetteCanvas.width = global._canvas._cv.width;
@@ -507,7 +507,7 @@ window.upgradeSpin = 0,
 window.isInView = function (x, y, r) {
 	let mid = arguments.length > 3 && arguments[3] !== undefined ? arguments[3] : 0,
 		ratio = getRatio();
-	r += config.borderChunk;
+	r += currentSettings.borderWidth.value.number;
 	if (mid) {
 		ratio *= 2;
 		return x > -global._screenWidth / ratio - r && x < global._screenWidth / ratio + r && y > -global._screenHeight / ratio - r && y < global._screenHeight / ratio + r;
