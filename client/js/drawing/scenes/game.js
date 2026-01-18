@@ -11,6 +11,8 @@ import { closeLoadingScreen, openLoadingScreen } from "./loadingScreen.js";
 import { settingsState } from "./settings.js";
 import { roomState } from "../../state/room.js";
 import { ASSET_MAGIC, getAsset, loadAsset } from "../../../../shared/assets.js";
+import { renderEntity } from "../entity.js";
+import { currentSettings } from "../../settings.js";
 
 
 const state = {
@@ -28,16 +30,6 @@ main.drawFuncts.set("clear", ({ canvas, ctx, delta }) => {
 })
 
 main.drawFuncts.set("background", ({ canvas, ctx, delta }) => {
-	for (let i = 0; i < entityArr.length; i++) {
-		let instance = entityArr[i]
-		let isMe = instance.id === _gui._playerid;
-
-		if (isMe) {
-			playerState.instance = instance;
-			playerState.gameName = instance.name == null ? mockups.get(instance.index).name : instance.name;
-			if (instance.alpha < 0.1) rewardManager.unlockAchievement("sneak_100");
-		} 
-	}
 	if (roomState.mapType !== 1) {
 		const W = roomState.cells[0].length;
 		const H = roomState.cells.length;
@@ -85,6 +77,7 @@ main.drawFuncts.set("background", ({ canvas, ctx, delta }) => {
 			}
 		}
 	}
+	// TODO: Circle Map
 	// } else if (roomState.mapType === 1) {
 	// 	const xx = -px + global._screenWidth / 2 + ratio * global._gameWidth / 2;
 	// 	const yy = -py + global._screenHeight / 2 + ratio * global._gameHeight / 2;
@@ -96,22 +89,35 @@ main.drawFuncts.set("background", ({ canvas, ctx, delta }) => {
 	// 	ctx.closePath();
 	// 	ctx.fill();
 	// }
+})
 
+main.drawFuncts.set("entities", ({ canvas, ctx, delta }) => {
+	let frameplate = [];
+	for (let i = 0; i < entityArr.length; i++) {
+		let instance = entityArr[i]
+		if (!instance.render.draws) continue;
+		let isMe = instance.id === _gui._playerid;
 
-	// ctx.strokeStyle = "black"
-	// for (let x = (canvas.width / 2 - playerState.instance.x) % roomState.gridSize; x < canvas.width; x += roomState.gridSize) {
-	// 	ctx.beginPath();
-	// 	ctx.moveTo(x, 0);
-	// 	ctx.lineTo(x, canvas.height | 0);
-	// 	ctx.stroke();
-	// }
-	// ctx.strokeStyle = "blue"
-	// for (let y = (canvas.height / 2 - playerState.instance.y) % roomState.gridSize; y < canvas.height; y += roomState.gridSize) {
-	// 	ctx.beginPath();
-	// 	ctx.moveTo(0, y);
-	// 	ctx.lineTo(canvas.width, y);
-	// 	ctx.stroke();
-	// };
+		let x = instance.x
+		let y = instance.y
+		if (isMe) {
+			if (instance.alpha < 0.1) rewardManager.unlockAchievement("sneak_100");
+			playerState.instance = instance;
+			playerState.gameName = instance.name == null ? mockups.get(instance.index).name : instance.name;
+
+			if(currentSettings.clientSideAim.value.enabled === true){
+				instance.render.facing = (!instance.twiggle && !global._died && !global._forceTwiggle) ? Math.atan2(global._target._y - y, global._target._x - x) : lerpAngle(instance.render.facing, instance.facing, window.movementSmoothing);
+			} else {
+				instance.render.facing = lerpAngle(instance.render.facing, instance.facing, window.movementSmoothing);
+			}
+		} else {
+			instance.render.facing = lerpAngle(instance.render.facing, instance.facing, window.movementSmoothing);
+		}
+
+		let entity = renderEntity(instance);
+		//drawEntity(x, y, instance, ratio, global.player._canSeeInvisible ? instance.alpha + .5 : instance.alpha, 1.1, instance.render.facing);
+		ctx.globalAlpha = 1;
+	};
 })
 
 async function startGame(gamemodeCode, joinRoomId, maxPlayers, maxBots){

@@ -16,27 +16,11 @@ import { player } from "./player.js";
 import { currentSettings } from "./settings.js";
 import { loadingScreenState } from "./drawing/scenes/loadingScreen.js";
 import { roomState } from "./state/room.js";
+import { playerState } from "./state/player.js";
 
-
+const entities = new Map();
+const entitiesArr = [];
 let socket;
-
-let lag = function () {
-	let sum = 0;
-	let entries = 0;
-	return {
-		get: function () {
-			return sum / entries;
-		},
-		add: function (l) {
-			sum += l;
-			entries++;
-			if (entries > 5){
-				sum -= sum/entries;
-				entries--;
-			}
-		}
-	};
-}();
 
 // CONVERT //
 const convert = {
@@ -49,11 +33,11 @@ const convert = {
 				throw new Error("Trying to crawl past the end of the provided data!");
 			} else return convert.reader.crawlData[convert.reader.index++];
 		},
-		current: function(){
+		current: function () {
 			if (convert.reader.index >= convert.reader.crawlData.length) {
 				logger.norm(convert.reader.crawlData);
 				throw new Error("Trying to crawl past the end of the provided data!");
-			} else return convert.reader.crawlData[convert.reader.index-1];
+			} else return convert.reader.crawlData[convert.reader.index - 1];
 		},
 		take: amount => {
 			convert.reader.index += amount;
@@ -69,95 +53,18 @@ const convert = {
 	},
 
 	lasers: convertLasers,
-	data: convertData,
+	entities: convertEntities,
 	fastGui: convertFastGui,
 	slowGui: convertSlowGui,
 };
 
 // CONVERT DATA // 
-const GunContainer = function () {
-	function physics(g) {
-		g.isUpdated = 1;
-		if (g.motion || g.position) {
-			g.motion -= 0.005
-			g.position += g.motion;
-			if (g.position < 0) {
-				g.position = 0;
-				g.motion = -g.motion;
-			} else if (g.position > .3) {
-				g.position = .3
-			}
-			if (g.motion > 0) g.motion *= .76;
-		}
+class RopePoint {
+	constructor(x, y) {
+		this.pos = { x: x, y: y };
+		this.vel = { x: 0, y: 0 };
 	}
-	return function (n) {
-		let a = [];
-		for (let i = 0; i < n; i++) a.push({
-			motion: 0,
-			position: 0,
-			isUpdated: 1
-		});
-		return {
-			getPositions: function () {
-				return a.map(function (g) {
-					return g.position;
-				});
-			},
-			update: function () {
-				for (let i = 0; i < a.length; i++) {
-					physics(a[i])
-				}
-			},
-			fire: function (i, power) {
-				if (a[i].isUpdated) a[i].motion += Math.sqrt(power) / 30;
-				a[i].isUpdated = 0;
-			},
-			length: a.length
-		};
-	};
-}();
-
-function Status() {
-	let state = "normal",
-		time = getNow();
-	return {
-		set: function (val) {
-			// Only update time and state if the new value is different,
-			// OR if we're explicitly re-setting "injured" (to refresh its timer)
-			if (val !== state || val === "injured") {
-				if (state !== "killed" && val !== "normal") {
-					time = getNow(); // injured/killed timer
-				}
-				state = val;
-			}
-		},
-		getFade: function (entitySize) {
-			return state === "killed" ? (currentSettings.deathAnimations.value.enabled?1 - Math.min(1, (getNow() - time) / 300):0) : 1;
-		},
-		getColor: function () {
-			return currentSettings.tintedDamage.value.enabled ? mixColors(color.red, color.guiblack, 0.2) : "#FFFFFF";
-		},
-		getBlend: function () {
-			const val = 80 * 6
-			let o = (state === "normal") ? 0 : .8 - Math.min(.8, (getNow() - time) / val);
-			// Injured state wears off after some time and reverts to normal
-			if (getNow() - time > val && state === "injured") {
-				state = "normal";
-			}
-			return o;
-		},
-		getCurrentState: function () { // Getter for current state
-			return state;
-		}
-	};
-}
-
-class RopePoint{
-	constructor(x, y){
-		this.pos = {x: x, y: y};
-		this.vel = {x: 0, y: 0};
-	}
-	tick(){
+	tick() {
 		this.vel.x *= .7;
 		this.vel.y *= .7;
 		this.pos.x += this.vel.x;
@@ -165,171 +72,11 @@ class RopePoint{
 	}
 }
 
-const process = function () {
-	const unpacking = {
-		new: function (entity) {
-			let isNew = entity.facing == null;
-			const type = convert.reader.next();
-			if (type & 0x01) {
-				entity.facing = convert.reader.next();
-				entity.layer = convert.reader.next();
-			} else {
-				entity.interval = metrics._rendergap;
-				entity.id = convert.reader.next();
-				let iii = entityMap.get(entity.id)
-				if (iii !== undefined) {
-					entity = iii
-				}
-				isNew = iii === undefined;
-				if (!isNew) {
-					entity.render.draws = true;
-					entity.render.lastx = entity.x;
-					entity.render.lasty = entity.y;
-				}
-				const flags = convert.reader.next();
-				entity.index = convert.reader.next();
-				entity.x = isNew?convert.reader.next():lerp(entity.render.lastx, convert.reader.next(), window.movementSmoothing);
-				entity.y = isNew?convert.reader.next():lerp(entity.render.lasty, convert.reader.next(), window.movementSmoothing);
-				entity.size = convert.reader.next();
-				entity.facing = convert.reader.next();
-				entity.twiggle = (flags & 1);
-				entity.layer = (flags & 2) ? convert.reader.next() : 0;
-				entity.color = convert.reader.next()._assetMagic === ASSET_MAGIC?loadAsset(ASSET_MAGIC, convert.reader.current().id):convert.reader.current();
-				entity.team = convert.reader.next();
-				if (isNew) {
-					entity.health = (flags & 4) ? (convert.reader.next() / 255) : 1;
-					entity.shield = (flags & 8) ? (convert.reader.next() / 255) : 1;
-				} else {
-					let hh = entity.health,
-						ss = entity.shield;
-					entity.health = (flags & 4) ? (convert.reader.next() / 255) : 1;
-					entity.shield = (flags & 8) ? (convert.reader.next() / 255) : 1;
-					if (entity.health < hh || entity.shield < ss) {
-						entity.render.status.set("injured");
-					} else if (entity.render.status.getFade(entity.size) !== 1) {
-						entity.render.status.set("normal");
-					}
-				}
-				entity.alpha = (flags & 16) ? (convert.reader.next() / 255) : 1;
-				entity.seeInvisible = flags & 32;
-				entity.nameColor = flags & 64 ? convert.reader.next() : "#FFFFFF";
-				entity.label = flags & 128 ? convert.reader.next() : mockups.get(entity.index).name
-				entity.widthHeightRatio = [(flags & 256) ? convert.reader.next() : 1, (flags & 512) ? convert.reader.next() : 1];
-				if(flags & 1024){
-					if(!entity.leash){
-						entity.leash = {x: 0, y: 0, points: [], fadeOverride: 1};
-						entity.leash.x = convert.reader.next()
-						entity.leash.y = convert.reader.next()
-						for(let i = 0; i < 10; i++){
-							entity.leash.points.push(new RopePoint((entity.x+entity.leash.x)/2, (entity.y+entity.leash.y)/2))
-						}
-					}else{
-						entity.leash.fadeOverride = 1;
-						entity.leash.x = lerp(entity.leash.x, convert.reader.next(), window.movementSmoothing)
-						entity.leash.y = lerp(entity.leash.y, convert.reader.next(), window.movementSmoothing)
-					}
-				}else{
-					if(entity.leash){
-						entity.leash.fadeOverride *= .7;
-						if(entity.leash.fadeOverride <= .01){
-							entity.leash = undefined;
-						}
-					}
-				}
-				entity.drawsHealth = type & 0x02;
-				entity.nameplate = type & 0x04;
-				entity.invuln = (type & 0x08 ? entity.invuln || Date.now() : 0);
-				if (type & 0x04) {
-					entity.name = convert.reader.next();
-					entity.score = convert.reader.next();
-				}
-				if (isNew) {
-					entity.render = {
-						real: true,
-						draws: false,
-						expandsWithDeath: entity.drawsHealth,
-						x: entity.x,
-						y: entity.y,
-						lastx: entity.x,
-						lasty: entity.y,
-						facing: entity.facing,
-						h: entity.health,
-						s: entity.shield,
-						interval: metrics._rendergap,
-						slip: 0,
-						status: Status(),
-						health: Smoothbar(entity.health, .06, true),
-						shield: Smoothbar(entity.shield, .06, true),
-						size: 1,
-						extra: [1, 0], // for props
-					};
-
-					let mockup = mockups.get(entity.index);
-					if (mockup != null && mockup.shape > 2 && mockup.shape < 6) {
-						switch (mockup.color) {
-							case 207:
-								rewardManager.unlockAchievement("hot");
-								break;
-							case 31:
-								rewardManager.unlockAchievement("toxic");
-								break;
-							case 261:
-								rewardManager.unlockAchievement("mystic");
-								break;
-						}
-					}
-					if (entity.color === -1) {
-						rewardManager.unlockAchievement("realShiny")
-					}
-				}
-				entity.render.health.set(entity.health);
-				entity.render.shield.set(entity.shield);
-				if (!isNew && entity.oldIndex !== entity.index) isNew = true;
-				entity.oldIndex = entity.index;
-			}
-			let gunnumb = convert.reader.next();
-			if (isNew) {
-				entity.guns = GunContainer(gunnumb);
-			} else if (gunnumb !== entity.guns.length) {
-				throw new Error("Mismatch between data gun number and remembered gun number!");
-			}
-			for (let i = 0; i < gunnumb; i++) {
-				let time = convert.reader.next(),
-					power = convert.reader.next();
-				if (time > global.player._lastUpdate - metrics._rendergap) {
-					entity.guns.fire(i, power);
-				}
-			}
-			let turnumb = convert.reader.next();
-			if (isNew) {
-				entity.turrets = [];
-				for (let i = 0; i < turnumb; i++) {
-					entity.turrets.push(process());
-				}
-			} else {
-				if (entity.turrets.length !== turnumb) {
-					console.log(entity);
-					throw new Error("Mismatch between data turret number and remembered turret number!");
-				}
-				for (let i = 0; i < entity.turrets.length; i++) {
-					process(entity.turrets[i]);
-				}
-			}
-
-			return entity;
-		}
-	}
-	// Return our function
-	return (z = {}) => {
-		return unpacking.new(z);
-	};
-}();
-
-function convertLasers(){
+function convertLasers() {
 	for (let i = 0, len = convert.reader.next(); i < len; i++) {
 		const id = convert.reader.next();
 		let laser = laserMap.get(id);
-		if(!laser){
+		if (!laser) {
 			laser = {
 				id: id,
 				x: convert.reader.next(),
@@ -348,7 +95,7 @@ function convertLasers(){
 				shouldDie: 0,
 				fade: 1,
 			}
-		}else{
+		} else {
 			laser._x = convert.reader.next();
 			laser.x = lerp(laser.x, laser._x, window.movementSmoothing)
 			laser._y = convert.reader.next();
@@ -367,171 +114,270 @@ function convertLasers(){
 		laserMap.set(id, laser);
 	}
 
-	for(let [_, laser] of laserMap){
+	for (let [_, laser] of laserMap) {
 		laser.shouldDie++;
-		if(laser.shouldDie > 1){
+		if (laser.shouldDie > 1) {
 			laser.fade = lerp(laser.fade, 0, window.movementSmoothing)
-			if(laser.fade < 0.01){
+			if (laser.fade < 0.01) {
 				laserMap.delete(laser.id);
 			}
 		}
 	}
 }
 
-function convertData() {
-	const updatedEntityIds = new Set(); // Keep track of IDs received in this packet
-
-	// This loop updates existing entities or adds new ones to the 'entities' Map.
-	// It also populates 'updatedEntityIds' with the IDs of all entities
-	// for which data was received in this packet.
-	for (let i = 0, len = convert.reader.next(); i < len; i++) {
-		const e = process();
-		entityMap.set(e.id, e);
-		updatedEntityIds.add(e.id);
+class ClientGun{
+	constructor(){
+		this.motion = 0;
+		this.position = 0;
+		this.recoverRate = .25;
 	}
+	tick(){
+		this.motion = lerp(this.motion, 0, this.recoverRate)
+		this.position = lerp(this.position, 0, this.recoverRate/2)
+	}
+	fire(power) {
+		this.motion += Math.sqrt(power) / 30;
+	}
+}
 
-	entityArr.length = 0;
-	for (let [id, e] of entityMap) {
-		entityArr.push(e);
-		// This entity was in our client's list from the PREVIOUS frame,
-		// but was NOT included in the server's update THIS frame.
-		// This implies the server has stopped sending data for it, likely because it's dead.
-		if (updatedEntityIds.has(id) === true) continue;
+class ClientEntity{
+	constructor(
+	    id = -1,
+		index = 0,
+		name = "",
+		x = 0,
+		y = 0,
+		size = 1,
+		facing = 0,
+		score = 0,
+		layer = 1,
+		color = 0,
+		team = 0,
+		health = 1,
+		shield = 1,
+		alpha = 1,
+		seeInvisible = false,
+		nameColor = "#FFFFFF",
+		label = "",
+		widthHeightRatio = [1, 1],
+		hideHealth = false,
+		hideName = false,
+		leash = false,
+	){
+		this.id = id;
+		this.index = index;
+		this.name = name;
+		this.x = x;
+		this.y = y;
+		this.size = size;
+		this.facing = facing;
+		this.score = score;
+		this.layer = layer;
+		this.color = color;
+		this.team = team;
+		this.health = health;
+		this.shield = shield;
+		this.alpha = alpha;
+		this.seeInvisible = seeInvisible;
+		this.nameColor = nameColor;
+		this.label = label;
+		this.widthHeightRatio = widthHeightRatio;
+		this.hideName = hideName;
+		this.hideHealth = hideHealth;
 
-		// Check conditions for removing the entity from the client
-		// (either its death animation finished, or it's out of view).
-		if (e.render.status.getFade(e.size) === 0 ||
-			!isInView(e.render.x - global.player._renderx, e.render.y - global.player._rendery, e.size, 1)) {
-			entityMap.delete(id);
-			continue;
+		this.leash = leash;
+		if(typeof this.leash === "object"){
+			this.leash = { x: this.leash.x, y: this.leash.y, points: [] };
+			for (let i = 0; i < 10; i++) {
+				entity.leash.points.push(new RopePoint((entity.x + entity.leash.x) / 2, (entity.y + entity.leash.y) / 2))
+			}
 		}
 
-		// We apply the old "death inference" logic here.
-		// The `e.health` here refers to its *last known health* from the previous packet.
-		// Only change status if it's not already in a death state to avoid resetting fade.
-		if (e.render.status.getCurrentState() !== "killed") {
-			e.render.status.set("killed");
-			// This "e.health === 1 ? 'dying' : 'killed'" was the original logic.
-			// It implies: if an entity disappears and its last health was 1, it's "dying".
-			// Otherwise (last health < 1, or even 0 if server sent that before stopping), it's "killed".
-			// However that doesn't seem to matter
-		}
+		this.guns = [];
+		this.turrets = [];
 
+		this.sizeFade = 0;
+		this.hurtFade = 0;
 	}
 
+	setGun(index){
+		this.guns[index] = new ClientGun();
+	}
+
+	setTurret(){
+		this.turrets[index] = newEntity();
+	}
+
+	tick(){
+		this.sizeFade = lerp(this.sizeFade, 1, 0.25);
+		this.hurtFade = lerp(this.hurtFade, 0, 0.25);
+		for(let gun of this.guns){
+			gun.tick();
+		}
+	}
+}
+
+function newEntity(skipSpawnFade=false){
+	let entity = new ClientEntity(
+		convert.reader.next(), // id
+		convert.reader.next(), // index
+		convert.reader.next(), // name
+		convert.reader.next(), // x
+		convert.reader.next(), // y
+		convert.reader.next(), // size
+		convert.reader.next(), // facing
+		convert.reader.next(), // score
+		convert.reader.next(), // layer
+		convert.reader.next(), // color
+		convert.reader.next(), // team
+		convert.reader.next(), // health
+		convert.reader.next(), // shield
+		convert.reader.next(), // alpha
+		convert.reader.next(), // seeInvisible
+		convert.reader.next(), // nameColor
+		convert.reader.next(), // label
+		convert.reader.next(), // widthHeightRatio
+		convert.reader.next(), // hideHealth
+		convert.reader.next(), // hideName
+		convert.reader.next() ? { x: convert.reader.next(), y: convert.reader.next() } : convert.reader.current(), // leash
+	)
+
+	let gunAmount = convert.reader.next();
+	for (let i = 0; i < gunAmount; i++) {
+		entity.setGun(i);
+	}
+
+	let turretAmount = convert.reader.next();
+	for (let i = 0; i < turretAmount; i++) {
+		entity.setTurret(i);
+	}
+
+	if(skipSpawnFade === true){
+		entity.sizeFade = 1;
+	}
+
+	entities.set(entity.id, entity)
+	return entity;
+}
+
+function updateEntity(entityId, updateType){
+	const entity = entities.get(entityId);
+	if(updateType === -1){
+		entity = newEntity(true);
+		return entity;
+	}
+	if(updateType === 0){
+		return entity;
+	}
+	if(convert.reader.next()){ // Leash
+		entity.leash.x = convert.reader.next();
+		entity.leash.y = convert.reader.next();
+		for(let point of entity.leash.points){
+			point.tick();
+		}
+	}else{
+		entity.leash = false;
+	}
+	if(updateType >= 1){ // Position
+		entity.x = convert.reader.next();
+		entity.y = convert.reader.next();
+		entity.facing = convert.reader.next();
+	}
+	if(updateType >= 2){ // Minimal
+		entity.health = convert.reader.next();
+		entity.shield = convert.reader.next();
+		entity.score = convert.reader.next();
+		entity.size = convert.reader.next();
+		entity.alpha = convert.reader.next();
+	}
+	if(updateType >= 3){ // Visual Change
+		entity.color = convert.reader.next();
+		entity.team = convert.reader.next();
+		entity.layer = convert.reader.next();
+	}
+	if(updateType >= 4){ // Text Change
+		entity.name = convert.reader.next();
+		entity.nameColor = convert.reader.next();
+		entity.label = convert.reader.next();
+	}
+	return entity;
+}
+
+let newEntities = new Map();
+let holdingVar = undefined;
+function convertEntities() {
+	for (let i = 0, newEntityAmount = convert.reader.next(); i < newEntityAmount; i++) {
+		const entity = newEntity();
+		newEntities.set(entity.id, entity);
+	}
+	for (let i = 0, updatedEntityAmount = convert.reader.next(); i < updatedEntityAmount; i++){
+		const entity = updateEntity(convert.reader.next(), convert.reader.next());
+		entityIdsInFrame.set(entity.id, entity);
+	}
+	
+	entitiesArr.length = 0;
+	const entitiesItr = newEntities.values();
+	for(let entity of entitiesItr){
+		entity.tick();
+		entitiesArr.push(entity);
+	}
 	entityArr.sort((a, b) => {
-		let sort = a.layer - b.layer;
-		if (!sort) sort = b.id - a.id; // Or a.id - b.id depending on desired tie-break
-		return sort;
+		return a.layer - b.layer || b.id - a.id;
 	});
+
+	holdingVar = newEntities;
+	newEntities = entities;
+	entities = holdingVar;
+	newEntities.clear();
 };
 
 // CONVERT GUI //
 function convertFastGui() {
-	let index = convert.reader.next(),
-		indices = {
-			topSpeed: index & 0x0100,
-			accel: index & 0x0080,
-			skills: index & 0x0040,
-			statsdata: index & 0x0020,
-			upgrades: index & 0x0010,
-			points: index & 0x0008,
-			score: index & 0x0004,
-			label: index & 0x0002,
-			fps: index & 0x0001
-		};
-	if (indices.fps) _gui._fps = convert.reader.next();
-	if (indices.label) {
-		_gui._type = convert.reader.next();
-		_gui._color = convert.reader.next();
-		_gui._playerid = convert.reader.next();
-	}
-	if (indices.score) _gui._skill.setScores(convert.reader.next());
-	if (indices.points) _gui._points = convert.reader.next();
-	if (indices.upgrades) {
-		const upgrades = [];
-		for (let i = 0, len = convert.reader.next(); i < len; i++) upgrades.push(convert.reader.next());
-		player.upgrades = upgrades;
-		if (upgrades.toString() !== _gui._realUpgrades.toString()) {
-			_gui._realUpgrades = upgrades;
-			_gui._upgrades = upgrades;
+	playerState.gui.skills.points = convert.reader.next();
+	const upgradeAmount = convert.reader.next();
+	if(upgradeAmount > 0){
+		playerState.gui.upgrades.length = 0;
+		for(let i = 0; i < upgradeAmount; i++){
+			playerState.gui.upgrades.push(convert.reader.next());
 		}
 	}
-	if (indices.statsdata)
-		for (let i = 9; i >= 0; i--) {
-			_gui._skills[i].name = convert.reader.next();
-			_gui._skills[i].cap = convert.reader.next();
-			_gui._skills[i].softcap = convert.reader.next();
+
+	const skillStatChanges = convert.reader.next();
+	if(skillStatChanges){
+		playerState.gui.skills = {};
+		const skillCategoryAmount = convert.reader.next();
+		for(let i = 0; i < skillCategoryAmount; i++){
+			playerState.gui.skills[convert.reader.next()] = { current: convert.reader.next(), max: convert.reader.max() };
 		}
-	if (indices.skills) {
-		let skk = parseInt(convert.reader.next(), 36).toString(16);
-		skk = "0000000000".substring(skk.length) + skk;
-		_gui._skills[0].amount = parseInt(skk.slice(0, 1), 16);
-		_gui._skills[1].amount = parseInt(skk.slice(1, 2), 16);
-		_gui._skills[2].amount = parseInt(skk.slice(2, 3), 16);
-		_gui._skills[3].amount = parseInt(skk.slice(3, 4), 16);
-		_gui._skills[4].amount = parseInt(skk.slice(4, 5), 16);
-		_gui._skills[5].amount = parseInt(skk.slice(5, 6), 16);
-		_gui._skills[6].amount = parseInt(skk.slice(6, 7), 16);
-		_gui._skills[7].amount = parseInt(skk.slice(7, 8), 16);
-		_gui._skills[8].amount = parseInt(skk.slice(8, 9), 16);
-		_gui._skills[9].amount = parseInt(skk.slice(9, 10), 16);
 	}
-	if (indices.accel) _gui._accel = convert.reader.next();
-	if (indices.topSpeed) _gui._topSpeed = convert.reader.next();
 }
 
 // CONVERT BROADCAST //
 function convertSlowGui(data) {
-	data.shift = (function () {
-		let i = 0;
-		return () => {
-			return data[i++]
-		}
-	})()
+	let i = 0;
 
-	// So let's start unpacking!
-	_gui._minimap._server = [];
-	_gui._leaderboard._server = [];
-	let minimapAllLength = data.shift();
-	for (let i = 0; i < minimapAllLength; i++) {
-		_gui._minimap._server.push({
-			id: data.shift(),
-			type: data.shift(),
-			x: (data.shift() * global._gameWidth) / 255,
-			y: (data.shift() * global._gameHeight) / 255,
-			color: data.shift(),
-			size: data.shift(),
-			width: data.shift(),
-			height: data.shift()
-		});
+	playerState.gui.minimap.length = 0;
+	let minimapPoints = m[i++];
+	for (let i = 0; i < minimapPoints; i++) {
+		playerState.gui.minimap.push({
+			x: m[i++],
+			y: m[i++],
+			color: m[i++],
+			size: m[i++]
+			// TODO: image support 
+		})
 	}
-	let minimapTeamLength = data.shift();
-	for (let i = 0; i < minimapTeamLength; i++) {
-		_gui._minimap._server.push({
-			id: data.shift(),
-			x: (data.shift() * global._gameWidth) / 255,
-			y: (data.shift() * global._gameHeight) / 255,
-			color: data.shift(),
-			type: 0,
-			size: 0
-		});
-	}
-	let leaderboardLength = data.shift();
-	for (let i = 0; i < leaderboardLength; i++) {
-		let instance = {
-			id: data.shift(),
-			score: data.shift(),
-			index: data.shift(),
-			name: data.shift(),
-			color: data.shift(),
-			barColor: data.shift(),
-			nameColor: data.shift(),
-		};
-		instance.label = data.shift() || mockups.get(instance.index).label
-		if (global.gamemodeAlteration !== "sbx" || data.shift() === global.party) {
-			_gui._leaderboard._server.push(instance);
-		}
+	
+	playerState.gui.minimap.length = 0;
+	let leaderboardEntries = m[i++];
+	for (let i = 0; i < leaderboardEntries; i++) {
+		playerState.gui.leaderboard.push({
+			score: m[i++],
+			name: m[i++],
+			elabel: m[i++],
+			color: m[i++],
+			nameColor: m[i++],
+		})
 	}
 }
 
@@ -655,7 +501,7 @@ let socketInit = function () {
 					global.gamemodeAlteration = m[0];
 				} break;
 				case "R": {
-//	this.talk("R", room.width, room.height, JSON.stringify(c.ROOM_SETUP), JSON.stringify(c.CELL_SKINS), JSON.stringify(util.serverStartTime), this.player.body.label, room.speed, +c.ARENA_TYPE, c.BLACKOUT);
+					//	this.talk("R", room.width, room.height, JSON.stringify(c.ROOM_SETUP), JSON.stringify(c.CELL_SKINS), JSON.stringify(util.serverStartTime), this.player.body.label, room.speed, +c.ARENA_TYPE, c.BLACKOUT);
 					window.gameStarted = true
 					roomState.width = m[i++];
 					roomState.height = m[i++];
@@ -692,23 +538,23 @@ let socketInit = function () {
 				}
 					break;
 				case "as":
-					if(window.loadedAssets===undefined)window.loadedAssets = 0;
+					if (window.loadedAssets === undefined) window.loadedAssets = 0;
 					window.loadingTextTooltip = `(${window.loadedAssets}/${m[0]})`
-					if(m[0] !== 0){
-						await setAsset(m[1], m[2], 
+					if (m[0] !== 0) {
+						await setAsset(m[1], m[2],
 							{
-								path2d:m[3],
-								path2dDiv:m[4],
-								image:m[5],
-								p1:m[6],
-								p2:m[7],
-								p3:m[8],
-								p4:m[9]
+								path2d: m[3],
+								path2dDiv: m[4],
+								image: m[5],
+								p1: m[6],
+								p2: m[7],
+								p3: m[8],
+								p4: m[9]
 							})
 						window.loadedAssets++;
 						loadingScreenState.subtitle = `(${window.loadedAssets}/${m[0]})`
 					}
-					if(window.loadedAssets === m[0]){
+					if (window.loadedAssets === m[0]) {
 						window.assetLoadingPromise()
 					}
 					break;
@@ -728,7 +574,7 @@ let socketInit = function () {
 					}
 					setTimeout(removeChatMessage, currentSettings.chatMessageDuration.value.number * 1000 - 50)
 				}
-				break;
+					break;
 				case "nrid": // new room id - happens bc host can dc from manager
 					window.selectedRoomId = m[0]
 					break;
@@ -737,37 +583,22 @@ let socketInit = function () {
 				}
 					break;
 				case "u": {
-					global.isScoping = !!m[0];
-					if (global.isScoping) rewardManager.unlockAchievement("im_still_single");
 					let cam = {
-						time: m[1],
-						x: m[2],
-						y: m[3],
-						FoV: m[4]
+						x: m[0],
+						y: m[1],
+						FoV: m[2]
 					};
-					//if (cam.time > global.player._lastUpdate) { // Why is this here?
-						lag.add(getNow() - cam.time);
-						global.player._time = cam.time + lag.get();
-						metrics._rendergap = cam.time - global.player._lastUpdate;
-						global.player._lastUpdate = cam.time;
-						convert.reader.set(m, 5);
-						const currentFP = Math.max(1, metrics._rendergap / Math.max(1, 1000/metrics._rendertime));
-						let perFrameAlpha = Math.max(0, .95 / currentFP);
-						window.movementSmoothing = lerp(window.movementSmoothing||1, perFrameAlpha, 0.05);
-						convert.fastGui();
-						convert.lasers();
-						convert.data();
-						// If the camera is slightly slower it gives the feeling that the player is moving more/faster
-						// Its better if the camera is behind the real spot because it has to "react" which has a certain feel
-						global.player._cx = lerp(global.player._cx||cam.x, cam.x, window.movementSmoothing*.7);
-						global.player._cy = lerp(global.player._cy||cam.y, cam.y, window.movementSmoothing*.7);
-						global.player._view = cam.FoV;
-						if (isNaN(global.player._renderv) || global.player._renderv === 0) global.player._renderv = 2000;
-						metrics._lastlag = metrics._lag;
-						metrics._lastuplink = Date.now()
-					//} //else logger.info("This is old data! Last given time: " + global.player._time + "; offered packet timestamp: " + cam.time + ".");
+					convert.reader.set(m, 4);
+					window.movementSmoothing = 1
+					convert.fastGui();
+					convert.lasers();
+					convert.entities();
+					// If the camera is slightly slower it gives the feeling that the player is moving more/faster
+					// Its better if the camera is behind the real spot because it has to "react" which has a certain feel
+					playerState.camera.x = lerp(playerState.camera.x, cam.x, window.movementSmoothing * .7);
+					playerState.camera.y = lerp(playerState.camera.y, cam.y, window.movementSmoothing * .7);
+					playerState.camera.fov = lerp(playerState.camera.fov, cam.FoV, window.movementSmoothing * .7)
 					socket.controls.talk();
-					updateTimes++;
 				}
 					break;
 				case "b": {
@@ -776,7 +607,7 @@ let socketInit = function () {
 					//convert.broadcast();
 				}
 					break;
-				case "v": 
+				case "v":
 					global.vignetteScalarSocket = m[0]
 					global.vignetteColorSocket = m[1]
 					break;
@@ -873,17 +704,17 @@ let socketInit = function () {
 					break;
 				case "am":
 					_anims.clear();
-					while(i < m.length){
+					while (i < m.length) {
 						const prev = _anims.get(m[i]);
 						const arr = prev || [];
-						if(!prev) _anims.set(m[i], arr)
+						if (!prev) _anims.set(m[i], arr)
 						i++;
-						
+
 						const readValue = () => {
 							const val = m[i++];
 							return val === ASSET_MAGIC ? loadAsset(ASSET_MAGIC, m[i++]) : val;
 						};
-						
+
 						arr.push({
 							index: m[i++],
 							size: m[i++],
@@ -911,7 +742,7 @@ let socketInit = function () {
 			socket.talk("k", currentSettings.networkProtocolVersion.value.number, document.getElementById("tokenInput").value || "", 0, "its local", false);
 			logger.info("Token submitted to the server for validation.");
 			socket.ping = function () {
-				if(window.doingPing === true) return;
+				if (window.doingPing === true) return;
 				socket.talk("p");
 			};
 			logger.info("Socket open.");
