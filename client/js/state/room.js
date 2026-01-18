@@ -1,4 +1,5 @@
 const roomState = {
+	roomId: "Loading...",
 	width: 1,
 	height: 1,
 	mapType: 0,

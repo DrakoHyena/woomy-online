@@ -13,6 +13,10 @@ const playerState = {
 		upgrades: [],
 		skills: {
 			points: 0
+		},
+		disconnect: {
+			title: "Disconnected For An Unknown Reason",
+			subtitle: "Try rejoining or joining a different room."
 		}
 	},
 	instance: {
