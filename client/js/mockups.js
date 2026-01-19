@@ -28,7 +28,7 @@ let mockups = {
 				}
 			} else {
 				mockups.pendingMockupRequests.add(entityIndex)
-				socket.talk("mu", entityIndex)
+				socket.send("mu", entityIndex)
 			}
 			return mockups.defaults
 		}
@@ -129,7 +129,7 @@ window.sendMockupEdit = (code) => {
 	if (socket === null) {
 		throw new Error("You need to be in a game to edit mockups!")
 	}
-	socket.talk("muEdit", code)
+	socket.send("muEdit", code)
 }
 
 function getEntityImageFromMockup(index, color) {

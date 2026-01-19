@@ -1,5 +1,6 @@
 const roomState = {
 	roomId: "Loading...",
+	serverTargetMs: 30,
 	width: 1,
 	height: 1,
 	mapType: 0,
@@ -13,6 +14,7 @@ const roomState = {
 			stretch: true
 		}
 	},
+	blackout: false
 }
 
 export { roomState };

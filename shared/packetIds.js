@@ -14,7 +14,8 @@ const serverPackets = {
 	lsdFilter: 12,
 	displayText: 13,
 	propAnimations: 14,
-	serverInfo: 15
+	serverInfo: 15,
+	log: 16
 }
 
 const clientPackets = {

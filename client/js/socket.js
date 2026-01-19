@@ -19,12 +19,12 @@ import { roomState } from "./state/room.js";
 import { playerState } from "./state/player.js";
 import { serverPackets } from "../../shared/packetIds.js";
 
-const entities = new Map();
+let entities = new Map();
 const entitiesArr = [];
 const socket = {
 	open: false,
 	onmessage: onmessage,
-	send: (e) => { multiplayer.playerPeer.send(fasttalk.encode(e)) },
+	send: (...e) => { multiplayer.playerPeer.send(fasttalk.encode(e)) },
 }
 
 // CONVERT //
@@ -35,6 +35,7 @@ const convert = {
 		next: function () {
 			if (convert.reader.index >= convert.reader.crawlData.length) {
 				logger.norm(convert.reader.crawlData);
+				console.trace()
 				throw new Error("Trying to crawl past the end of the provided data!");
 			} else return convert.reader.crawlData[convert.reader.index++];
 		},
@@ -66,6 +67,7 @@ const convert = {
 // CONVERT DATA // 
 function convertLasers() {
 	for (let i = 0, len = convert.reader.next(); i < len; i++) {
+		console.log(len)
 		const id = convert.reader.next();
 		let laser = laserMap.get(id);
 		if (!laser) {
@@ -194,7 +196,7 @@ class ClientEntity {
 		if (typeof this.leash === "object") {
 			this.leash = { x: this.leash.x, y: this.leash.y, points: [] };
 			for (let i = 0; i < 10; i++) {
-				entity.leash.points.push(new RopePoint((entity.x + entity.leash.x) / 2, (entity.y + entity.leash.y) / 2))
+				this.leash.points.push(new RopePoint((this.x + this.leash.x) / 2, (this.y + this.leash.y) / 2))
 			}
 		}
 
@@ -209,7 +211,7 @@ class ClientEntity {
 		this.guns[index] = new ClientGun();
 	}
 
-	setTurret() {
+	setTurret(index) {
 		this.turrets[index] = newEntity();
 	}
 
@@ -266,7 +268,7 @@ function newEntity(skipSpawnFade = false) {
 }
 
 function updateEntity(entityId, updateType) {
-	const entity = entities.get(entityId);
+	let entity = entities.get(entityId);
 	if (updateType === -1) {
 		entity = newEntity(true);
 		return entity;
@@ -275,6 +277,12 @@ function updateEntity(entityId, updateType) {
 		return entity;
 	}
 	if (convert.reader.next()) { // Leash
+		if(!entity.leash){
+			entity.leash = { x: 0, y: 0, points: [] };
+			for (let i = 0; i < 10; i++) {
+				entity.leash.points.push(new RopePoint((entity.x + entity.leash.x) / 2, (entity.y + entity.leash.y) / 2))
+			}
+		}
 		entity.leash.x = convert.reader.next();
 		entity.leash.y = convert.reader.next();
 		for (let point of entity.leash.points) {
@@ -311,15 +319,19 @@ function updateEntity(entityId, updateType) {
 let newEntities = new Map();
 let holdingVar = undefined;
 function convertEntities() {
-	for (let i = 0, newEntityAmount = convert.reader.next(); i < newEntityAmount; i++) {
-		const entity = newEntity();
-		newEntities.set(entity.id, entity);
+	const missingEntityInfoIds = [];
+	for (let i = 0, incomingEntityAmount = convert.reader.next(); i < incomingEntityAmount; i++){
+		const id = convert.reader.next();
+		const updateType = convert.reader.next();
+		const oldFrameEntity = entities.get(id);
+		if(oldFrameEntity){
+			newEntities.set(id, updateEntity(id, updateType))
+		}else if(updateType !== -1){
+			missingEntityInfoIds.push(id);
+		} else { // Update -1 for a new entity
+			newEntities.set(id, updateEntity(id, updateType))
+		}
 	}
-	for (let i = 0, updatedEntityAmount = convert.reader.next(); i < updatedEntityAmount; i++) {
-		const entity = updateEntity(convert.reader.next(), convert.reader.next());
-		entityIdsInFrame.set(entity.id, entity);
-	}
-
 	entitiesArr.length = 0;
 	const entitiesItr = newEntities.values();
 	for (let entity of entitiesItr) {
@@ -350,14 +362,14 @@ function convertFastGui() {
 	const skillStatChanges = convert.reader.next();
 	if (skillStatChanges) {
 		playerState.gui.skills = {};
-		const skillCategoryAmount = convert.reader.next();
-		for (let i = 0; i < skillCategoryAmount; i++) {
-			playerState.gui.skills[convert.reader.next()] = { current: convert.reader.next(), max: convert.reader.max() };
+		for (let i = 0; i < skillStatChanges; i++) {
+			playerState.gui.skills[convert.reader.next()] = { max: convert.reader.next(), current: convert.reader.next() };
 		}
 	}
 }
 
 function convertSlowGui(data) {
+	const m = data;
 	let i = 0;
 
 	playerState.gui.minimap.length = 0;
@@ -372,13 +384,13 @@ function convertSlowGui(data) {
 		})
 	}
 
-	playerState.gui.minimap.length = 0;
+	playerState.gui.leaderboard.length = 0;
 	let leaderboardEntries = m[i++];
 	for (let i = 0; i < leaderboardEntries; i++) {
 		playerState.gui.leaderboard.push({
 			score: m[i++],
 			name: m[i++],
-			elabel: m[i++],
+			label: m[i++],
 			color: m[i++],
 			nameColor: m[i++],
 		})
@@ -403,21 +415,14 @@ async function onmessage (message) {
 			}
 			break;
 		case serverPackets.layerInfo:
-			//	this.talk("R", room.width, room.height, JSON.stringify(c.ROOM_SETUP), JSON.stringify(c.CELL_SKINS), JSON.stringify(util.serverStartTime), this.player.body.label, room.speed, +c.ARENA_TYPE, c.BLACKOUT);
-			window.gameStarted = true
 			roomState.width = m[i++];
 			roomState.height = m[i++];
 			roomState.cells = JSON.parse(m[i++]);
 			roomState.cellSkins = Object.assign(roomState.cellSkins, JSON.parse(m[i++]))
-			serverStart = JSON.parse(m[i++]);
-			i++
-			i++
-			//config.roomSpeed = m[5];
-			roomState.mapType = m[i++] || 0;
-			global._blackout = m[i++];
-			logger.info("Room data recieved! Starting game...");
-			global._gameStart = true;
-			global.message = "";
+			roomState.serverTargetMs = m[i++]
+			roomState.mapType = m[i++];
+			roomState.blackout = m[i++];
+			console.log("Room data recieved! Starting game...");
 			break;
 		case serverPackets.gameMessage:
 			global.messages.push({
@@ -474,7 +479,7 @@ async function onmessage (message) {
 				y: m[1],
 				FoV: m[2]
 			};
-			convert.reader.set(m, 4);
+			convert.reader.set(m, 3);
 			window.movementSmoothing = 1
 			convert.fastGui();
 			convert.lasers();
@@ -496,7 +501,7 @@ async function onmessage (message) {
 			playerState.gui.disconnect.title = m[0];
 			playerState.gui.disconnect.subtitle = m[1];
 			multiplayer.playerPeer.destroy();
-			console.log("Closed socket via packet")
+			console.log("Closed socket via packet", playerState.gui.disconnect)
 			break;
 		case serverPackets.deathScreen:
 			console.log("TODO: Death Screen")
@@ -536,11 +541,14 @@ async function onmessage (message) {
 				})
 			}
 			break;
-		case serverPackets, serverInfo:
+		case serverPackets.serverInfo:
 			metrics._serverCpuUsage = m[0]
 			metrics._serverMemUsage = m[1]
 			mockups.totalMockups = m[2]
 			break;
+		case serverPackets.log:
+			console.log(m[0])
+		break;
 		default:
 			throw new Error("Unknown serverPacketId!" + packet);
 	}
@@ -552,6 +560,6 @@ let connectClientSocket = async function (roomId) {
 	socket.send("k", currentSettings.networkProtocolVersion.value.number, document.getElementById("tokenInput").value || "", 0, "its local", false);
 	console.log("Token submitted to the server for validation.");
 	return socket;
-}();
+};
 
 export { socket, connectClientSocket }

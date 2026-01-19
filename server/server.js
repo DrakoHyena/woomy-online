@@ -1,4 +1,5 @@
 import { assets, ASSET_MAGIC } from "../shared/assets.js";
+import { serverPackets } from "../shared/packetIds.js";
 import { oneVsOne } from "./modes/oneVsOne.js";
 
 const modeFuncs = {oneVsOne}
@@ -49,7 +50,7 @@ worker.onmessage = function (msg) {
             break;
 		case "roomId":
 			for(let [k,v] of userSockets){
-				v.talk("nrid", data.id)
+				v.talk(serverPackets.roomId, data.id)
 			}
 			if(global.updateRoomInfo) global.updateRoomInfo();
 			break;
@@ -2589,14 +2590,14 @@ const Chain = Chainf;
                 throw new Error(`Trying to add existing mockup "${exportName}"`);
             }
             updateClassDatas(exportName, data)
-            sockets.talkToAll("mu", Class[exportName].index, JSON.stringify(mockups.getMockup(Class[exportName].index, true/*skip cache chcek*/)))
+            sockets.talkToAll(serverPackets.mockupRequest, Class[exportName].index, JSON.stringify(mockups.getMockup(Class[exportName].index, true/*skip cache chcek*/)))
         }
         global.updateClass = (exportName, data) => {
             if (!Class[exportName]) {
                 throw new Error(`Trying to update nonexistent mockup "${exportName}"`);
             }
             updateClassDatas(exportName, data, Class[exportName].index)
-            sockets.talkToAll("mu", Class[exportName].index, JSON.stringify(mockups.getMockup(Class[exportName].index, true/*skip cache chcek*/)))
+            sockets.talkToAll(serverPackets.mockupRequest, Class[exportName].index, JSON.stringify(mockups.getMockup(Class[exportName].index, true/*skip cache chcek*/)))
         }
 
         global.editorChangeEntity = (code) => {
@@ -2781,7 +2782,7 @@ const Chain = Chainf;
             room.arenaClosed = true;
             //if (c.enableBot) editStatusMessage("Offline");
             sockets.broadcast("Arena Closed: No players can join.", "#FF0000");
-            for (let socket of clients) socket.talk("P", "The arena has closed. Please try again later once the server restarts.", ran.randomLore());
+            for (let socket of clients) socket.talk(serverPackets.disconnect, "The arena has closed. Please try again later once the server restarts.", ran.randomLore());
             util.log("The arena has closed!", true);
             if (room.modelMode || c.SANDBOX) {
                 util.warn("Closing server...");
@@ -5972,6 +5973,7 @@ const Chain = Chainf;
 
         class Entity {
             constructor(position, master = this) {
+				this.lastFrameCamera = {};
                 this.isGhost = false;
 				this.spectating = null;
                 this.killCount = {
@@ -6475,7 +6477,7 @@ const Chain = Chainf;
                     if (set.HITS_OWN_TEAM != null) this.hitsOwnTeam = set.HITS_OWN_TEAM;
                     if (set.LABEL != null) this.label = set.LABEL;
                     this.labelOverride = "";
-                    if (set.TOOLTIP != null) this.socket?.talk("m", `${set.TOOLTIP}`, "#8cff9f");
+                    if (set.TOOLTIP != null) this.socket?.talk(serverPackets.gameMessage, `${set.TOOLTIP}`, "#8cff9f");
                     if (set.TYPE != null) this.type = set.TYPE;
                     if (set.SHAPE != null) {
                         this.shape = typeof set.SHAPE === 'number' ? set.SHAPE : 0
@@ -6817,35 +6819,29 @@ const Chain = Chainf;
             }
             camera(tur = false) {
                 let out = {
-                    type: tur * 0x01 + this.settings.drawHealth * 0x02 + ((this.type === "tank" || this.type === "utility") && !this.settings.noNameplate) * 0x04 + this.invuln * 0x08,
                     id: this.id,
-					masterId: this.master.id,
                     index: this.index,
+					name: this.name,
                     x: this.x,
                     y: this.y,
-                    cx: this.altCameraSource?this.altCameraSource[0]:this.x,
-                    cy: this.altCameraSource?this.altCameraSource[1]:this.y,
                     size: this.size,
-                    rsize: this.realSize,
-                    status: 1,
-                    health: this.health.display(),
-                    shield: this.shield.display(),
                     facing: this.facing,
-                    vfacing: this.vfacing,
-					leash: this.leash,
-                    twiggle: this.facingType !== "toTarget" || (this.facingType === "lmg" && this.control.fire), //this.facingType === "looseWithMotion" || this.facingType === "smoothWithMotion" || this.facingType === "spinSlowly" || this.facingType === "spinSlowly2" || this.facingType === "spinSlowly3" || this.facingType === "spinSlowly4" || this.facingType === "altSpin" || this.facingType === "fastSpin" || this.facingType === "autospin" || this.facingType === "autospin2" || this.facingType === "reverseAutospin" || this.facingType === "bitFastSpin" || this.facingType === "hadron" || this.facingType === "locksFacing" && this.control.alt || this.facingType === "hatchet" || this.facingType === "altLocksFacing" || this.facingType === "lmg" && this.control.fire,
+                    score: this.skill.score,
                     layer: this.type === "mazeWall" ? 7 : this.passive && this.LAYER !== -1 ? 1 : this.LAYER === -1 ? this.bond == null ? this.type === "wall" ? 11 : this.type === "food" ? 10 : this.type === "tank" ? 5 : this.type === "crasher" ? 8 : 0 : this.bound.layer : this.LAYER,
                     color: this.color,
                     team: this.team,
-                    name: this.name,
-                    score: this.skill.score,
-                    sizeRatio: [this.width || 1, this.height || 1],
-                    guns: this.guns.map(gun => gun.lastShot),
-                    turrets: this.turrets.map(turret => turret.camera(true)),
+					health: this.health.display(),
+                    shield: this.shield.display(),
                     alpha: this.alpha,
                     seeInvisible: this.seeInvisible,
                     nameColor: this.nameColor,
-                    label: this.labelOverride ? this.labelOverride : 0
+                    label: this.labelOverride ? this.labelOverride : this.label,
+                    sizeRatio: [this.width || 1, this.height || 1],
+                    hideHealth: false,
+					hideName: false,
+					leash: this.leash,
+                    guns: this.guns,
+                    turrets: this.turrets,
                 };
                 if (this.scoped) {
                     if (!this.control.alt) {
@@ -6867,6 +6863,7 @@ const Chain = Chainf;
                         this.altCameraSource[1] = this.y + this.fov * Math.sin(this.facing) / 3;
                     }
                 }
+				this.lastFrameCamera.out = out;
                 return out;
             }
             skillUp(stat) {
@@ -8185,7 +8182,7 @@ const Chain = Chainf;
                 }
                 player.body.underControl = false;
                 player.body.autoOverride = false;
-                player.body.sendMessage = (content, color = 0) => { this.talk("m", content, color) };
+                player.body.sendMessage = (content, color = 0) => { this.talk(serverPackets.gameMessage, content, color) };
                 player.body.rewardManager = (id, amount) => { };
                 let fakeBody = new Entity({
                     x: player.body.x,
@@ -8431,91 +8428,103 @@ const Chain = Chainf;
             };
         })();
 
-function flatten(data, out, playerContext = null) {
-    out.push(data.type);
-
-    if (data.type & 0x01) { // Turret specific data
-        out.push(+(data.facing).toFixed(2), data.layer);
-    } else { // Full entity data
-        // Pre-calculate values
-        const x = (data.x + .5) | 0;
-        const y = (data.y + .5) | 0;
-        const size = (data.size + .5) | 0;
-        const facing = +(data.facing).toFixed(2);
-
-        // --- Perspective Logic ---
-        let finalTwiggle = data.twiggle;
-        let finalColor = data.color ?? 0;
-
-        if (playerContext && playerContext.body) {
-            // Perspective #1: Autospin
-            // If the viewing player has autospin on, the twiggle flag is forced true.
-            if (playerContext.command.autospin) {
-                finalTwiggle = true;
-            }
-            
-            // Perspective #2: FFA Color Override
-            // In FFA, if a player's body color is 'FFA_RED', they see their own bullets as their team color.
-            if (playerContext.gameMode === "ffa" && data.color === "FFA_RED" && playerContext.body.color === "FFA_RED" && data.masterId === playerContext.body.id) {
-				finalColor = playerContext.teamColor ?? 0;
-            }
-        }
-        // --- End of Perspective Logic ---
-
-        // Create flags bitmask
-        let flags = 0;
-        flags |= finalTwiggle ? 1 : 0;
-        flags |= data.layer !== 0 ? 2 : 0;
-        flags |= data.health < .975 ? 4 : 0;
-        flags |= data.shield < .975 ? 8 : 0;
-        flags |= data.alpha < .975 ? 16 : 0;
-        flags |= data.seeInvisible ? 32 : 0;
-        flags |= data.nameColor !== "#FFFFFF" ? 64 : 0;
-        flags |= data.label ? 128 : 0;
-        flags |= data.sizeRatio[0] !== 1 ? 256 : 0;
-        flags |= data.sizeRatio[1] !== 1 ? 512 : 0;
-		flags |= data.leash ? 1024 : 0;
-
-        // Push core data
-        out.push(data.id, flags, data.index, x, y, size, facing);
-
-        // Push conditional data based on flags
-        if (flags & 2) out.push(data.layer);
-        
-        // Push the finalColor, which may have been modified by perspective logic
-        out.push(finalColor, data.team);
-        
-        if (flags & 4) out.push(Math.ceil(255 * data.health));
-        if (flags & 8) out.push(Math.ceil(255 * data.shield));
-        if (flags & 16) out.push(Math.ceil(255 * data.alpha));
-        if (flags & 64) out.push(data.nameColor);
-        if (flags & 128) out.push(data.label);
-        if (flags & 256) out.push(data.sizeRatio[0]);
-        if (flags & 512) out.push(data.sizeRatio[1]);
-		if (flags & 1024) out.push(data.leash.x, data.leash.y)
-
-        // Push player-specific data
-        if (data.type & 0x04) {
-            out.push(data.name || "", data.score || 0);
-        }
-    }
-
-    // Push gun data
-    const gunCount = data.guns.length;
-    out.push(gunCount);
-    for (let i = 0; i < gunCount; i++) {
-        const gun = data.guns[i];
-        out.push((gun.time + .5) | 0, (gun.power + .5) | 0);
-    }
-
-    // Push turret data (recursively, passing context)
-    const turretCount = data.turrets.length;
-    out.push(turretCount);
-    for (let i = 0; i < turretCount; i++) {
-        // The recursive call now passes the playerContext through
-        flatten(data.turrets[i], out, playerContext);
-    }
-}
+	function addEntityToPacket(entity, out, playerContext = null) {
+		const lastFrameData = entity.lastFrameCamera;
+		let minimumUpdateType = -1;
+		const oldData = lastFrameData.out;
+		const newData = entity.camera(entity.isTurret);
+		if(oldData && playerContext.requestedFullContextEntityIds.has(entity.id) === false){
+			if(
+				oldData.name !== newData.name ||
+				oldData.nameColor !== newData.nameColor ||
+				oldData.label !== newData.label
+			){
+				minimumUpdateType = 4
+			} else if(
+				oldData.color !== newData.color ||
+				oldData.team !== newData.team ||
+				oldData.layer !== newData.layer
+			){
+				minimumUpdateType = 3
+			} else if(
+				oldData.health !== newData.health ||
+				oldData.shield !== newData.shield ||
+				oldData.score !== newData.score ||
+				oldData.size !== newData.size ||
+				oldData.alpha !== newData.alpha
+			){
+				minimumUpdateType = 2
+			} else if(
+				oldData.x !== newData.x || 
+				oldData.y !== newData.y ||
+				oldData.facing !== newData.facing
+			){
+				minimumUpdateType = 1
+			} else {
+				minimumUpdateType = 0;
+			}
+		}
+		playerContext.requestedFullContextEntityIds.delete(entity.id);
+		out.push(newData.id);
+		out.push(minimumUpdateType)
+		if(minimumUpdateType === -1){
+			out.push(newData.index);
+			out.push(newData.name);
+			out.push(newData.x);
+			out.push(newData.y);
+			out.push(newData.size);
+			out.push(newData.facing);
+			out.push(newData.score);
+			out.push(newData.layer);
+			out.push(newData.color);
+			out.push(newData.team);
+			out.push(newData.health);
+			out.push(newData.shield);
+			out.push(newData.alpha);
+			out.push(newData.seeInvisible);
+			out.push(newData.nameColor);
+			out.push(newData.label);
+			out.push(newData.sizeRatio);
+			out.push(newData.hideHealth);
+			out.push(newData.hideName);
+			if(newData.leash){
+				out.push(true);
+				out.push(newData.leash.x);
+				out.push(newData.leash.y);
+			}else{
+				out.push(false);
+			}
+						
+			out.push(newData.guns.length);
+			
+			const turretCount = newData.turrets.length;
+			out.push(turretCount);
+			for (let i = 0; i < turretCount; i++) {
+			    addEntityToPacket(newData.turrets[i], out, playerContext);
+			}
+		} else if (minimumUpdateType === 0) {
+			// Nothing needs updated
+		} else if(minimumUpdateType >= 1){
+			out.push(newData.x);
+			out.push(newData.y);
+			out.push(newData.facing);
+		} else if(minimumUpdateType >= 2) {
+			out.push(newData.health);
+			out.push(newData.shield);
+			out.push(newData.score);
+			out.push(newData.size);
+			out.push(newData.alpha);
+		} else if(minimumUpdateType >= 3) {
+			out.push(newData.color);
+			out.push(newData.team);
+			out.push(newData.layer);
+		} else if(minimumUpdateType >= 4) {
+			out.push(newData.name);
+			out.push(newData.nameColor);
+			out.push(newData.label);
+		}
+		return out;
+	}
 
         const sockets = (() => {
             const protocol = require("./lib/fasttalk");
@@ -8595,12 +8604,9 @@ function flatten(data, out, playerContext = null) {
                     this.camera = {
                         x: undefined,
                         y: undefined,
-                        vx: 0,
-                        vy: 0,
-                        lastUpdate: util.time(),
-                        lastDowndate: undefined,
                         fov: 2000
                     };
+					this.requestedFullContextEntityIds = new Set();
                     this.animationsToDo = new Map();
                     this.betaData = {
                         permissions: 0,
@@ -8742,8 +8748,7 @@ function flatten(data, out, playerContext = null) {
                     this.inactivityTimeout = null;
                     this.beginTimeout = () => {
                         this.inactivityTimeout = setTimeout(() => {
-                            this.talk("P", "You were disconnected for inactivity.");
-                            this.kick("Kicked for inactivity!");
+                            this.talk(serverPackets.disconnect, "You were disconnected for inactivity.");
                         }, (c.INACTIVITY_TIMEOUT || 360) * 1000);
                     };
                     this.endTimeout = () => clearTimeout(this.inactivityTimeout);
@@ -8754,7 +8759,7 @@ function flatten(data, out, playerContext = null) {
                 animationsUpdate() {
 					let arr = [];
 					this.animationsToDo.forEach((v)=>{arr.push(v.entityId, ...v)})
-					this.talk("am", ...arr);
+					this.talk(serverPackets.propAnimations, ...arr);
 					this.animationsToDo.clear();
                 }
                 get readableID() {
@@ -8806,12 +8811,11 @@ function flatten(data, out, playerContext = null) {
                 }*/
                 }
                 error(type = "unknown", reason = "unspecified", report = false) {
-                    this.talk("P", `Something went wrong during the ${type} process: ${reason}. ${report ? "Please report this bug if it continues to occur." : ""}`);
-                    this.kick(reason + "!");
+                    this.talk(serverPackets.disconnect, `Something went wrong during the ${type} process: ${reason}. ${report ? "Please report this bug if it continues to occur." : ""}`);
                 }
                 kick(reason = "Unspecified.") {
                     util.warn(this.readableID + "has been kicked. Reason: " + reason);
-                    this.talk("P", "You have been kicked: " + reason)
+                    this.talk(serverPackets.disconnect, "You have been kicked: " + reason)
 					this.close()
                 }
                 ban(reason) {
@@ -8824,11 +8828,10 @@ function flatten(data, out, playerContext = null) {
                         ip: this.ip,
                         reason: reason
                     });
-                    this.talk("P", "You have been banned: " + reason)
-                    this.talk("closeSocket")
+                    this.talk(serverPackets.disconnect, "You Have Been Banned", reason)
                 }
                 close(isBanned) {
-                    this.talk("closeSocket")
+                    this.talk(serverPackets.disconnect)
                     if (this.isClosed) {
                         return;
                     }
@@ -8862,102 +8865,24 @@ function flatten(data, out, playerContext = null) {
 					global.updateRoomInfo()
 				}
                 closeWithReason(reason) {
-                    this.talk("P", reason);
-                    this.kick(reason);
+                    this.talk(serverPackets.disconnect, reason);
                 }
-                makeGUI() {
-                    const skilNames = ["atk", "hlt", "spd", "str", "pen", "dam", "rld", "mob", "rgn", "shi"];
-                    const cache = {
-                        _: {},
-                        get: key => {
-                            if (cache._[key] == null) {
-                                return null;
-                            }
-                            const output = cache._[key] != null && cache._[key].update && cache._[key].value;
-                            cache._[key].update = false;
-                            return output;
-                        },
-                        set: (key, value) => {
-                            if (cache._[key]) {
-                                let updated = false;
-                                if (value instanceof Array) {
-                                    updated = value.length !== cache._[key].value.length || value.some((element, index) => cache._[key].value[index] !== element);
-                                } else if (value !== cache._[key].value) {
-                                    updated = true;
-                                }
-                                if (!updated) {
-                                    return;
-                                }
-                            }
-                            cache._[key] = {
-                                update: true,
-                                value: value
-                            };
-                        }
-                    };
-                    function getSkills(body) {
-                        let val = 0;
-                        val += 0x1 * body.skill.amount("atk");
-                        val += 0x10 * body.skill.amount("hlt");
-                        val += 0x100 * body.skill.amount("spd");
-                        val += 0x1000 * body.skill.amount("str");
-                        val += 0x10000 * body.skill.amount("pen");
-                        val += 0x100000 * body.skill.amount("dam");
-                        val += 0x1000000 * body.skill.amount("rld");
-                        val += 0x10000000 * body.skill.amount("mob");
-                        val += 0x100000000 * body.skill.amount("rgn");
-                        val += 0x1000000000 * body.skill.amount("shi");
-                        return val.toString(36);
+                getSkillUi(output=[]) {
+                    let body = this?.player?.body;
+                    if (body) {
+						output.push(body.skill.points)
+						output.push(body.upgrades.length);
+						for (let i = 0; i < body.upgrades.length; i++){
+							output.push(body.upgrades[i].index);
+						}
+						output.push(body.skill.name.length)
+						for(let i = 0; i < body.skill.name.length; i++){
+							output.push(body.skill.name[i])
+							output.push(body.skill.caps[i])
+							output.push(body.skill.raw[i])
+						}
                     }
-                    cache.set("time", performance.now());
-                    return () => {
-                        let current = cache.get("time"),
-                            output = [0],
-                            body = this?.player?.body;
-                        if (performance.now() - current > 1000) {
-                            cache._ = {};
-                            cache.set("time", performance.now());
-                        }
-                        cache.set("mspt", room.mspt);
-                        if (body) {
-                            cache.set("label", [body.index, this.player.teamColor != null ? this.player.teamColor : body.color, body.id]);
-                            cache.set("score", body.skill.score + .5 | 0);
-                            if (!body.lvlCheated && body.skill.score > 59212) body.rewardManager(-1, "wait_its_all_sandbox");
-                            cache.set("points", body.skill.points);
-                            cache.set("upgrades", body.upgrades.filter(up => up.level <= body.skill.level).map(up => up.index));
-                            cache.set("skillNames", skilNames.map(name => [body.skill.title(name), body.skill.cap(name), body.skill.cap(name, true)]).flat());
-                            cache.set("skills", getSkills(body));
-                        }
-                        if (current = cache.get("mspt"), current != null && current !== false) {
-                            output[0] += 0x0001;
-                            output.push(current);
-                        }
-                        if (current = cache.get("label"), current != null && current !== false) {
-                            output[0] += 0x0002;
-                            output.push(...current);
-                        }
-                        if (current = cache.get("score"), current != null && current !== false) {
-                            output[0] += 0x0004;
-                            output.push(current);
-                        }
-                        if (current = cache.get("points"), current != null && current !== false) {
-                            output[0] += 0x0008;
-                            output.push(current);
-                        }
-                        if (current = cache.get("upgrades"), current != null && current !== false) {
-                            output[0] += 0x0010;
-                            output.push(current.length, ...current);
-                        }
-                        if (current = cache.get("skillNames"), current != null && current !== false) {
-                            output[0] += 0x0020;
-                            output.push(...current);
-                        }
-                        if (current = cache.get("skills"), current != null && current !== false) {
-                            output[0] += 0x0040;
-                            output.push(current);
-                        }
-                        return output;
-                    }
+                    return output;
                 }
                 async incoming(message) {
                     this.receivedPackets++
@@ -9085,7 +9010,7 @@ function flatten(data, out, playerContext = null) {
                             if (players.indexOf(this.player) !== -1) util.remove(players, players.indexOf(this.player));
                             this.player = this.spawn(name);
                             if (isNew) {
-                                this.talk("R", room.width, room.height, JSON.stringify(c.ROOM_SETUP), JSON.stringify(c.CELL_SKINS), JSON.stringify(util.serverStartTime), this.player.body.label, room.speed, +c.ARENA_TYPE, c.BLACKOUT);
+                                this.talk(serverPackets.layerInfo, room.width, room.height, JSON.stringify(c.ROOM_SETUP), JSON.stringify(c.CELL_SKINS), room.speed, +c.ARENA_TYPE, c.BLACKOUT);
                             }
                             //socket.update(0);
                             this.woomyOnlineSocketId = m[3];
@@ -9099,16 +9024,14 @@ function flatten(data, out, playerContext = null) {
 
                             if (bannedPlayers.includes(this.woomyOnlineSocketId)) {
                                 console.log("[INFO]", `Banned WoomyOnlineSocketId (${this.woomyOnlineSocketId}) attempted to join.`);
-                                this.talk("P", "The room host has banned you from their room.");
-                                this.talk("closeSocket")
+                                this.talk(serverPackets.disconnect, "The room host has banned you from their room.");
                                 this.close(true);
                                 return;
                             }
 
 							if(players.length > maxPlayersOverride){
                                 console.log("[INFO]", `WoomyOnlineSocketId (${this.woomyOnlineSocketId}) attempted to join while the room is full.`);
-                                this.talk("P", "This room is currently full. Please try again later.");
-                                this.talk("closeSocket")
+                                this.talk(serverPackets.disconnect, "This room is currently full. Please try again later.");
                                 this.close(true);
                                 return;
 							}
@@ -9137,14 +9060,6 @@ function flatten(data, out, playerContext = null) {
                             }
                             if (body.nameColor.toLowerCase() !== "#ffffff") body.rewardManager(-1, "i_feel_special");
                         } break;
-                        case "p": { // Ping packet
-                            if (m.length !== 0) {
-                                this.error("ping calculation", "Ill-sized ping", true);
-                                return 1;
-                            }
-                            this.talk("p");
-                            this.status.lastHeartbeat = util.time();
-                        } break;
                         case "banSocket": {
                             if (this.betaData.globalName !== "Room Host") return;
                             players.forEach(o => {
@@ -9154,8 +9069,7 @@ function flatten(data, out, playerContext = null) {
                                     y: player.target.y + body.y
                                 }) < o.size * 1.3) {
                                     if (o.socket.woomyOnlineSocketId) bannedPlayers.push(o.socket.woomyOnlineSocketId)
-                                    o.socket.talk("P", "The room host has banned you from their room.");
-                                    o.socket.talk("closeSocket")
+                                    o.socket.talk(serverPackets.disconnect, "The room host has banned you from their room.");
                                     o.socket.close();
                                 }
                             });
@@ -9167,7 +9081,7 @@ function flatten(data, out, playerContext = null) {
                             }
 							let mockup = mockups.getMockup(m[0])
 							if(typeof mockup !== "object") break;
-                            this.talk("mu", m[0], JSON.stringify(mockup))
+                            this.talk(serverPackets.mockupRequest, m[0], JSON.stringify(mockup))
                             break;
                         case "muEdit":
                             if (typeof m[0] !== "string") {
@@ -9374,10 +9288,7 @@ function flatten(data, out, playerContext = null) {
                                     }, 5000);
                                     player.body.name = name;
                                     player.body.nameColor = nameColor;
-                                    player.body.sendMessage = (content, color = 0) => this.talk("m", content, color);
-                                    player.body.rewardManager = (id, amount) => {
-                                        this.talk("AA", id, amount);
-                                    }
+                                    player.body.sendMessage = (content, color = 0) => this.talk(serverPackets.gameMessage, content, color);
                                     player.body.controllers = [new ioTypes.listenToPlayerStatic(player.body, player)];
                                     player.body.FOV = 1;
                                     player.body.refreshFOV();
@@ -9392,7 +9303,7 @@ function flatten(data, out, playerContext = null) {
                                     player.body.rewardManager(-1, "okay_this_is_boring_i_give_up");
                                     player.body.FOV = .5;
                                     util.info(trimName(this.name) + " has relinquished control of a Dominator. Location: " + loc + " Dominator. Players: " + clients.length + ".");
-                                    this.talk("F", ...player.records());
+                                    this.talk(serverPackets.deathScreen, ...player.records());
                                     player.body.relinquish(player);
                                 }
                             } else if (c.serverName.includes("Mothership")) {
@@ -9417,7 +9328,7 @@ function flatten(data, out, playerContext = null) {
                                     player.body.settings.leaderboardable = false;
                                     player.body.name = name;
                                     player.body.nameColor = ["#00B0E1", "#F04F54", "#00E06C", "#BE7FF5", "#FFEB8E", "#F37C20", "#E85DDF", "#8EFFFB"][player.team - 1];
-                                    player.body.sendMessage = (content, color = 0) => this.talk("m", content, color);
+                                    player.body.sendMessage = (content, color = 0) => this.talk(serverPackets.gameMessage, content, color);
                                     player.body.rewardManager = (id, amount) => {
                                         this.talk("AA", id, amount);
                                     }
@@ -9434,7 +9345,7 @@ function flatten(data, out, playerContext = null) {
                                     player.body.sendMessage("You have relinquished control of your team's Mothership.");
                                     player.body.rewardManager(-1, "okay_this_is_boring_i_give_up");
                                     util.info(trimName(this.name) + " has relinquished control of their team's Mothership. Players: " + clients.length + ".");
-                                    this.talk("F", ...player.records());
+                                    this.talk(serverPackets.deathScreen, ...player.records());
                                     player.body.relinquish(player);
                                 }
                             }
@@ -9467,7 +9378,7 @@ function flatten(data, out, playerContext = null) {
                                 this.error("Server Data Stats", "Ill-sized request", true)
                                 return 1
                             }
-                            this.talk("da", global.serverStats.cpu, global.serverStats.mem, global.exportNames.length)
+                            this.talk(serverPackets.serverInfo, global.serverStats.cpu, global.serverStats.mem, global.exportNames.length)
                             break;
                         case "CTB":
                             if (body.switchingToBasic === true) return;
@@ -9839,8 +9750,8 @@ function flatten(data, out, playerContext = null) {
                                 this.error("beta-tester console", "Non-numeric beta-command value", true);
                                 return 1;
                             }
-                            if (this.betaData.permissions !== 3) return this.talk("Z", "[ERROR] You need a beta-tester level 3 token to use these commands.");
-                            if (!isAlive) return this.talk("Z", "[ERROR] You cannot use a beta-tester command while dead.");
+                            if (this.betaData.permissions !== 3) return this.talk(serverPackets.log, "[ERROR] You need a beta-tester level 3 token to use these commands.");
+                            if (!isAlive) return this.talk(serverPackets.log, "[ERROR] You cannot use a beta-tester command while dead.");
                             //if (body.underControl) return socket.talk("Z", "[ERROR] You cannot use a beta-tester command while controlling a Dominator or Mothership.");
                             switch (m[0]) {
                                 case 0: { // Broadcast
@@ -9915,7 +9826,7 @@ function flatten(data, out, playerContext = null) {
                                     //body.children
                                 } break;
                                 case 15: { // Set team
-                                    if (-m[1] > room.teamAmount) return this.talk("Z", "[ERROR] The maximum team amount for this server is " + room.teamAmount + ".");
+                                    if (-m[1] > room.teamAmount) return this.talk(serverPackets.log, "[ERROR] The maximum team amount for this server is " + room.teamAmount + ".");
                                     body.team = m[1];
                                     player.team = -m[1];
                                     this.rememberedTeam = m[1];
@@ -9933,13 +9844,13 @@ function flatten(data, out, playerContext = null) {
                                 } break;
                                 case 19: { // Enable or disable multiboxing
                                     if (m[1] === 0) {
-                                        if (!body.multibox.enabled) return this.talk("Z", "[ERROR] Multiboxing is already disabled for you.");
-                                        this.talk("Z", "[INFO] You have disabled multiboxing for yourself.");
+                                        if (!body.multibox.enabled) return this.talk(serverPackets.log, "[ERROR] Multiboxing is already disabled for you.");
+                                        this.talk(serverPackets.log, "[INFO] You have disabled multiboxing for yourself.");
                                         body.multibox.enabled = false;
                         				body.onDead({sockets, ran, Entity, me: body, them: body.collisionArray[0]});
                                         return body.onDead = null;
                                     }
-                                    this.talk("Z", "[INFO] You are now controlling " + m[1] + " new " + (m[1] > 1 ? "entities" : "entity") + ".");
+                                    this.talk(serverPackets.log, "[INFO] You are now controlling " + m[1] + " new " + (m[1] > 1 ? "entities" : "entity") + ".");
                                     while (m[1]-- > 0) {
                                         let controlledBody = new Entity({
                                             x: body.x + Math.random() * 5,
@@ -9968,23 +9879,23 @@ function flatten(data, out, playerContext = null) {
                                 } break;
                                 case 20: { // Add controller
                                     if (ioTypes[m[1]] == null) {
-                                        this.talk("Z", "[ERROR] That controller doesn't exist!");
+                                        this.talk(serverPackets.log, "[ERROR] That controller doesn't exist!");
                                         return;
                                     }
                                     body.controllers.push(new ioTypes[m[1]](body, player));
-                                    this.talk("Z", "[INFO] Added that controller to you!");
+                                    this.talk(serverPackets.log, "[INFO] Added that controller to you!");
                                 } break;
                                 case 21: { // Remove controller
                                     if (ioTypes[m[1]] == null) {
-                                        this.talk("Z", "[ERROR] That controller doesn't exist!");
+                                        this.talk(serverPackets.log, "[ERROR] That controller doesn't exist!");
                                         return;
                                     }
                                     body.controllers = body.controllers.filter(entry => !(entry instanceof ioTypes[m[1]]));
-                                    this.talk("Z", "[INFO] Removed that controller from you!");
+                                    this.talk(serverPackets.log, "[INFO] Removed that controller from you!");
                                 } break;
                                 case 22: { // Clear Controllers
                                     body.controllers = [];
-                                    this.talk("Z", "[INFO] Removed all controllers from you!");
+                                    this.talk(serverPackets.log, "[INFO] Removed all controllers from you!");
                                 } break;
 								case 23: // Layer shift
 									if(typeof m[1] === "number") body.roomLayer = m[1]
@@ -10103,7 +10014,7 @@ function flatten(data, out, playerContext = null) {
 							for(let i = keys.length/2; i < keys.length; i++){
 								const key = keys[i]
 								const value = assets[key];
-								this.talk("as",
+								this.talk(serverPackets.assetDownload,
 									keys.length/2,
 									key,
 									value.data,
@@ -10116,7 +10027,7 @@ function flatten(data, out, playerContext = null) {
 									value.info.p4,
 								)
 							}
-							if(keys.length === 0) this.talk("as", 0, 0)
+							if(keys.length === 0) this.talk(serverPackets.assetDownload, 0, 0)
 						break;
                         case "cs": // short for chat send
                             // Do they even exist
@@ -10145,10 +10056,11 @@ function flatten(data, out, playerContext = null) {
                                 text = text.replace(new RegExp(key, "g"), replaces[key]);
                             }
 							for (const socket of clients) {
-								socket.talk("cs", text, this.player.body.id)
+								socket.talk(serverPackets.chatMessage, text, this.player.body.id)
 							}
                             break;
                         default:
+							console.log(index, m)
                             this.error("initialization", `Unknown packet index (${index})`, true);
                             return 1;
                     }
@@ -10168,7 +10080,7 @@ function flatten(data, out, playerContext = null) {
                                     //this.talk("m", "That party link is expired or invalid!");
                                     player.team = null;
                                 } else {
-                                    this.talk("m", "Team set with proper party link!");
+                                    this.talk(serverPackets.gameMessage, "Team set with proper party link!");
                                 }
                             }
                             if (player.team == null || room.defeatedTeams.includes(-player.team)) {
@@ -10180,7 +10092,6 @@ function flatten(data, out, playerContext = null) {
                             }
                             if (player.team !== this.rememberedTeam) {
                                 this.party = room.partyHash[player.team - 1];
-                                this.talk("pL", room.partyHash[player.team - 1]);
                             }
                             let spawnSectors = player.team === 20 ? ["edge"] : ["spn", "bas", "n_b", "bad"].map(r => r + player.team).filter(sector => room[sector] && room[sector].length);
                             const sector = ran.choose(spawnSectors);
@@ -10226,15 +10137,10 @@ function flatten(data, out, playerContext = null) {
                     }
                     body.name = name || this.betaData.globalName;
                     body.addController(new ioTypes.listenToPlayer(body, player));
-                    body.sendMessage = (content, color = 0) => this.talk("m", content, color);
-                    body.rewardManager = (id, amount) => {
-                        this.talk("AA", id, amount);
-                    }
+                    body.sendMessage = (content, color = 0) => this.talk(serverPackets.gameMessage, content, color);
                     body.isPlayer = true;
                     if (this.sandboxId) {
                         body.sandboxId = this.sandboxId;
-                        this.talk("pL", body.sandboxId);
-                        this.talk("gm", "sbx");
                     }
                     body.invuln = true;
                     body.invulnTime = [Date.now(), room.gameMode !== "tdm" || !room["bas1"].length ? 18e4 : 6e4];
@@ -10276,7 +10182,6 @@ function flatten(data, out, playerContext = null) {
                             this.usingAdBlocker
                         ];
                     })();
-                    player.gui = this.makeGUI(player);
                     player.socket = this;
                     body.socket = this;
                     players.push(player);
@@ -10353,16 +10258,11 @@ function flatten(data, out, playerContext = null) {
                     if (c.serverName.includes("Tag") || c.SOCCER) {
                         for (let i = 0; i < c.TEAM_AMOUNT; i++) {
                             output.leaderboard.push({
-                                id: i,
-                                skill: {
-                                    score: c.SOCCER ? soccer.scoreboard[i] : 0,
-                                },
-                                index: c.SOCCER ? Class.soccerMode.index : Class.tagMode.index,
+                                score: c.SOCCER ? soccer.scoreboard[i] : 0,
                                 name: ["BLUE", "RED", "GREEN", "PURPLE"][i],
                                 color: [10, 12, 11, 15][i] ?? 0,
                                 nameColor: "#FFFFFF",
-                                team: -i - 1,
-                                label: 0
+                                label: ""
                             });
                         }
                     }
@@ -10371,38 +10271,21 @@ function flatten(data, out, playerContext = null) {
                             return;
                         }
                         if (!my.isOutsideRoom && (((my.type === 'wall' || my.type === "mazeWall") && my.alpha > 0.2) || my.showsOnMap || my.type === 'miniboss' || (my.type === 'tank' && my.lifetime) || my.isMothership || my.miscIdentifier === "appearOnMinimap") || my.miscIdentifier === "Sanctuary Boss") {
-                            if (output.minimapSandboxes[my.sandboxId] != null) {
-                                output.minimapSandboxes[my.sandboxId].push(
-                                    my.id,
-                                    (my.type === 'wall' || my.type === 'mazeWall') ? my.shape === 4 ? 2 : 1 : 0,
-                                    util.clamp(Math.floor(256 * my.x / room.width), 0, 255),
-                                    util.clamp(Math.floor(256 * my.y / room.height), 0, 255),
-                                    my.color ?? 0,
-                                    Math.round(my.SIZE),
-                                    my.width || 1,
-                                    my.height || 1
-                                );
-                                counters.minimapSandboxes[my.sandboxId]++;
-                            } else {
-                                output.minimapAll.push(
-                                    my.id,
-                                    (my.type === 'wall' || my.type === 'mazeWall') ? my.shape === 4 ? 2 : 1 : 0,
-                                    util.clamp(Math.floor(256 * my.x / room.width), 0, 255),
-                                    util.clamp(Math.floor(256 * my.y / room.height), 0, 255),
-                                    my.color ?? 0,
-                                    Math.round(my.SIZE),
-                                    my.width || 1,
-                                    my.height || 1
-                                ); counters.minimapAll++;
-                            }
+                            output.minimapAll.push(
+								my.x,
+								my.y,
+                                my.color ?? 0,
+                                Math.round(my.SIZE)
+                            ); 
+							counters.minimapAll++;
                         }
                         if (my.type === 'tank' && my.master === my && !my.lifetime) {
                             if (output.minimapTeams[my.team] != null) {
                                 output.minimapTeams[my.team].push(
-                                    my.id,
                                     util.clamp(Math.floor(256 * my.x / room.width), 0, 255),
                                     util.clamp(Math.floor(256 * my.y / room.height), 0, 255),
-                                    my.color ?? 0
+                                    my.color ?? 0,
+									my.size
                                 );
                                 counters.minimapTeams[my.team]++;
                             }
@@ -10436,23 +10319,12 @@ function flatten(data, out, playerContext = null) {
                         let entry = output.leaderboard[top];
                         topTen.push({
                             id: entry.id,
-                            data: c.SANDBOX ? [
+                            data: [
                                 Math.round(c.serverName.includes("Mothership") ? entry.health.amount : entry.skill.score),
-                                entry.index,
                                 entry.name,
+								entry.labelOverride || entry.label || "",
                                 entry.color ?? 0,
-                                getBarColor(entry) ?? 0,
                                 entry.nameColor,
-                                entry.labelOverride || 0,
-                                entry.sandboxId || -1
-                            ] : [
-                                Math.round(c.serverName.includes("Mothership") ? entry.health.amount : entry.skill.score),
-                                entry.index,
-                                entry.name,
-                                entry.color ?? 0,
-                                getBarColor(entry) ?? 0,
-                                entry.nameColor,
-                                entry.labelOverride || 0
                             ]
                         });
                         output.leaderboard.splice(top, 1);
@@ -10467,7 +10339,7 @@ function flatten(data, out, playerContext = null) {
                         output.minimapSandboxes[team] = [counters.minimapSandboxes[team], ...output.minimapSandboxes[team]];
                     }
                     output.leaderboard = [output.leaderboard.length, ...output.leaderboard.map(entry => {
-                        return [entry.id, ...entry.data];
+                        return entry.data;
                     }).flat()];
                     return output;
                 }
@@ -10482,12 +10354,7 @@ function flatten(data, out, playerContext = null) {
                     const data = global.newBroadcasting();
                     for (const socket of clients) {
                         if (socket.status.hasSpawned) {
-                            if (c.SANDBOX && data.minimapSandboxes[socket.sandboxId] != null) {
-                                socket.talk("b", ...data.minimapSandboxes[socket.sandboxId], 0, ...data.leaderboard);
-                            } else {
-                                let myTeam = data.minimapTeams[-socket.player.team];
-                                socket.talk("b", ...data.minimapAll, ...(myTeam ? myTeam : [0]), ...data.leaderboard);
-                            }
+                            socket.talk(serverPackets.slowGuiUpdate, ...data.minimapAll, ...data.leaderboard);
                         }
                     }
                 }
@@ -10500,17 +10367,17 @@ function flatten(data, out, playerContext = null) {
                     }
                 },
                 broadcast: (message, color = "") => {
-                    for (let socket of clients) socket.talk("m", message, color);
+                    for (let socket of clients) socket.talk(serverPackets.gameMessage, message, color);
                 },
-                broadcastRoom: () => {
-                    for (let socket of clients) socket.talk("r", room.width, room.height, JSON.stringify(c.ROOM_SETUP));
+                broadcastRoom: () => { // TODO: Replace with the R packet
+                    for (let socket of clients) socket.talk(serverPackets.layerInfo, room.width, room.height, JSON.stringify(c.ROOM_SETUP), JSON.stringify(c.CELL_SKINS), room.speed, +c.ARENA_TYPE, c.BLACKOUT);
                 },
                 connect: async (playerId) => new SocketUser(playerId),
                 ban: (id, reason, setMessage = "") => {
                     let client;
                     if (client = clients.find(r => r.id === id), client instanceof SocketUser) {
                         if (setMessage.length) {
-                            client.talk("P", setMessage);
+                            client.talk(serverPackets.disconnect, setMessage);
                         }
                         client.ban(reason);
                         return true;
@@ -12892,19 +12759,19 @@ function flatten(data, out, playerContext = null) {
                 let socket = instance;
                 let camera = socket.camera; // The camera state
                 let body = player.body; // The player's body, might be null if dead
-                let photo = body ? body.camera() : {}
 				const playerContext = body ? {
 					command: player.command,
 					body: body,
 					teamColor: player.teamColor,
-					gameMode: room.gameMode
+					gameMode: room.gameMode,
+					requestedFullContextEntityIds: socket.requestedFullContextEntityIds
 				} : null;
 
 
                 let fov = 1000; // Default FOV
                 if (body != null && body.isAlive()) { // We are alive
-                    camera.x = body.altCameraSource?body.altCameraSource[0]:photo.cx;
-                    camera.y = body.altCameraSource?body.altCameraSource[1]:photo.cy;
+                    camera.x = body.altCameraSource?body.altCameraSource[0]:body.x;
+                    camera.y = body.altCameraSource?body.altCameraSource[1]:body.y;
                     fov = body.fov;
                 }else{ // We are dead/spectating
 					if(body.spectating){
@@ -12915,9 +12782,8 @@ function flatten(data, out, playerContext = null) {
 								body.spectating = null;
 							}
 						}else{
-							const spectatePhoto = body.spectating.camera()
-							camera.x = spectatePhoto.x;
-							camera.y = spectatePhoto.y;
+							camera.x = body.spectating.x;
+							camera.y = body.spectating.y;
 							fov = body.spectating.fov;
 						}
 					}
@@ -12938,13 +12804,6 @@ function flatten(data, out, playerContext = null) {
 
                 let visible = [];
                 let numberInView = 0;
-
-				// Manually include player
-				// Fixes guided tank targetting bug
-                if(body != null && body.isAlive()){
-					flatten(photo, visible, playerContext)
-					numberInView++
-				}
                 // Query the grid for entities whose AABBs overlap with the search area.
                 // This gives us a list of entities that are *potentially* visible.
 				grid.getCollisions(searchArea, (entity) => {
@@ -12975,15 +12834,15 @@ function flatten(data, out, playerContext = null) {
                     }
 
 					numberInView++
-        			flatten(entity.camera(entity.isTurret), visible, playerContext);
+        			addEntityToPacket(entity, visible, playerContext);
                 })
 
                 if (body != null && body.displayText !== socket.oldDisplayText) {
                     socket.oldDisplayText = body.displayText;
-                    socket.talk("displayText", true, body.displayText, body.displayTextColor);
+                    socket.talk(serverPackets.displayText, true, body.displayText, body.displayTextColor);
                 } else if (body != null && !body.displayText && socket.oldDisplayText) {
                     socket.oldDisplayText = null;
-                    socket.talk("displayText", false);
+                    socket.talk(serverPackets.displayText, false);
                 }
 
                 if (c.serverName.includes("Growth") && player.body != null && !player.body.hasDreadnoughted && player.body.skill.score >= 2_000_000) {
@@ -13002,7 +12861,7 @@ function flatten(data, out, playerContext = null) {
                     socket.status.deceased = true;
                     const records = player.records();
                     socket.status.previousScore = records[0];
-                    socket.talk("F", ...records); // Send death record to client
+                    socket.talk(serverPackets.deathScreen, ...records); // Send death record to client
                     if (records[0] > 300000) { // Check for high scores for logging/rewards
                         const totalKills = Math.round(records[2] + (records[3] / 2) + (records[4] * 2));
                         if (totalKills >= Math.floor(records[0] / 100000)) {
@@ -13026,23 +12885,19 @@ function flatten(data, out, playerContext = null) {
 				const laserPacket = [];
 				lasers.forEach((l)=>l.addToPacket(laserPacket, playerContext))
 
-
                 // Send the update packet to the client
                 socket.talk(
-                    "u",
-                    (body != null ? (body.cameraShiftFacing != null) : false), // Flag for camera shift
-                    room.lastCycle, // Timestamp (assuming room.lastCycle is updated in gameLoop)
+                    serverPackets.viewUpdate,
                     camera.x + .5 | 0, // Camera X (rounded)
                     camera.y + .5 | 0, // Camera Y (rounded)
                     fov + .5 | 0, // FOV (rounded)
-                    // camera.vx, camera.vy, // Omitted velocity as per original packet format change
-                    (player.gui ? player.gui() : []), // Player GUI data (assuming player.gui() is defined elsewhere and returns an array)
+                    socket.getSkillUi(),
 					lasers.size,
 					laserPacket,
                     numberInView, // Count of visible entities
                     visible.flat() // Flattened data for visible entities
                 );
-            }
+			}
         }, c.visibleListInterval)
 
 

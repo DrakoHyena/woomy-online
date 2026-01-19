@@ -175,7 +175,7 @@ multiplayer.joinRoom = async function (roomId, socket) {
 	}
 	clearInterval(connectingInterval);
 	this.playerPeer.onmessage = (msg) => { 
-		if(window.clientMessage) window.clientMessage(msg)
+		socket.onmessage(msg)
 	}
 	this.playerPeer.onclose = function(){
 		global._disconnected = 1;

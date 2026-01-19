@@ -2,7 +2,7 @@ import { rewardManager } from "../../achievements.js";
 import { lerp, lerpAngle } from "../../lerp.js";
 import { multiplayer } from "../../multiplayer.js";
 import { playerState } from "../../state/player.js";
-import { makeSocket, socket } from "../../socket.js";
+import { connectClientSocket, socket } from "../../socket.js";
 import { getWOSocketId, util } from "../../util.js";
 import { drawLoop } from "../drawLoop.js";
 import { Scene } from "../scene.js";
@@ -115,7 +115,7 @@ main.drawFuncts.set("entities", ({ canvas, ctx, delta }) => {
 		}
 
 		let entity = renderEntity(instance);
-		//drawEntity(x, y, instance, ratio, global.player._canSeeInvisible ? instance.alpha + .5 : instance.alpha, 1.1, instance.render.facing);
+		drawEntity(x, y, instance, ratio, global.player._canSeeInvisible ? instance.alpha + .5 : instance.alpha, 1.1, instance.render.facing);
 		ctx.globalAlpha = 1;
 	};
 })
@@ -149,7 +149,7 @@ async function startGame(gamemodeCode, joinRoomId, maxPlayers, maxBots){
 	}
 
 	openLoadingScreen("Joining Server...", "")
-    await makeSocket(joinRoomId).catch((err)=>{
+    await connectClientSocket(joinRoomId).catch((err)=>{
 		openLoadingScreen("Connection Timed Out", "There was an issue connecting to this player. Try a different room or make your own and play alone for the time being.")
 		throw err;
 	})
@@ -157,12 +157,12 @@ async function startGame(gamemodeCode, joinRoomId, maxPlayers, maxBots){
 	openLoadingScreen("Loading Assets...", "(0/0)")
 	await new Promise((res, rej)=>{
 		window.assetLoadingPromise = res;
-		socket.talk("as");
+		socket.send("as");
 	})
 	
 	openLoadingScreen("Loading Room...", "")
     console.log(socket)
-    socket.talk("s", 0, playerState.socketName.toString(), 1, getWOSocketId());
+    socket.send("s", 0, playerState.socketName.toString(), 1, getWOSocketId());
     window.selectedRoomId = joinRoomId;
 
     document.getElementById("gameCanvas").focus();

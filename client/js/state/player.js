@@ -8,7 +8,7 @@ const playerState = {
 		fov: 1,
 	},
 	gui: {
-		minimap: {},
+		minimap: [],
 		leaderboard: [],
 		upgrades: [],
 		skills: {
