@@ -14,7 +14,8 @@ const roomState = {
 			stretch: true
 		}
 	},
-	blackout: false
+	blackout: false,
+	propAnimations: new Map()
 }
 
 export { roomState };

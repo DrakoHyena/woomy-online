@@ -6825,6 +6825,7 @@ const Chain = Chainf;
                     x: this.x,
                     y: this.y,
                     size: this.size,
+					shape: this.shape,
                     facing: this.facing,
                     score: this.skill.score,
                     layer: this.type === "mazeWall" ? 7 : this.passive && this.LAYER !== -1 ? 1 : this.LAYER === -1 ? this.bond == null ? this.type === "wall" ? 11 : this.type === "food" ? 10 : this.type === "tank" ? 5 : this.type === "crasher" ? 8 : 0 : this.bound.layer : this.LAYER,
@@ -8441,6 +8442,7 @@ const Chain = Chainf;
 			){
 				minimumUpdateType = 4
 			} else if(
+				oldData.shape !== newData.shape ||
 				oldData.color !== newData.color ||
 				oldData.team !== newData.team ||
 				oldData.layer !== newData.layer
@@ -8473,6 +8475,7 @@ const Chain = Chainf;
 			out.push(newData.x);
 			out.push(newData.y);
 			out.push(newData.size);
+			out.push(newData.shape);
 			out.push(newData.facing);
 			out.push(newData.score);
 			out.push(newData.layer);
@@ -8526,6 +8529,7 @@ const Chain = Chainf;
 			out.push(newData.alpha);
 		}
 		if(minimumUpdateType >= 3) {
+			out.push(newData.shape);
 			out.push(newData.color);
 			out.push(newData.team);
 			out.push(newData.layer);
@@ -12861,6 +12865,11 @@ const Chain = Chainf;
 
 					numberInView++
         			addEntityToPacket(entity, visible, playerContext);
+					// TODO: Remove once turrets are included in grid queries
+					for(let turret of entity.turrets){
+						numberInView++;
+						addEntityToPacket(turret, visible, playerContext);
+					}
                 })
 
                 if (body != null && body.displayText !== socket.oldDisplayText) {

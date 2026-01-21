@@ -23,7 +23,6 @@ let entities = new Map();
 const entitiesArr = [];
 const missingEntityIds = new Set();
 const laserMap = new Map();
-const _anims = new Map();
 const metrics = { _serverCpuUsage: 0, _serverMemUsage: 0 };
 const socket = {
 	open: false,
@@ -158,6 +157,7 @@ class ClientEntity {
 		x = 0,
 		y = 0,
 		size = 1,
+		shape = 0,
 		facing = 0,
 		score = 0,
 		layer = 1,
@@ -180,6 +180,7 @@ class ClientEntity {
 		this.x = x;
 		this.y = y;
 		this.size = size;
+		this.shape = shape;
 		this.facing = facing;
 		this.score = score;
 		this.layer = layer;
@@ -205,6 +206,7 @@ class ClientEntity {
 
 		this.guns = [];
 		this.turrets = [];
+		this.props = [];
 
 		this.sizeFade = 0;
 		this.hurtFade = 0;
@@ -235,6 +237,7 @@ function newEntity(id, skipSpawnFade = false) {
 		convert.reader.next(), // x
 		convert.reader.next(), // y
 		convert.reader.next(), // size
+		convert.reader.next(), // shape
 		convert.reader.next(), // facing
 		convert.reader.next(), // score
 		convert.reader.next(), // layer
@@ -313,6 +316,7 @@ function updateEntity(entityId, updateType) {
 		entity.alpha = convert.reader.next();
 	}
 	if (updateType >= 3) { // Visual Change
+		entity.shape = convert.reader.next();
 		entity.color = convert.reader.next();
 		entity.team = convert.reader.next();
 		entity.layer = convert.reader.next();
@@ -350,7 +354,7 @@ function convertEntities() {
 				convert.reader.take(5); // health, shield, score, size, alpha
 			}
 			if (updateType >= 3) { // Visual
-				convert.reader.take(3); // color, team, layer
+				convert.reader.take(4); // shape, color, team, layer
 			}
 			if (updateType >= 4) { // Text
 				convert.reader.take(3); // name, nameColor, label
@@ -550,11 +554,11 @@ async function onmessage (message) {
 			// TODO: Display Text
 			break;
 		case serverPackets.propAnimations:
-			_anims.clear();
+			roomState.propAnimations.clear();
 			while (i < m.length) {
-				const prev = _anims.get(m[i]);
+				const prev = roomState.propAnimations.get(m[i]);
 				const arr = prev || [];
-				if (!prev) _anims.set(m[i], arr)
+				if (!prev) roomState.propAnimations.set(m[i], arr)
 				i++;
 
 				const readValue = () => {
@@ -595,4 +599,4 @@ let connectClientSocket = async function (roomId) {
 	return socket;
 };
 
-export { socket, connectClientSocket, entities, entitiesArr }
+export { socket, connectClientSocket, entities, entitiesArr, ClientEntity }

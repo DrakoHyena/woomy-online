@@ -11,7 +11,7 @@ import { closeLoadingScreen, openLoadingScreen } from "./loadingScreen.js";
 import { settingsState } from "./settings.js";
 import { roomState } from "../../state/room.js";
 import { ASSET_MAGIC, getAsset, loadAsset } from "../../../../shared/assets.js";
-import { renderEntity } from "../entity.js";
+import { getEntityImage } from "../entity.js";
 import { currentSettings } from "../../settings.js";
 import { entitiesArr } from "../../socket.js";
 
@@ -37,8 +37,8 @@ main.drawFuncts.set("background", ({ canvas, ctx, delta }) => {
 		const cellHeight = roomState.height / H;
 		const scaledCellWidth = state.screenScale * cellWidth;
 		const scaledCellHeight = state.screenScale * cellHeight;
-		const offsetX = canvas.width / 2 - state.screenScale * playerState.instance.x;
-		const offsetY = canvas.height / 2 - state.screenScale * playerState.instance.y;
+		const offsetX = canvas.width / 2 - state.screenScale * playerState.entity.x;
+		const offsetY = canvas.height / 2 - state.screenScale * playerState.entity.y;
 
 		state.frame++;
 
@@ -100,7 +100,8 @@ main.drawFuncts.set("entities", ({ canvas, ctx, delta }) => {
 			playerState.gameName = entity.name == null ? mockups.get(entity.index).name : entity.name;
 		}
 
-		const render = renderEntity(entity);
+		const render = getEntityImage(entity);
+		console.log(render)
 		ctx.drawImage(render, entity.x, entity.y)
 		ctx.globalAlpha = 1;
 	};

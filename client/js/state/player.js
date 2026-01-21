@@ -1,5 +1,3 @@
-import { ClientEntity } from "../../entity.js";
-
 const playerState = {
 	name: "",
 	socketName: [],
@@ -21,7 +19,28 @@ const playerState = {
 			subtitle: "Try rejoining or joining a different room."
 		}
 	},
-	entity: new ClientEntity(),
+	entity: {
+		id: -1,
+		index: 0,
+		name: "Loading Player...",
+		x: 0,
+		y: 0,
+		size: 1,
+		facing: 0,
+		score: 0,
+		layer: 0,
+		color: 0,
+		team: 0,
+		health: 0,
+		shield: 0,
+		alpha: 1,
+		seeInvisible: 0,
+		nameColor: "#FFFFFF",
+		label: "Loading Player...",
+		widthHeightRatio: [1, 1],
+		hideName: 0,
+		hideHealth: 0
+	},
 	entityId: -1,
 }
 
