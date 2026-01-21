@@ -1,5 +1,5 @@
 import { assets, ASSET_MAGIC } from "../shared/assets.js";
-import { serverPackets } from "../shared/packetIds.js";
+import { clientPackets, serverPackets } from "../shared/packetIds.js";
 import { oneVsOne } from "./modes/oneVsOne.js";
 
 const modeFuncs = {oneVsOne}
@@ -6817,7 +6817,7 @@ const Chain = Chainf;
             get m_y() {
                 return (this.velocity.y + this.accel.y) / room.speed;
             }
-            camera(tur = false) {
+            camera() {
                 let out = {
                     id: this.id,
                     index: this.index,
@@ -8432,7 +8432,7 @@ const Chain = Chainf;
 		const lastFrameData = entity.lastFrameCamera;
 		let minimumUpdateType = -1;
 		const oldData = lastFrameData.out;
-		const newData = entity.camera(entity.isTurret);
+		const newData = entity.camera();
 		if(oldData && playerContext.requestedFullContextEntityIds.has(entity.id) === false){
 			if(
 				oldData.name !== newData.name ||
@@ -8500,25 +8500,37 @@ const Chain = Chainf;
 			const turretCount = newData.turrets.length;
 			out.push(turretCount);
 			for (let i = 0; i < turretCount; i++) {
-			    addEntityToPacket(newData.turrets[i], out, playerContext);
+                out.push(newData.turrets[i].id);
 			}
-		} else if (minimumUpdateType === 0) {
+		}
+		if (minimumUpdateType === 0) {
 			// Nothing needs updated
-		} else if(minimumUpdateType >= 1){
+		}
+		if(minimumUpdateType >= 1){
+			if(newData.leash){
+				out.push(true);
+				out.push(newData.leash.x);
+				out.push(newData.leash.y);
+			}else{
+				out.push(false);
+			}
 			out.push(newData.x);
 			out.push(newData.y);
 			out.push(newData.facing);
-		} else if(minimumUpdateType >= 2) {
+		}
+		if(minimumUpdateType >= 2) {
 			out.push(newData.health);
 			out.push(newData.shield);
 			out.push(newData.score);
 			out.push(newData.size);
 			out.push(newData.alpha);
-		} else if(minimumUpdateType >= 3) {
+		}
+		if(minimumUpdateType >= 3) {
 			out.push(newData.color);
 			out.push(newData.team);
 			out.push(newData.layer);
-		} else if(minimumUpdateType >= 4) {
+		}
+		if(minimumUpdateType >= 4) {
 			out.push(newData.name);
 			out.push(newData.nameColor);
 			out.push(newData.label);
@@ -10059,6 +10071,20 @@ const Chain = Chainf;
 								socket.talk(serverPackets.chatMessage, text, this.player.body.id)
 							}
                             break;
+                        case clientPackets.requestEntityInfo: { // Request entity info (clientPackets.requestEntityInfo)
+                            if (m.length < 1) {
+                                this.error("entity info request", "Empty entity info request", true);
+                                return 1;
+                            }
+                            // Accept multiple entity IDs in a single request
+                            for (let i = 0; i < m.length; i++) {
+                                if (typeof m[i] !== "number") {
+                                    this.error("entity info request", "Non-numeric entity ID", true);
+                                    return 1;
+                                }
+                                this.requestedFullContextEntityIds.add(m[i]);
+                            }
+                        } break;
                         default:
 							console.log(index, m)
                             this.error("initialization", `Unknown packet index (${index})`, true);

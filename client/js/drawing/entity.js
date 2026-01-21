@@ -1,6 +1,4 @@
 
-// Core shape geometry drawing - draws at origin, assumes context is pre-transformed
-
 import { currentSettings } from "../settings.js";
 import { gameState } from "./scenes/game.js";
 

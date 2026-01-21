@@ -13,7 +13,7 @@ import { roomState } from "../../state/room.js";
 import { ASSET_MAGIC, getAsset, loadAsset } from "../../../../shared/assets.js";
 import { renderEntity } from "../entity.js";
 import { currentSettings } from "../../settings.js";
-
+import { entitiesArr } from "../../socket.js";
 
 const state = {
 	renderingStarted: false,
@@ -92,30 +92,16 @@ main.drawFuncts.set("background", ({ canvas, ctx, delta }) => {
 })
 
 main.drawFuncts.set("entities", ({ canvas, ctx, delta }) => {
-	let frameplate = [];
-	for (let i = 0; i < entityArr.length; i++) {
-		let instance = entityArr[i]
-		if (!instance.render.draws) continue;
-		let isMe = instance.id === _gui._playerid;
+	for (let i = 0; i < entitiesArr.length; i++) {
+		const entity = entitiesArr[i];
 
-		let x = instance.x
-		let y = instance.y
-		if (isMe) {
-			if (instance.alpha < 0.1) rewardManager.unlockAchievement("sneak_100");
-			playerState.instance = instance;
-			playerState.gameName = instance.name == null ? mockups.get(instance.index).name : instance.name;
-
-			if(currentSettings.clientSideAim.value.enabled === true){
-				instance.render.facing = (!instance.twiggle && !global._died && !global._forceTwiggle) ? Math.atan2(global._target._y - y, global._target._x - x) : lerpAngle(instance.render.facing, instance.facing, window.movementSmoothing);
-			} else {
-				instance.render.facing = lerpAngle(instance.render.facing, instance.facing, window.movementSmoothing);
-			}
-		} else {
-			instance.render.facing = lerpAngle(instance.render.facing, instance.facing, window.movementSmoothing);
+		if (entity.id === playerState.entityId) {
+			playerState.entity = entity;
+			playerState.gameName = entity.name == null ? mockups.get(entity.index).name : entity.name;
 		}
 
-		let entity = renderEntity(instance);
-		drawEntity(x, y, instance, ratio, global.player._canSeeInvisible ? instance.alpha + .5 : instance.alpha, 1.1, instance.render.facing);
+		const render = renderEntity(entity);
+		ctx.drawImage(render, entity.x, entity.y)
 		ctx.globalAlpha = 1;
 	};
 })

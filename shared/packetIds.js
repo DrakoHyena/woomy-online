@@ -19,7 +19,7 @@ const serverPackets = {
 }
 
 const clientPackets = {
-
+	requestEntityInfo: 0
 }
 
 export { serverPackets, clientPackets }

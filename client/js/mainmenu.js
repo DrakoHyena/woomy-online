@@ -50,19 +50,11 @@ const popup = document.querySelector(".popup");
 const popupTitle = popup.querySelector("h1");
 const popupMessage = popup.querySelector("span");
 
-function displayFirefoxSwitch() {
-	popup.style.display = "block";
-	popupTitle.textContent = "Dear Firefox User:";
-	popupMessage.textContent = "We highly recommend that you do not play this game with the firefox browser. The game functions and performs much better on a Chromium based browser, such as Google Chrome, Opera GX or Microsoft Edge. You may play using Firefox, just be aware that multiple issues may manifest themselves.";
-}
-
 function displayCanvasNotSupported() {
 	popup.style.display = "block";
 	popupTitle.textContent = "Warning:";
 	popupMessage.textContent = "Your browser does not support canvas. Please switch to a Chromium based browser, such as Google Chrome, Opera GX or Microsoft Edge.";
 }
-if (navigator.userAgent.search("Firefox") !== -1) displayFirefoxSwitch();
-
 
 document.getElementById("controlsButton").onclick = displayHowToPlay
 function displayHowToPlay() {

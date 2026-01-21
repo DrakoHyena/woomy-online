@@ -1,3 +1,5 @@
+import { ClientEntity } from "../../entity.js";
+
 const playerState = {
 	name: "",
 	socketName: [],
@@ -19,9 +21,8 @@ const playerState = {
 			subtitle: "Try rejoining or joining a different room."
 		}
 	},
-	instance: {
-
-	}
+	entity: new ClientEntity(),
+	entityId: -1,
 }
 
 export { playerState }

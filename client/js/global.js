@@ -494,7 +494,6 @@ window.getNow = function () {
 };
 window.entityArr = [];
 window.entityMap = new Map();
-window.laserMap = new Map();
 window.getRatio = function () {
 	return Math.max(global._screenWidth / global.player._renderv, global._screenHeight / global.player._renderv / 9 * 16);
 };

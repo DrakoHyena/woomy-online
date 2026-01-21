@@ -17,10 +17,14 @@ import { currentSettings } from "./settings.js";
 import { loadingScreenState } from "./drawing/scenes/loadingScreen.js";
 import { roomState } from "./state/room.js";
 import { playerState } from "./state/player.js";
-import { serverPackets } from "../../shared/packetIds.js";
+import { serverPackets, clientPackets } from "../../shared/packetIds.js";
 
 let entities = new Map();
 const entitiesArr = [];
+const missingEntityIds = new Set();
+const laserMap = new Map();
+const _anims = new Map();
+const metrics = { _serverCpuUsage: 0, _serverMemUsage: 0 };
 const socket = {
 	open: false,
 	onmessage: onmessage,
@@ -67,7 +71,6 @@ const convert = {
 // CONVERT DATA // 
 function convertLasers() {
 	for (let i = 0, len = convert.reader.next(); i < len; i++) {
-		console.log(len)
 		const id = convert.reader.next();
 		let laser = laserMap.get(id);
 		if (!laser) {
@@ -212,7 +215,7 @@ class ClientEntity {
 	}
 
 	setTurret(index) {
-		this.turrets[index] = newEntity();
+		this.turrets[index] = convert.reader.next(); // entity id
 	}
 
 	tick() {
@@ -224,9 +227,9 @@ class ClientEntity {
 	}
 }
 
-function newEntity(skipSpawnFade = false) {
+function newEntity(id, skipSpawnFade = false) {
 	let entity = new ClientEntity(
-		convert.reader.next(), // id
+		id, // id
 		convert.reader.next(), // index
 		convert.reader.next(), // name
 		convert.reader.next(), // x
@@ -243,10 +246,10 @@ function newEntity(skipSpawnFade = false) {
 		convert.reader.next(), // seeInvisible
 		convert.reader.next(), // nameColor
 		convert.reader.next(), // label
-		convert.reader.next(), // widthHeightRatio
+		[convert.reader.next(), convert.reader.next()], // widthHeightRatio (array with 2 elements)
 		convert.reader.next(), // hideHealth
 		convert.reader.next(), // hideName
-		convert.reader.next() ? { x: convert.reader.next(), y: convert.reader.next() } : convert.reader.current(), // leash
+		convert.reader.next() ? { x: convert.reader.next(), y: convert.reader.next() } : false, // leash
 	)
 
 	let gunAmount = convert.reader.next();
@@ -269,29 +272,35 @@ function newEntity(skipSpawnFade = false) {
 
 function updateEntity(entityId, updateType) {
 	let entity = entities.get(entityId);
+
 	if (updateType === -1) {
-		entity = newEntity(true);
+		entity = newEntity(entityId, entity !== undefined);
 		return entity;
 	}
+	
 	if (updateType === 0) {
 		return entity;
 	}
-	if (convert.reader.next()) { // Leash
-		if(!entity.leash){
-			entity.leash = { x: 0, y: 0, points: [] };
-			for (let i = 0; i < 10; i++) {
-				entity.leash.points.push(new RopePoint((entity.x + entity.leash.x) / 2, (entity.y + entity.leash.y) / 2))
+	
+	if (updateType >= 1) {
+		if (convert.reader.next()) { // "has leash?"
+			if(!entity.leash){
+				entity.leash = { x: convert.reader.next(), y: convert.reader.next(), points: [] };
+				for (let i = 0; i < 10; i++) {
+					entity.leash.points.push(new RopePoint((entity.x + leashX) / 2, (entity.y + leashY) / 2))
+				}
+			} else {
+				entity.leash.x = convert.reader.next();
+				entity.leash.y = convert.reader.next();
 			}
+			for (let point of entity.leash.points) {
+				point.tick();
+			}
+		} else {
+			entity.leash = false;
 		}
-		entity.leash.x = convert.reader.next();
-		entity.leash.y = convert.reader.next();
-		for (let point of entity.leash.points) {
-			point.tick();
-		}
-	} else {
-		entity.leash = false;
-	}
-	if (updateType >= 1) { // Position
+		
+		// Position data
 		entity.x = convert.reader.next();
 		entity.y = convert.reader.next();
 		entity.facing = convert.reader.next();
@@ -319,26 +328,48 @@ function updateEntity(entityId, updateType) {
 let newEntities = new Map();
 let holdingVar = undefined;
 function convertEntities() {
-	const missingEntityInfoIds = [];
 	for (let i = 0, incomingEntityAmount = convert.reader.next(); i < incomingEntityAmount; i++){
 		const id = convert.reader.next();
 		const updateType = convert.reader.next();
-		const oldFrameEntity = entities.get(id);
-		if(oldFrameEntity){
-			newEntities.set(id, updateEntity(id, updateType))
-		}else if(updateType !== -1){
-			missingEntityInfoIds.push(id);
-		} else { // Update -1 for a new entity
-			newEntities.set(id, updateEntity(id, updateType))
+		// Existing entities or full data
+		if(entities.has(id) === true || updateType === -1){
+			newEntities.set(id, updateEntity(id, updateType));
+		
+		// New entities with incomplete data
+		}else{
+			missingEntityIds.add(id);
+			console.log("Missing entity info for entity ID:", id);
+			if (updateType >= 1) { // Leash + Position
+				const hasLeash = convert.reader.next();
+				if (hasLeash) {
+					convert.reader.take(2); // leash x, y
+				}
+				convert.reader.take(3); // x, y, facing
+			}
+			if (updateType >= 2) { // Minimal
+				convert.reader.take(5); // health, shield, score, size, alpha
+			}
+			if (updateType >= 3) { // Visual
+				convert.reader.take(3); // color, team, layer
+			}
+			if (updateType >= 4) { // Text
+				convert.reader.take(3); // name, nameColor, label
+			}
 		}
 	}
+	
+	// Send batched request for all missing entities
+	if (missingEntityIds.size > 0) {
+		socket.send(clientPackets.requestEntityInfo, ...missingEntityIds);
+	}
+	
 	entitiesArr.length = 0;
 	const entitiesItr = newEntities.values();
 	for (let entity of entitiesItr) {
 		entity.tick();
 		entitiesArr.push(entity);
 	}
-	entityArr.sort((a, b) => {
+	entitiesArr.sort((a, b) => {
 		return a.layer - b.layer || b.id - a.id;
 	});
 
@@ -346,6 +377,8 @@ function convertEntities() {
 	newEntities = entities;
 	entities = holdingVar;
 	newEntities.clear();
+	console.log(missingEntityIds, entitiesArr)
+	missingEntityIds.clear();
 };
 
 // CONVERT GUI //
@@ -361,9 +394,9 @@ function convertFastGui() {
 
 	const skillStatChanges = convert.reader.next();
 	if (skillStatChanges) {
-		playerState.gui.skills = {};
 		for (let i = 0; i < skillStatChanges; i++) {
-			playerState.gui.skills[convert.reader.next()] = { max: convert.reader.next(), current: convert.reader.next() };
+			const skillName = convert.reader.next();
+			playerState.gui.skills[skillName] = { max: convert.reader.next(), current: convert.reader.next() };
 		}
 	}
 }
@@ -374,7 +407,7 @@ function convertSlowGui(data) {
 
 	playerState.gui.minimap.length = 0;
 	let minimapPoints = m[i++];
-	for (let i = 0; i < minimapPoints; i++) {
+	for (let j = 0; j < minimapPoints; j++) {
 		playerState.gui.minimap.push({
 			x: m[i++],
 			y: m[i++],
@@ -386,7 +419,7 @@ function convertSlowGui(data) {
 
 	playerState.gui.leaderboard.length = 0;
 	let leaderboardEntries = m[i++];
-	for (let i = 0; i < leaderboardEntries; i++) {
+	for (let j = 0; j < leaderboardEntries; j++) {
 		playerState.gui.leaderboard.push({
 			score: m[i++],
 			name: m[i++],
@@ -562,4 +595,4 @@ let connectClientSocket = async function (roomId) {
 	return socket;
 };
 
-export { socket, connectClientSocket }
+export { socket, connectClientSocket, entities, entitiesArr }
