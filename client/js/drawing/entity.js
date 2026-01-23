@@ -1,11 +1,15 @@
 
 import { getColor, setColors } from "../colors.js";
+import { mixColors } from "../../shared/mix_colors.js";
 import { mockups } from "../mockups.js";
 import { currentSettings } from "../settings.js";
 import { roomState } from "../state/room.js";
 import { gameState } from "./scenes/game.js";
+import { entities } from "../socket.js";
+
 
 // Returns true if it handled stroke/fill itself 
+const path2dCache = new Map();
 function drawShape(context, shape, size, stroke, fill, options = {}) {
 	const widthHeightRatio = options.widthHeightRatio ?? [1, 1];
 	const angle = options.angle ?? 0;
@@ -81,6 +85,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 				};
 			context.quadraticCurveTo(c.x, c.y, p.x, p.y);
 		}
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -92,6 +97,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 		if (ring !== false) {
 			context.arc(0, 0, size * ring, 2 * Math.PI * arcLen, 0, true);
 		}
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -118,6 +124,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 				context.lineTo(size * Math.cos(theta), size * Math.sin(theta));
 			}
 		}
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -133,6 +140,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 			[1, 1.2 * Math.PI],
 			[1, 1.6 * Math.PI]
 		]) context.lineTo(size * scale * Math.cos(theta), size * scale * Math.sin(theta));
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -152,6 +160,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 			}
 			context.lineTo(px, py);
 		}
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -169,6 +178,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 				py = size * Math.sin(theta);
 			context.quadraticCurveTo(cx, cy, px, py);
 		}
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -185,6 +195,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 			}
 			context.lineTo(px, py);
 		}
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -200,6 +211,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 			[1, 1.2 * Math.PI],
 			[1, 1.6 * Math.PI]
 		]) context.lineTo(size * scale * Math.cos(theta), size * scale * Math.sin(theta));
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -216,6 +228,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 			[1, 1.429 * Math.PI],
 			[1, 1.714 * Math.PI]
 		]) context.lineTo(size * scale * Math.cos(theta), size * scale * Math.sin(theta));
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -236,6 +249,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 			}
 			context.lineTo(px, py);
 		}
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -256,6 +270,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 			}
 			context.lineTo(px, py);
 		}
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -275,6 +290,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 			}
 			context.lineTo(px, py);
 		}
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -292,6 +308,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 			[-1.16, 1.047],
 			[-1, Math.PI / 2]
 		]) context.lineTo(size * scale * Math.cos((theta - .025)), size * scale * Math.sin((theta - .025)));
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -308,6 +325,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 			[1, -1.571],
 			[1, -0.611]
 		]) context.lineTo(size * scale * Math.cos(theta), size * scale * Math.sin(theta));
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -323,6 +341,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 			[-1, .838],
 			[0.25, -0.611]
 		]) context.lineTo(size * scale * Math.cos((theta - .025)), size * scale * Math.sin((theta - .025)));
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -338,6 +357,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 			[-1, 1.257],
 			[1, -0.489]
 		]) context.lineTo(size * scale * Math.cos(theta), size * scale * Math.sin(theta));
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -368,6 +388,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 			[1.1, -0.335],
 			[1.5, -0.14]
 		]) context.lineTo(size * (scale * 1.5) * Math.cos((theta - .0261)), size * (scale * 1.5) * Math.sin((theta - .0261)));
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -387,6 +408,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 			[-1, .82],
 			[0.95, -0.578]
 		]) context.lineTo(size * (scale * .9) * Math.cos(theta), size * (scale * .9) * Math.sin(theta));
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -406,6 +428,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 			[-0.35, 1.361],
 			[0.625, -0.698]
 		]) context.lineTo(size * scale * Math.cos((theta - .0261)), size * scale * Math.sin((theta - .0261)));
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -424,6 +447,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 			[-1, .89],
 			[0.75, -0.559]
 		]) context.lineTo(size * scale * Math.cos((theta - .0261)), size * scale * Math.sin((theta - .0261)));
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -444,6 +468,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 			[0.313, -0.576],
 			[1, -0.489]
 		]) context.lineTo(size * scale * Math.cos((theta - .0261)), size * scale * Math.sin((theta - .0261)));
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -464,6 +489,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 			[0.625, -1.047],
 			[1, -0.681]
 		]) context.lineTo(size * scale * Math.cos((theta - .0261)), size * scale * Math.sin((theta - .0261)));
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -491,6 +517,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 			[1.315, -0.331613],
 			[1, 0]
 		]) context.lineTo(size * scale * Math.cos(theta + 1.5447), size * scale * Math.sin(theta + 1.5447));
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -503,6 +530,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 			[-1, .541],
 			[1, -0.541]
 		]) context.lineTo(size * scale * Math.cos(theta + 1.5447), size * scale * Math.sin(theta + 1.5447));
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -511,6 +539,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 	if (shape === 124) { // Ring
 		context.arc(0, 0, size, 0, 2 * Math.PI, true);
 		context.arc(0, 0, size / 1.15, 0, 2 * Math.PI, false);
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -524,6 +553,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 		context.arc(-centerAway, centerAway, scalesize, .5 * Math.PI, Math.PI);
 		context.arc(-centerAway, -centerAway, scalesize, Math.PI, 1.5 * Math.PI);
 		context.arc(centerAway, -centerAway, scalesize, -0.5 * Math.PI, 0);
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -537,6 +567,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 		context.arc(-centerAway, centerAway, scalesize, .5 * Math.PI, Math.PI);
 		context.arc(-centerAway, -centerAway, scalesize, Math.PI, 1.5 * Math.PI);
 		context.arc(centerAway, -centerAway, scalesize, -0.5 * Math.PI, 0);
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -549,6 +580,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 		context.arc(centerAway, 0, scalesize, -0.272 * Math.PI, .272 * Math.PI);
 		context.arc(-centerAway, centerAway, scalesize, .272 * Math.PI, Math.PI);
 		context.arc(-centerAway, -centerAway, scalesize, Math.PI, 1.544 * Math.PI);
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -562,6 +594,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 				py = size * 1.5 * Math.sin(theta + 45);
 			context.lineTo(px, py);
 		}
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -581,6 +614,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 				py = size * Math.sin(theta);
 			context.quadraticCurveTo(cx, cy, px, py);
 		}
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -600,6 +634,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 				py = size * Math.sin(theta);
 			context.quadraticCurveTo(cx, cy, px, py);
 		}
+		context.closePath();
 		context.lineJoin = "miter";
 		if (fill) context.fill();
 		if (stroke) context.stroke();
@@ -609,6 +644,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 	if (shape === 131) { // Minesweeper Ring
 		context.arc(0, 0, size, 0, 2 * Math.PI, true);
 		context.arc(0, 0, size / 1.05, 0, 2 * Math.PI, false);
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -617,6 +653,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 	if (shape === 132) { // Glass Smasher Body
 		context.arc(0, 0, size, 0, 2 * Math.PI, true);
 		context.arc(0, 0, size / 1.5, 0, 2 * Math.PI, false);
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -629,6 +666,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 				py = size * 1.5 * Math.sin((180 / 11) + theta + 1.635);
 			context.lineTo(px, py);
 		}
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -642,6 +680,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 				py = size * 1.5 * Math.sin((180 / 4) + theta + .52);
 			context.lineTo(px, py);
 		}
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -654,6 +693,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 				py = size * 1.1 * Math.sin((180 / 6) + theta + .385);
 			context.lineTo(px, py);
 		}
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -662,6 +702,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 	if (shape === 136) { // Revolutionist
 		context.arc(0, 0, size, 0, 2 * Math.PI, true);
 		context.arc(0, 0, size * .999999, 0, 2 * Math.PI, false);
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -674,6 +715,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 			[-0.125, 0],
 			[-1, .959]
 		]) context.lineTo(size * scale * Math.cos((theta - .0261)), size * scale * Math.sin((theta - .0261)));
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -686,6 +728,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 			[-1, 1.292],
 			[0.75, -0.768]
 		]) context.lineTo(size * scale * Math.cos((theta - .0261)), size * scale * Math.sin((theta - .0261)));
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -700,6 +743,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 			[1, -1.954],
 			[1, -0.139]
 		]) context.lineTo(size * scale * Math.cos((theta - .0261)), size * scale * Math.sin((theta - .0261)));
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -707,6 +751,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 
 	if (shape === 140) {
 		context.arc(0, 0, size * 1.45, 0, 2 * Math.PI);
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -723,6 +768,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 			}
 			context.lineTo(px, py);
 		}
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -745,6 +791,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 			[1, 270],
 			[1, 288]
 		]) context.lineTo(size * scale * Math.cos((theta * Math.PI) / 180), size * scale * Math.sin((theta * Math.PI) / 180));
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -771,6 +818,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 			[0.915, 350],
 			[0.905, 355]
 		]) context.lineTo(size * scale * Math.cos((theta * Math.PI) / 180), size * scale * Math.sin((theta * Math.PI) / 180));
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -789,6 +837,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 			[1, 270],
 			[1, 335]
 		]) context.lineTo(size * scale * Math.cos((theta * Math.PI) / 180), size * scale * Math.sin((theta * Math.PI) / 180));
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -808,6 +857,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 			}
 			context.lineTo(px, py);
 		}
+		context.closePath();
 		if (fill) context.fill();
 		if (stroke) context.stroke();
 		return true;
@@ -816,7 +866,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 	if (shape === 146) { // Ring
 		context.arc(0, 0, size, 0, 2 * Math.PI, true);
 		context.arc(0, 0, size * 1.1, 0, 2 * Math.PI, false);
-		return { handled: false };
+		return true;
 	}
 
 	if (shape === 147) { // long boy
@@ -1485,13 +1535,13 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 	}
 
 	if (shape === 998) {
-		context.arc(x, y, size, 0, Math.PI);
+		context.arc(0, 0, size, 0, Math.PI);
 		if (stroke) context.stroke(path);
 		if (fill) context.fill(path);
 	}
 
 	if (shape === 999) {
-		context.arc(x, y, size, 0, Math.PI, 1);
+		context.arc(0, 0, size, 0, Math.PI, 1);
 		if (stroke) context.stroke(path);
 		if (fill) context.fill(path);
 	}
@@ -1791,69 +1841,84 @@ function makeGunPath(context, length, height, aspect, skin) {
 	}
 }
 
-function renderGun(context, entity, gun, options) {
-	// TODO: Gun rendering
-	// need to redo how guns are sent first
-	/*const { source, m, adjustedRot, drawSize, tankDrawX, tankDrawY, renderColor, renderBlend, invulnTicker } = options;
+const gunCache = new Map();
+function renderGunsAtLayer(context, entity, layer) {
+	const entityFacing = entity.facing || 0;
+	const entitySize = entity.size || 1;
 
-	const positions = source.guns.getPositions();
+	for (let i = 0; i < entity.guns.length; i++) {
+		const gun = entity.guns[i];
+		
+		// Layer filtering (default to layer 0 since server doesn't send layer data yet)
+		const gunLayer = gun.layer ?? 0;
+		if (gunLayer !== layer) continue;
 
-	for (let i = 0; i < m.guns.length; i++) {
-		const g = m.guns[i];
+		// Gun properties from ClientGun
+		const gunSkin = gun.skin || 0;
+		const gunColor = gun.color ?? 16;
+		const gunAspect = gun.aspect ?? 1;
+		const gunDirection = gun.direction || 0;
+		const gunOffset = gun.offset || 0;
+		const gunLength = gun.length || 1;
+		const gunWidth = gun.width || 1;
 
-		const gunAngle = g.angle || 0;
-		const gunAspect = g.aspect == null ? 1 : g.aspect;
-		const gunBaseColor = g.color == null ? 16 : g.color;
+		   // Animated properties (recoil)
+		   const gunPosition = gun.position || 0;
 
-		const anglePlusRot = gunAngle + adjustedRot;
-		const cosAnglePlusRot = Math.cos(anglePlusRot);
-		const sinAnglePlusRot = Math.sin(anglePlusRot);
+		   // Calculate angles: use gun's local angle (or 0) and add direction to get lateral offset
+		   const gunAngle = gun.angle ?? 0; // do NOT include entity.facing here (keeps icon renders stable)
+		   const directionAngle = gunDirection + gunAngle;
+		   const cosGunAngle = Math.cos(gunAngle);
+		   const sinGunAngle = Math.sin(gunAngle);
 
-		const directionPlusAnglePlusRot = g.direction + anglePlusRot;
-		const cosDirPlusAnglePlusRot = Math.cos(directionPlusAnglePlusRot);
-		const sinDirPlusAnglePlusRot = Math.sin(directionPlusAnglePlusRot);
+		   // Calculate position divisor based on aspect
+		   const positionDivisor = gunAspect === 1 ? 2 : 1;
+		   const positionOffset = gunPosition / positionDivisor;
 
-		const positionDivisor = gunAspect === 1 ? 2 : 1;
-		const position = positions[i] / positionDivisor;
+		   // Calculate offset position (along gun's direction) and apply recoil along barrel
+		   const offsetX = gunOffset * Math.cos(directionAngle);
+		   const offsetY = gunOffset * Math.sin(directionAngle);
 
-		const offsetX = g.offset * cosDirPlusAnglePlusRot;
-		const offsetY = g.offset * sinDirPlusAnglePlusRot;
-		const lengthTerm = g.length / 2 - position;
+		   // Calculate length position (along gun direction, accounting for recoil)
+		   const lengthTerm = (gunLength / 2 - positionOffset) * entitySize;
 
-		const gx = offsetX + lengthTerm * cosAnglePlusRot;
-		const gy = offsetY + lengthTerm * sinAnglePlusRot;
+		   // Final gun position in local entity units
+		   const gx = offsetX * entitySize + lengthTerm * cosGunAngle;
+		   const gy = offsetY * entitySize + lengthTerm * sinGunAngle;
 
-		let gColor = mixColors(getColor(gunBaseColor), renderColor, renderBlend);
-		if (invulnTicker) gColor = mixColors(gColor, color.vlgrey, 0.5);
+		// Set gun color
+		const gColor = getColor(gunColor);
+		setColors(context, gColor);
 
-		switch (g.color_unmix) {
-			case 1: setColorsUnmix(context, gColor); break;
-			case 2: setColorsUnmixB(context, gColor); break;
-			default: setColors(context, gColor); break;
-		}
+		// Calculate draw dimensions
+		const gunDrawLength = ((gunLength / 2) * 1000 | 0) / 1000;
+		const gunDrawWidth = ((gunWidth / 2) * 1000 | 0) / 1000;
 
-		const gunDrawLength = ((g.length / 2) * 1000 | 0) / 1000;
-		const gunDrawWidth = ((g.width / 2) * 1000 | 0) / 1000;
-
-		const key = `${gunDrawLength}|${gunDrawWidth}|${gunAspect}|${g.skin}`;
+		// Get or create cached gun path
+		const key = `${gunDrawLength}|${gunDrawWidth}|${gunAspect}|${gunSkin}`;
 		let path = gunCache.get(key);
 		if (path === undefined) {
 			path = new Path2D();
-			makeGunPath(path, gunDrawLength, gunDrawWidth, gunAspect, g.skin || 0);
+			makeGunPath(path, gunDrawLength, gunDrawWidth, gunAspect, gunSkin);
 			path.closePath();
 			gunCache.set(key, path);
 		}
 
+		// Draw the gun
 		context.save();
-		context.translate(tankDrawX + drawSize * gx, tankDrawY + drawSize * gy);
-		context.rotate(anglePlusRot);
-		context.scale(drawSize, drawSize);
-		context.lineWidth /= drawSize;
+		context.translate(gx, gy);
+		context.rotate(gunAngle);
+		context.scale(entitySize, entitySize);
+		context.lineWidth /= entitySize;
 		context.stroke(path);
-		context.lineWidth *= drawSize;
 		context.fill(path);
 		context.restore();
-	}*/
+	}
+
+	// Clear cache if it gets too large
+	if (gunCache.size > 4000) {
+		gunCache.clear();
+	}
 }
 
 function renderProp(ctx, entity, prop, propColor) {
@@ -1976,6 +2041,27 @@ function renderPropsAtLayer(context, entity, layer) {
 	}
 }
 
+function renderTurretsAtLayer(ctx, entity, turrets, layer) {
+	for (let turret of turrets) {
+		if (!turret) continue;
+		const turretLayer = turret.layer ?? 0;
+		if (turretLayer !== layer) continue;
+		ctx.save();
+		// Compute turret offset in entity-local coordinates (undo entity rotation)
+		const dx = turret.x - entity.x;
+		const dy = turret.y - entity.y;
+		const ef = entity.facing || 0;
+		const cos = Math.cos(-ef);
+		const sin = Math.sin(-ef);
+		const localX = dx * cos - dy * sin;
+		const localY = dx * sin + dy * cos;
+		ctx.translate(localX, localY);
+		// Rotate turret relative to the body so the main draw's entity rotation isn't applied twice
+		ctx.rotate((turret.facing || 0) - ef);
+		renderEntity(ctx, turret, true);
+		ctx.restore();
+	}
+}
 function renderEntity(ctx, entity) {
 	ctx.lineCap = "round";
 	ctx.lineJoin = currentSettings.pointy.value.enabled ? "miter" : "round";
@@ -1983,38 +2069,139 @@ function renderEntity(ctx, entity) {
 
 	handlePropAnimations(entity);
 
-	if (entity.props.length) renderPropsAtLayer(ctx, entity, -2);
-	if (entity.props.length) renderPropsAtLayer(ctx, entity, -1);
-	if (entity.props.length) renderPropsAtLayer(ctx, entity, 0);
+	const hasProps = entity.props.length > 0;
+	const hasGuns = entity.guns && entity.guns.length > 0;
+	const hasTurrets = entity.turrets.length > 0;
 
+	const turrets = entity.turrets.map(entityId=>entities.get(entityId))
+
+	//Layer -2: Behind everything
+	if (hasProps) renderPropsAtLayer(ctx, entity, -2);
+	if (hasTurrets) renderTurretsAtLayer(ctx, entity, turrets, -2);
+	if (hasGuns) renderGunsAtLayer(ctx, entity, -2);
+
+	// Layer -1: Behind body
+	if (hasProps) renderPropsAtLayer(ctx, entity, -1);
+	if (hasTurrets) renderTurretsAtLayer(ctx, entity, turrets, -1);
+	if (hasGuns) renderGunsAtLayer(ctx, entity, -1);
+
+	// Layer 0: Default layer
+	if (hasProps) renderPropsAtLayer(ctx, entity, 0);
+	if (hasTurrets) renderTurretsAtLayer(ctx, entity, turrets, 0);
+	if (hasGuns) renderGunsAtLayer(ctx, entity, 0);
+
+	// Draw entity body
 	setColors(ctx, getColor(entity.color));
 	drawShape(ctx, entity.shape, entity.size, true, true, {
 		widthHeightRatio: entity.widthHeightRatio,
 		angle: entity.angle // used for special effects, not rotation
 	})
 
-	if (entity.props.length) renderPropsAtLayer(ctx, entity, 1);
-	if (entity.props.length) renderPropsAtLayer(ctx, entity, 2,);
+	// Layer 1: In front of body
+	if (hasProps) renderPropsAtLayer(ctx, entity, 1);
+	if (hasTurrets) renderTurretsAtLayer(ctx, entity, turrets, 1);
+	if (hasGuns) renderGunsAtLayer(ctx, entity, 1);
+
+	// Layer 2: In front of everything
+	if (hasProps) renderPropsAtLayer(ctx, entity, 2);
+	if (hasTurrets) renderTurretsAtLayer(ctx, entity, turrets, 2);
+	if (hasGuns) renderGunsAtLayer(ctx, entity, 2);
 }
 
-const CANVAS_SIZE = 128;
+// Calculate Maximum Extent for an entity (fast approximation)
+function calculateMEC(entity) {
+	const size = entity.size || 1;
+	let maxDistSq = size * size; // Start with body size
+
+	// Body shape - for non-circles, vertices extend further
+	const s = Math.abs(entity.shape || 0);
+	if (s > 0 && s < 8) {
+		// Polygon real size multiplier (vertices extend past unit circle)
+		const realSize = 1 / Math.cos(Math.PI / s);
+		maxDistSq = (size * realSize) ** 2;
+	}
+
+	// Gun endpoints - find max distance from center
+	const guns = entity.guns;
+	if (guns) {
+		for (let i = 0; i < guns.length; i++) {
+			const gun = guns[i];
+			const gunLength = gun.length || 1;
+			const gunWidth = gun.width || 1;
+			const gunOffset = gun.offset || 0;
+			const gunAspect = gun.aspect ?? 1;
+			const gunDirection = gun.direction || 0;
+
+// Match the rendering logic exactly (match drawEntity):
+		const gunAngle = gun.angle ?? 0;
+		const directionPlusAngle = gun.direction + gunAngle;
+
+		// Offset is applied along the gun direction (directionPlusAngle)
+		const offsetX = gunOffset * size * Math.cos(directionPlusAngle);
+		const offsetY = gunOffset * size * Math.sin(directionPlusAngle);
+
+		// Gun center position (lengthTerm = gunLength/2 * size along gunAngle)
+		const lengthTerm = (gunLength / 2) * size;
+		const gx = offsetX + lengthTerm * Math.cos(gunAngle);
+		const gy = offsetY + lengthTerm * Math.sin(gunAngle);
+
+			// Gun path extends from -gunLength/2 to +gunLength/2, scaled by entitySize
+			const gunDrawLength = (gunLength / 2) * size;
+			const gunDrawWidth = (gunWidth / 2) * size;
+			const h = gunAspect > 0 ? gunDrawWidth * gunAspect : gunDrawWidth;
+
+			// Four corners of the gun (at gun's local coordinates, then rotated)
+			const corners = [
+				{ lx: gunDrawLength, ly: h },    // front-right
+				{ lx: gunDrawLength, ly: -h },   // front-left
+				{ lx: -gunDrawLength, ly: h },   // back-right
+				{ lx: -gunDrawLength, ly: -h }   // back-left
+			];
+
+			const cosDir = Math.cos(gunDirection);
+			const sinDir = Math.sin(gunDirection);
+
+			for (const corner of corners) {
+				// Rotate corner by gun direction and add gun center position
+				const worldX = gx + corner.lx * cosDir - corner.ly * sinDir;
+				const worldY = gy + corner.lx * sinDir + corner.ly * cosDir;
+				const distSq = worldX * worldX + worldY * worldY;
+				maxDistSq = Math.max(maxDistSq, distSq);
+			}
+		}
+	}
+
+	return Math.sqrt(maxDistSq) * 2; // Diameter
+}
+
+const CANVAS_SIZE = 64;
 function getEntityImage(entity) {
 	const canvas = new OffscreenCanvas(CANVAS_SIZE, CANVAS_SIZE);
 	const ctx = canvas.getContext('2d');
 
 	// FIXME: remove after testing
 	ctx.fillStyle = "red";
+	ctx.globalAlpha = .2;
 	ctx.fillRect(0, 0, canvas.width, canvas.height)
+	ctx.globalAlpha = 1;
 
 	ctx.save();
 
 	// Translate to center of canvas
 	ctx.translate(CANVAS_SIZE / 2, CANVAS_SIZE / 2);
 
-	// Scale so entity.size fits within the canvas (with padding)
-	const targetSize = CANVAS_SIZE * 0.4;
-	const scale = targetSize / entity.size;
+	// Calculate the MEC to ensure nothing gets clipped
+	const maxExtent = calculateMEC(entity) || entity.size;
+
+	// Scale so the full entity fits within the canvas (with padding)
+	const targetSize = CANVAS_SIZE;
+	const scale = targetSize / maxExtent;
 	ctx.scale(scale, scale);
+
+	// Center the entity using its mockup 'middle' so asymmetric parts (guns) don't go off-canvas
+	const centerX = entity.position?.middle?.x || 0;
+	const centerY = entity.position?.middle?.y || 0;
+	ctx.translate(-centerX, -centerY);
 
 	renderEntity(ctx, entity);
 
@@ -2024,4 +2211,4 @@ function getEntityImage(entity) {
 }
 
 
-export { getEntityImage }
+export { getEntityImage, renderGunsAtLayer, renderTurretsAtLayer, renderEntity }

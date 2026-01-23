@@ -14,19 +14,58 @@ import { ASSET_MAGIC, getAsset, loadAsset } from "../../../../shared/assets.js";
 import { getEntityImage } from "../entity.js";
 import { currentSettings } from "../../settings.js";
 import { entitiesArr } from "../../socket.js";
+import { keyboard } from "../../controls/keyboard.js";
+import { mouse } from "../../controls/mouse.js";
 
 const state = {
 	renderingStarted: false,
 	screenScale: 1,
 	fovScale: 1,
 	frame: 0,
+	lastInput: {
+		keyboard: {},
+		changes: []
+	}
 }
 
 const main = new Scene(document.getElementById("mainCanvas"));
 drawLoop.scenes.set("main", main);
 
+main.utilityFuncts.set("gameInput", ({ canvas, ctx, delta }) => {
+	//console.log(playerState.entity)
+	// Compute target inline relative to the camera (mouse offset from canvas center, scaled)
+	const rect = canvas.getBoundingClientRect();
+	const posX = (mouse.x - rect.left) * (canvas.width / rect.width);
+	const posY = (mouse.y - rect.top) * (canvas.height / rect.height);
+	const ss = state.screenScale || 1;
+	const targetX = (posX - canvas.width / 2) / ss;
+	const targetY = (posY - canvas.height / 2) / ss;
+
+	state.lastInput.changes.push(
+		targetX,
+		targetY,
+		mouse.buttons.left,
+		mouse.buttons.middle,
+		mouse.buttons.right,
+		mouse.scrollY
+	)
+	for(let key in keyboard.keys){
+		const newVal = keyboard.keys[key]
+		const oldVal = state.lastInput.keyboard[key];
+		if(newVal !== oldVal){
+			state.lastInput.keyboard[key] = newVal;
+			state.lastInput.changes.push(key, newVal)
+		}
+	}
+	state.lastInput.changes.push(-1) // end of block flag
+})
+
 main.drawFuncts.set("clear", ({ canvas, ctx, delta }) => {
 	ctx.clearRect(0, 0, canvas.width, canvas.height);
+	
+	// Update screenScale based on FOV each frame
+	const fov = playerState.camera.fov || 1;
+	state.screenScale = Math.max(canvas.width / fov, canvas.height / fov / 9 * 16);
 })
 
 main.drawFuncts.set("background", ({ canvas, ctx, delta }) => {
@@ -35,10 +74,11 @@ main.drawFuncts.set("background", ({ canvas, ctx, delta }) => {
 		const H = roomState.cells.length;
 		const cellWidth = roomState.width / W;
 		const cellHeight = roomState.height / H;
+		
 		const scaledCellWidth = state.screenScale * cellWidth;
 		const scaledCellHeight = state.screenScale * cellHeight;
-		const offsetX = canvas.width / 2 - state.screenScale * playerState.entity.x;
-		const offsetY = canvas.height / 2 - state.screenScale * playerState.entity.y;
+		const offsetX = canvas.width / 2 - state.screenScale * playerState.camera.x;
+		const offsetY = canvas.height / 2 - state.screenScale * playerState.camera.y;
 
 		state.frame++;
 
@@ -92,8 +132,12 @@ main.drawFuncts.set("background", ({ canvas, ctx, delta }) => {
 })
 
 main.drawFuncts.set("entities", ({ canvas, ctx, delta }) => {
+	const offsetX = canvas.width / 2 - state.screenScale * playerState.camera.x;
+	const offsetY = canvas.height / 2 - state.screenScale * playerState.camera.y;
+
 	for (let i = 0; i < entitiesArr.length; i++) {
 		const entity = entitiesArr[i];
+		if (entity.isTurret) continue;
 
 		if (entity.id === playerState.entityId) {
 			playerState.entity = entity;
@@ -101,9 +145,27 @@ main.drawFuncts.set("entities", ({ canvas, ctx, delta }) => {
 		}
 
 		const render = getEntityImage(entity);
-		console.log(render)
-		ctx.drawImage(render, entity.x, entity.y)
-		ctx.globalAlpha = 1;
+		const screenX = state.screenScale * entity.x + offsetX;
+		const screenY = state.screenScale * entity.y + offsetY;
+		const entitySize = entity.size || 1;
+		// Scale based on screenScale and entity size, normalized by render dimensions
+		const scale = state.screenScale * entitySize / render.width * 2;
+
+		ctx.save();
+		ctx.translate(screenX, screenY);
+		ctx.scale(scale, scale);
+		ctx.globalAlpha = entity.alpha;
+
+		const scoreText = renderText(entity.score, entity.size/2);
+		ctx.drawImage(scoreText, -scoreText.width/2, -render.height);
+		if(entity.name){
+			const nameText = renderText(entity.name, entity.size);
+			ctx.drawImage(nameText, -nameText.width/2, -render.height - scoreText.height)
+		}
+	
+		ctx.rotate(entity.facing);
+		ctx.drawImage(render, -render.width / 2, -render.height / 2);
+		ctx.restore();
 	};
 })
 

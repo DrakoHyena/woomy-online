@@ -18,6 +18,7 @@ import { loadingScreenState } from "./drawing/scenes/loadingScreen.js";
 import { roomState } from "./state/room.js";
 import { playerState } from "./state/player.js";
 import { serverPackets, clientPackets } from "../../shared/packetIds.js";
+import { gameState } from "./drawing/scenes/game.js";
 
 let entities = new Map();
 const entitiesArr = [];
@@ -135,7 +136,16 @@ class RopePoint {
 }
 
 class ClientGun {
-	constructor() {
+	constructor(skin, color, aspect, direction, offset, length, width, angle) {
+		this.skin = skin;
+		this.color = color;
+		this.aspect = aspect;
+		this.direction = direction;
+		this.offset = offset;
+		this.length = length;
+		this.width = width;
+		this.angle = angle;
+
 		this.motion = 0;
 		this.position = 0;
 		this.recoverRate = .25;
@@ -152,6 +162,7 @@ class ClientGun {
 class ClientEntity {
 	constructor(
 		id = -1,
+		isTurret = false,
 		index = 0,
 		name = "",
 		x = 0,
@@ -195,6 +206,7 @@ class ClientEntity {
 		this.widthHeightRatio = widthHeightRatio;
 		this.hideName = hideName;
 		this.hideHealth = hideHealth;
+		this.isTurret = isTurret;
 
 		this.leash = leash;
 		if (typeof this.leash === "object") {
@@ -213,7 +225,17 @@ class ClientEntity {
 	}
 
 	setGun(index) {
-		this.guns[index] = new ClientGun();
+		this.guns[index] = new ClientGun(
+			convert.reader.next(), // skin
+			convert.reader.next(), // color
+			convert.reader.next(), // aspect
+			convert.reader.next(), // direction
+			convert.reader.next(), // offset
+			convert.reader.next(), // length
+			convert.reader.next(), // width
+			convert.reader.next(), // angle
+		);
+		this.guns[index].fire(convert.reader.next()) // power
 	}
 
 	setTurret(index) {
@@ -232,6 +254,7 @@ class ClientEntity {
 function newEntity(id, skipSpawnFade = false) {
 	let entity = new ClientEntity(
 		id, // id
+		convert.reader.next(), // isTurret
 		convert.reader.next(), // index
 		convert.reader.next(), // name
 		convert.reader.next(), // x
@@ -255,14 +278,14 @@ function newEntity(id, skipSpawnFade = false) {
 		convert.reader.next() ? { x: convert.reader.next(), y: convert.reader.next() } : false, // leash
 	)
 
-	let gunAmount = convert.reader.next();
-	for (let i = 0; i < gunAmount; i++) {
-		entity.setGun(i);
-	}
-
 	let turretAmount = convert.reader.next();
 	for (let i = 0; i < turretAmount; i++) {
 		entity.setTurret(i);
+	}
+
+	let gunAmount = convert.reader.next();
+	for (let i = 0; i < gunAmount; i++) {
+		entity.setGun(i);
 	}
 
 	if (skipSpawnFade === true) {
@@ -275,6 +298,10 @@ function newEntity(id, skipSpawnFade = false) {
 
 function updateEntity(entityId, updateType) {
 	let entity = entities.get(entityId);
+
+	if(entityId === playerState.entityId){
+		playerState.entity = entity;
+	}
 
 	if (updateType === -1) {
 		entity = newEntity(entityId, entity !== undefined);
@@ -326,6 +353,12 @@ function updateEntity(entityId, updateType) {
 		entity.nameColor = convert.reader.next();
 		entity.label = convert.reader.next();
 	}
+	// guns
+	const gunAmount = convert.reader.next();
+	for(let i = 0; i < gunAmount; i++){
+		// FIXME: Might need time to calculate if shot
+		entity.guns[i].fire(convert.reader.next())
+	}
 	return entity;
 }
 
@@ -359,6 +392,8 @@ function convertEntities() {
 			if (updateType >= 4) { // Text
 				convert.reader.take(3); // name, nameColor, label
 			}
+			const gunAmount = convert.reader.next();
+			convert.reader.take(gunAmount * 1) // power
 		}
 	}
 	
@@ -381,7 +416,6 @@ function convertEntities() {
 	newEntities = entities;
 	entities = holdingVar;
 	newEntities.clear();
-	console.log(missingEntityIds, entitiesArr)
 	missingEntityIds.clear();
 };
 
@@ -516,7 +550,8 @@ async function onmessage (message) {
 				y: m[1],
 				FoV: m[2]
 			};
-			convert.reader.set(m, 3);
+			playerState.entityId = m[3];
+			convert.reader.set(m, 4);
 			window.movementSmoothing = 1
 			convert.fastGui();
 			convert.lasers();
@@ -526,6 +561,10 @@ async function onmessage (message) {
 			playerState.camera.x = lerp(playerState.camera.x, cam.x, window.movementSmoothing * .7);
 			playerState.camera.y = lerp(playerState.camera.y, cam.y, window.movementSmoothing * .7);
 			playerState.camera.fov = lerp(playerState.camera.fov, cam.FoV, window.movementSmoothing * .7)
+
+			// Update inputs whenever we received a viewUpdate
+			socket.send(clientPackets.inputUpdate, ...gameState.lastInput.changes)
+			gameState.lastInput.changes.length = 0;
 			break;
 		case serverPackets.slowGuiUpdate:
 			convert.slowGui(m);

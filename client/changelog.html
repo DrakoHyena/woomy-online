@@ -3,6 +3,15 @@
 	<ul class="patchnoteBody">
 		<li>Fixed Rooms randomly disconntecting from the Room Manager, causing their room code to be regenerated often</li>
 		<li>Removed a warning that appeared if you used firefox</li>
+		<li>Rewrote the entire client</li>
+		<ul>
+			<li>Redid Input Code</li>
+			<ul>
+				<li>Inputs are now buffered</li>
+				<li>All inputs are now sent to the server</li>
+				<li>Modders, Note: I recommend that you use this sparingly in consideration for mobile users. See "case clientPackets.inputUpdate" in server.js to utilize.</li>
+			</ul>
+		</ul>
 	</ul>
 </div>
 <div class="patchnoteSection">

@@ -6843,6 +6843,7 @@ const Chain = Chainf;
 					leash: this.leash,
                     guns: this.guns,
                     turrets: this.turrets,
+					isTurret: !!this.isTurret,
                 };
                 if (this.scoped) {
                     if (!this.control.alt) {
@@ -8470,6 +8471,7 @@ const Chain = Chainf;
 		out.push(newData.id);
 		out.push(minimumUpdateType)
 		if(minimumUpdateType === -1){
+			out.push(newData.isTurret);
 			out.push(newData.index);
 			out.push(newData.name);
 			out.push(newData.x);
@@ -8497,17 +8499,29 @@ const Chain = Chainf;
 			}else{
 				out.push(false);
 			}
-						
-			out.push(newData.guns.length);
-			
+
 			const turretCount = newData.turrets.length;
 			out.push(turretCount);
 			for (let i = 0; i < turretCount; i++) {
                 out.push(newData.turrets[i].id);
 			}
+
+			out.push(newData.guns.length);
+			for(let gun of newData.guns){
+				out.push(gun.skin);
+				out.push(gun.color);
+				out.push(gun.aspect);
+				out.push(gun.direction);
+				out.push(gun.offset);
+				out.push(gun.length);
+				out.push(gun.width);
+				out.push(gun.angle);
+				out.push(gun.lastShot.power);
+			}
+			return out;
 		}
 		if (minimumUpdateType === 0) {
-			// Nothing needs updated
+			return out;
 		}
 		if(minimumUpdateType >= 1){
 			if(newData.leash){
@@ -8538,6 +8552,10 @@ const Chain = Chainf;
 			out.push(newData.name);
 			out.push(newData.nameColor);
 			out.push(newData.label);
+		}
+		out.push(newData.guns.length);
+		for(let gun of newData.guns){
+			out.push(gun.lastShot.power);
 		}
 		return out;
 	}
@@ -9107,41 +9125,30 @@ const Chain = Chainf;
                             if (this.betaData.globalName !== "Room Host") return;
                             global.editorChangeEntity(m[0])
                             break;
-                        case "C": { // Command packet
-                            if (m.length !== 3) {
-                                this.error("command handling", "Ill-sized command packet", true);
-                                return 1;
-                            }
-                            let target = {
-                                x: m[0],
-                                y: m[1],
-                            },
-                            commands = m[2]
-                            // Verify data
-                            if (typeof target.x !== 'number' || typeof target.y !== 'number' || isNaN(target.x) || isNaN(target.y) || typeof commands !== 'number') {
-                                this.kick('Weird downlink.');
-                                return 1;
-                            }
-                            if (commands >= 255) {
-                                this.kick('Malformed command packet.');
-                                return 1;
-                            }
-                            // Put the new target in
-                            player.target = target;
+                        case clientPackets.inputUpdate: { // Command packet
+							const len = m.length;
+							let i = 0;
 
-                            // Process the commands
-                            if (player.command != null && player.body != null && commands > -1) {
-                                player.command.up = (commands & 1);
-                                player.command.down = (commands & 2) >> 1;
-                                player.command.left = (commands & 4) >> 2;
-                                player.command.right = (commands & 8) >> 3;
-                                player.command.lmb = (commands & 16) >> 4;
-                                player.command.mmb = (commands & 32) >> 5;
-                                player.command.rmb = (commands & 64) >> 6;
-                            }
-                            if (player.command != null) {
-                                player.command.report = m;
-                            }
+							// Update Entity
+							if(!player.command || !player.body) return;
+							while(i !== len){
+								player.target.x = m[i++];
+								player.target.y = m[i++];
+								player.command.lmb = m[i++];
+								player.command.mmb = m[i++];
+								player.command.rmb = m[i++];
+								player.command.scroll = m[i++];
+								let nextVal = m[i++];
+								while(nextVal !== -1){
+									player.command.keyboard[nextVal] = m[i++]
+									nextVal = m[i++]
+								}
+							}
+							
+							player.command.up = player.command.keyboard["w"];
+							player.command.left = player.command.keyboard["a"];
+							player.command.down = player.command.keyboard["s"];
+							player.command.right = player.command.keyboard["d"];
                         } break;
                         case "t": { // Player toggle
                             if (m.length !== 1) {
@@ -10195,10 +10202,12 @@ const Chain = Chainf;
                         lmb: false,
                         mmb: false,
                         rmb: false,
+						scroll: 0,
                         autofire: false,
                         autospin: false,
                         override: false,
                         reversed: false,
+						keyboard: {}
                     };
                     player.records = (() => { // sendRecordValid
                         let begin = util.time();
@@ -12855,8 +12864,7 @@ const Chain = Chainf;
                         !entity.settings.drawShape ||
                         (c.SANDBOX && entity.sandboxId !== socket.sandboxId) ||
 						(!body.roomLayerless && !entity.roomLayerless && body.roomLayer !== entity.roomLayer) ||
-                        (body && !body.seeInvisible && entity.alpha < 0.1) ||
-						(body && entity.id === body.id) // exclude player, see above
+                        (body && !body.seeInvisible && entity.alpha < 0.1)
                         // Note: The grid query already handled the main distance check.
                         // If more precise frustum culling is needed, add a check here, but AABB is usually sufficient for performance gain.
                     ) {
@@ -12926,6 +12934,7 @@ const Chain = Chainf;
                     camera.x + .5 | 0, // Camera X (rounded)
                     camera.y + .5 | 0, // Camera Y (rounded)
                     fov + .5 | 0, // FOV (rounded)
+					body.id, // Entity Id
                     socket.getSkillUi(),
 					lasers.size,
 					laserPacket,
