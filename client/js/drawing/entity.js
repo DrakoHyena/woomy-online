@@ -1028,9 +1028,14 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 	}
 
 	if (shape > 200 && shape < 998) {
-		let path = path2dCache.get(shape),
+		let cached = path2dCache.get(shape),
+			path = null,
 			sizeDiv = 1;
-		if (!path) {
+		if (cached) {
+			path = cached.path;
+			sizeDiv = cached.sizeDiv;
+		}
+		if (!cached) {
 			switch (shape) {
 				case 201: // 6 Pointed Star
 					path = new Path2D("m -1.2745055,-0.73559036 .8496635,-1.54e-5 L -5.9657109e-7,-1.4711814 .42484199,-0.73560576 1.2745055,-0.73559036 .84968469,-1.7597132e-6 1.2745055,0.73558804 .42484199,0.73560224 -5.9657109e-7,1.4711779 -0.424842,0.73559964 -1.2745055,0.73558804 -0.8496847,-1.7597132e-6 Z");
@@ -1522,7 +1527,7 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 					sizeDiv = .9;
 					break;
 			}
-			path2dCache.set(shape, { path, sizeDiv })
+			path2dCache.set(shape, { path, sizeDiv });
 		}
 		size /= sizeDiv;
 		context.save();
@@ -1536,14 +1541,14 @@ function drawShape(context, shape, size, stroke, fill, options = {}) {
 
 	if (shape === 998) {
 		context.arc(0, 0, size, 0, Math.PI);
-		if (stroke) context.stroke(path);
-		if (fill) context.fill(path);
+		if (stroke) context.stroke();
+		if (fill) context.fill();
 	}
 
 	if (shape === 999) {
 		context.arc(0, 0, size, 0, Math.PI, 1);
-		if (stroke) context.stroke(path);
-		if (fill) context.fill(path);
+		if (stroke) context.stroke();
+		if (fill) context.fill();
 	}
 
 	if (shape > 9999) {
@@ -1843,7 +1848,6 @@ function makeGunPath(context, length, height, aspect, skin) {
 
 const gunCache = new Map();
 function renderGunsAtLayer(context, entity, layer) {
-	const entityFacing = entity.facing || 0;
 	const entitySize = entity.size || 1;
 
 	for (let i = 0; i < entity.guns.length; i++) {
@@ -2065,7 +2069,7 @@ function renderTurretsAtLayer(ctx, entity, turrets, layer) {
 function renderEntity(ctx, entity) {
 	ctx.lineCap = "round";
 	ctx.lineJoin = currentSettings.pointy.value.enabled ? "miter" : "round";
-	ctx.lineWidth = gameState.fovScale * currentSettings.borderWidth.value.number;
+	ctx.lineWidth = (gameState.fovScale * currentSettings.borderWidth.value.number);
 
 	handlePropAnimations(entity);
 
@@ -2094,7 +2098,7 @@ function renderEntity(ctx, entity) {
 	setColors(ctx, getColor(entity.color));
 	drawShape(ctx, entity.shape, entity.size, true, true, {
 		widthHeightRatio: entity.widthHeightRatio,
-		angle: entity.angle // used for special effects, not rotation
+		angle: entity.facing // used for special effects, not rotation
 	})
 
 	// Layer 1: In front of body
@@ -2113,14 +2117,6 @@ function calculateMEC(entity) {
 	const size = entity.size || 1;
 	let maxDistSq = size * size; // Start with body size
 
-	// Body shape - for non-circles, vertices extend further
-	const s = Math.abs(entity.shape || 0);
-	if (s > 0 && s < 8) {
-		// Polygon real size multiplier (vertices extend past unit circle)
-		const realSize = 1 / Math.cos(Math.PI / s);
-		maxDistSq = (size * realSize) ** 2;
-	}
-
 	// Gun endpoints - find max distance from center
 	const guns = entity.guns;
 	if (guns) {
@@ -2132,7 +2128,7 @@ function calculateMEC(entity) {
 			const gunAspect = gun.aspect ?? 1;
 			const gunDirection = gun.direction || 0;
 
-// Match the rendering logic exactly (match drawEntity):
+		// Match the rendering logic exactly (match drawEntity):
 		const gunAngle = gun.angle ?? 0;
 		const directionPlusAngle = gun.direction + gunAngle;
 
@@ -2174,10 +2170,32 @@ function calculateMEC(entity) {
 	return Math.sqrt(maxDistSq) * 2; // Diameter
 }
 
-const CANVAS_SIZE = 64;
-function getEntityImage(entity) {
-	const canvas = new OffscreenCanvas(CANVAS_SIZE, CANVAS_SIZE);
-	const ctx = canvas.getContext('2d');
+const entityImgCache = new Map();
+function makeEntityImgCacheKey(entity, padding){
+	let key = `${padding}|${entity.index}|${entity.guns.length}|${entity.props.length}|${entity.shape}|${entity.size}|${entity.widthHeightRatio}`;
+	return key;
+}
+
+const CANVAS_SIZE = 256;
+const canvasPool = [];
+function getEntityImage(entity, liveRender, padding = 1) {
+	const imgCacheKey = makeEntityImgCacheKey(entity, padding);
+	if(liveRender === false){
+		const savedImg = entityImgCache.get(imgCacheKey);
+		if(savedImg){
+			return savedImg;
+		}
+		console.log("Generating image for entity:", entity)
+	}
+
+	const canvas = canvasPool.length === 0 ? new OffscreenCanvas(1, 1) : canvasPool.pop();
+	canvas.width = CANVAS_SIZE * padding;
+	canvas.height = CANVAS_SIZE * padding;
+	if(!canvas.ctx){
+		canvas.ctx = canvas.getContext("2d");
+		canvas.ctx.imageSmoothingEnabled = false;
+	}
+	const ctx = canvas.ctx;
 
 	// FIXME: remove after testing
 	ctx.fillStyle = "red";
@@ -2188,24 +2206,27 @@ function getEntityImage(entity) {
 	ctx.save();
 
 	// Translate to center of canvas
-	ctx.translate(CANVAS_SIZE / 2, CANVAS_SIZE / 2);
+	ctx.translate(canvas.width / 2, canvas.height / 2);
 
 	// Calculate the MEC to ensure nothing gets clipped
-	const maxExtent = calculateMEC(entity) || entity.size;
+	const maxExtent = calculateMEC(entity);
 
 	// Scale so the full entity fits within the canvas (with padding)
 	const targetSize = CANVAS_SIZE;
 	const scale = targetSize / maxExtent;
 	ctx.scale(scale, scale);
 
-	// Center the entity using its mockup 'middle' so asymmetric parts (guns) don't go off-canvas
-	const centerX = entity.position?.middle?.x || 0;
-	const centerY = entity.position?.middle?.y || 0;
-	ctx.translate(-centerX, -centerY);
-
 	renderEntity(ctx, entity);
 
 	ctx.restore();
+
+	canvas.upscaleVal = maxExtent / CANVAS_SIZE;
+
+	createImageBitmap(canvas).then((bmp)=>{
+		bmp.upscaleVal = canvas.upscaleVal;
+		entityImgCache.set(imgCacheKey, bmp);
+		canvasPool.push(canvas);
+	})
 
 	return canvas;
 }

@@ -13,6 +13,7 @@ class Scene{
 		this.resizeFuncts = new Map();
 		this.drawFuncts = new Map();
 		this._ctx = this.canvas.getContext("2d");
+		this._ctx.imageSmoothingEnabled = false;
 		this._lastDraw = 0;
 		this.resize();
 	}

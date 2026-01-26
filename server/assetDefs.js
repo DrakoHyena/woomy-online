@@ -25,7 +25,11 @@ setAsset("pumpkinOrange", "#FF7518");
 */
 
 // Built In Assets (Removal not recommended)
+// Note, these go to https://woomy.online/resources/... therefore you cannot add anything in the same way
+// You must find a service to make your assets available online
+// Checkout https://www.jsdelivr.com/
 setAsset("normCellSkin", "/resources/cellSkins/norm.png", { image: true })
+setAsset("boundaryCellSkin", "/resources/cellSkins/boundary.png", { image: true })
 setAsset("defaultCellSkin1", "/resources/cellSkins/default1.png", { image: true })
 setAsset("defaultCellSkin2", "/resources/cellSkins/default2.png", { image: true })
 setAsset("defaultCellSkin3", "/resources/cellSkins/default3.png", { image: true })

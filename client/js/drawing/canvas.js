@@ -213,9 +213,6 @@ global._canvas = new (class Canvas {
 			case global.KEY_RIGHT_ARROW:
 				socket.controls.commands[3] = 1;
 				break;
-			case global.KEY_LEVEL_UP:
-				for(let i = 0; i < 10; i++) socket.talk("L");
-				break;
 			// Beta-tester keys
 			case global.KEY_COLOR_CHANGE:
 				socket.talk("B", 0);

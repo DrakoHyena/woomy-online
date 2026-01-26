@@ -26,16 +26,18 @@ const defaultSettings = {
 	animatedLasers: true,
 	clientSideAim: false,
 	darkModeMenu: false,
+	showFps: true,
 
 	// Number settings
 	chatMessageDuration: 5,
 	uiScale: 1.2,
 	fontStrokeRatio: 7,
-	borderWidth: 5.5, // borderChunk
+	borderWidth: 2.5, // borderChunk
 	barWidth: 4, // barChunk
 	fontSizeBoost: 10,
 	vignetteStrength: 1,
 	fpsCap: 1000,
+	inputBufferSize: 500,
 
 	// String/Dropdown settings
 	barStyle: "Circle",
@@ -77,6 +79,7 @@ const settingTypes = {
 	animatedLasers: "checkbox",
 	clientSideAim: "checkbox",
 	darkModeMenu: "checkbox",
+	showFps: "checkbox",
 
 	// Number settings
 	chatMessageDuration: "number",
@@ -87,6 +90,7 @@ const settingTypes = {
 	fontSizeBoost: "number",
 	vignetteStrength: "number",
 	fpsCap: "number",
+	inputBufferSize: "number",
 
 	// Dropdown settings
 	barStyle: "dropdown",
@@ -123,6 +127,8 @@ const settingLimits = {
 	vignetteStrengthMax: 5,
 	fpsCapMin: 1,
 	fpsCapMax: 1000,
+	inputBufferSizeMin: 100,
+	inputBufferSizeMax: 1000,
 
 	// Dropdown setting options
 	barStyleOptions: ["Circle", "Square", "Triangle"],

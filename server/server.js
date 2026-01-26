@@ -1508,7 +1508,13 @@ const Chain = Chainf;
 					"frameInterval": 0,
 					"repeat": true,
 					"stretch": false 
-				}
+				},
+				"boundary": {
+					"assets": ["boundaryCellSkin"],
+					"frameInterval": 0,
+					"repeat": true,
+					"stretch": false
+				},
 			},
             "X_GRID": 18,
             "Y_GRID": 18,
@@ -6831,8 +6837,8 @@ const Chain = Chainf;
                     layer: this.type === "mazeWall" ? 7 : this.passive && this.LAYER !== -1 ? 1 : this.LAYER === -1 ? this.bond == null ? this.type === "wall" ? 11 : this.type === "food" ? 10 : this.type === "tank" ? 5 : this.type === "crasher" ? 8 : 0 : this.bound.layer : this.LAYER,
                     color: this.color,
                     team: this.team,
-					health: this.health.display(),
-                    shield: this.shield.display(),
+					health: this.health,
+                    shield: this.shield,
                     alpha: this.alpha,
                     seeInvisible: this.seeInvisible,
                     nameColor: this.nameColor,
@@ -8450,8 +8456,10 @@ const Chain = Chainf;
 			){
 				minimumUpdateType = 3
 			} else if(
-				oldData.health !== newData.health ||
-				oldData.shield !== newData.shield ||
+				oldData.health.amount !== newData.health.amount ||
+				oldData.health.max !== newData.health.max ||
+				oldData.shield.amount !== newData.shield.amount ||
+				oldData.shield.max !== newData.shield.max ||
 				oldData.score !== newData.score ||
 				oldData.size !== newData.size ||
 				oldData.alpha !== newData.alpha
@@ -8483,8 +8491,10 @@ const Chain = Chainf;
 			out.push(newData.layer);
 			out.push(newData.color);
 			out.push(newData.team);
-			out.push(newData.health);
-			out.push(newData.shield);
+			out.push(newData.health.amount);
+			out.push(newData.health.max)
+			out.push(newData.shield.amount);
+			out.push(newData.shield.max)
 			out.push(newData.alpha);
 			out.push(newData.seeInvisible);
 			out.push(newData.nameColor);
@@ -8517,6 +8527,7 @@ const Chain = Chainf;
 				out.push(gun.width);
 				out.push(gun.angle);
 				out.push(gun.lastShot.power);
+				out.push(gun.lastShot.time);
 			}
 			return out;
 		}
@@ -8536,11 +8547,14 @@ const Chain = Chainf;
 			out.push(newData.facing);
 		}
 		if(minimumUpdateType >= 2) {
-			out.push(newData.health);
-			out.push(newData.shield);
-			out.push(newData.score);
-			out.push(newData.size);
-			out.push(newData.alpha);
+            // send primitive values (amount and max) instead of objects to avoid encoding errors
+            out.push(newData.health.amount);
+            out.push(newData.health.max);
+            out.push(newData.shield.amount);
+            out.push(newData.shield.max);
+            out.push(newData.score);
+            out.push(newData.size);
+            out.push(newData.alpha);
 		}
 		if(minimumUpdateType >= 3) {
 			out.push(newData.shape);
@@ -8556,6 +8570,7 @@ const Chain = Chainf;
 		out.push(newData.guns.length);
 		for(let gun of newData.guns){
 			out.push(gun.lastShot.power);
+			out.push(gun.lastShot.time);
 		}
 		return out;
 	}
@@ -9373,29 +9388,14 @@ const Chain = Chainf;
                                 }
                             }
                         } break;
-                        case "L": { // Level up cheat
-                            if (m.length !== 0) {
-                                this.error("level up", "Ill-sized level-up request", true);
-                                return 1;
-                            }
-                            if (body != null && !body.underControl && body.skill.level < c.SKILL_CHEAT_CAP) {
+                        case clientPackets.levelUp: // Level up cheat
+							while(body.skill.level < c.SKILL_CHEAT_CAP) {
                                 body.skill.score += body.skill.levelScore;
                                 body.lvlCheated = true;
                                 body.skill.maintain();
-                                body.refreshBodyAttributes();
                             }
-                        } break;
-                        case "P": { // Class tree prompt
-                            if (m.length !== 1) {
-                                this.error("class tree prompting", "Ill-sized class tree prompt request", true);
-                                return 1;
-                            }
-                            if (!isAlive) return;
-                            if (m[0]) {
-                                body.sendMessage("Press U to close the class tree.");
-                                body.sendMessage("Use the arrow keys to cycle through the class tree.");
-                            }
-                        } break;
+                            body.refreshBodyAttributes();
+						break;
                         case "da": // Server Data Stats
                             if (m.length !== 0) {
                                 this.error("Server Data Stats", "Ill-sized request", true)

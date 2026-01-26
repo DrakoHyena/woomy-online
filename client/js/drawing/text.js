@@ -1,5 +1,6 @@
 const textCanvas = new OffscreenCanvas(1, 1);
 const ctx = textCanvas.getContext("2d");
+ctx.imageSmoothingEnabled = false;
 
 const textRenders = new Map();
 

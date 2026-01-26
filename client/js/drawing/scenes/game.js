@@ -16,6 +16,7 @@ import { currentSettings } from "../../settings.js";
 import { entitiesArr } from "../../socket.js";
 import { keyboard } from "../../controls/keyboard.js";
 import { mouse } from "../../controls/mouse.js";
+import { clientPackets } from "../../../../shared/packetIds.js";
 
 const state = {
 	renderingStarted: false,
@@ -31,7 +32,21 @@ const state = {
 const main = new Scene(document.getElementById("mainCanvas"));
 drawLoop.scenes.set("main", main);
 
+function onInputTrue(key){
+	switch(key){
+		case "n":
+			socket.send(clientPackets.levelUp)
+		break;
+	}
+}
+
+function onInputFalse(key){
+
+}
+
 main.utilityFuncts.set("gameInput", ({ canvas, ctx, delta }) => {
+	if(state.lastInput.changes.length > currentSettings.inputBufferSize.value.number) state.lastInput.changes.length = 0;
+	
 	//console.log(playerState.entity)
 	// Compute target inline relative to the camera (mouse offset from canvas center, scaled)
 	const rect = canvas.getBoundingClientRect();
@@ -55,14 +70,21 @@ main.utilityFuncts.set("gameInput", ({ canvas, ctx, delta }) => {
 		if(newVal !== oldVal){
 			state.lastInput.keyboard[key] = newVal;
 			state.lastInput.changes.push(key, newVal)
+			if(newVal === true){
+				onInputTrue(key);
+			}else{
+				onInputFalse(key);
+			}
 		}
 	}
 	state.lastInput.changes.push(-1) // end of block flag
 })
 
 main.drawFuncts.set("clear", ({ canvas, ctx, delta }) => {
-	ctx.clearRect(0, 0, canvas.width, canvas.height);
-	
+	ctx.globalAlpha = 1;
+	ctx.fillStyle = "#a0a0a0";
+	ctx.fillRect(0, 0, canvas.width, canvas.height);
+
 	// Update screenScale based on FOV each frame
 	const fov = playerState.camera.fov || 1;
 	state.screenScale = Math.max(canvas.width / fov, canvas.height / fov / 9 * 16);
@@ -74,7 +96,7 @@ main.drawFuncts.set("background", ({ canvas, ctx, delta }) => {
 		const H = roomState.cells.length;
 		const cellWidth = roomState.width / W;
 		const cellHeight = roomState.height / H;
-		
+    
 		const scaledCellWidth = state.screenScale * cellWidth;
 		const scaledCellHeight = state.screenScale * cellHeight;
 		const offsetX = canvas.width / 2 - state.screenScale * playerState.camera.x;
@@ -82,37 +104,94 @@ main.drawFuncts.set("background", ({ canvas, ctx, delta }) => {
 
 		state.frame++;
 
+		// Render in-bounds cells
 		for (let y = 0; y < H; y++) {
 			const top = state.screenScale * y * cellHeight + offsetY;
 			const bottom = top + scaledCellHeight;
-			
-			// Skip entire row if off-screen vertically
 			if (bottom < 0 || top > canvas.height) continue;
-			
+
 			const row = roomState.cells[y];
-			for (let x = 0; x < row.length; x++) {
-				const cell = row[x];
-				if (cell === "edge") continue;
-				
+			for (let x = 0; x < W; x++) {
 				const left = state.screenScale * x * cellWidth + offsetX;
 				const right = left + scaledCellWidth;
-				
-				// Skip cell if off-screen horizontally
 				if (right < 0 || left > canvas.width) continue;
-				
-				const cellSkin = roomState.cellSkins[cell] || roomState.cellSkins["default"];
-				const assetIndex = cellSkin.frameInterval === 0 ? 0 : Math.floor((state.frame % cellSkin.frameInterval) / cellSkin.frameInterval * cellSkin.assets.length);
-				const asset = getAsset(cellSkin.assets[assetIndex]).data;
 
-				if(cellSkin.repeat){
+				const cell = row[x];
+				if (cell === "edge") continue;
+
+				// Use cell skin if available, else fallback to default
+				let cellSkin = null, asset = null;
+				if (cell && roomState.cellSkins[cell] && Array.isArray(roomState.cellSkins[cell].assets) && roomState.cellSkins[cell].assets.length > 0) {
+					cellSkin = roomState.cellSkins[cell];
+					const assetIndex = (!cellSkin.frameInterval || cellSkin.frameInterval === 0) ? 0 : Math.floor(state.frame / cellSkin.frameInterval) % cellSkin.assets.length;
+					const assetObj = getAsset(cellSkin.assets[assetIndex]);
+					asset = assetObj && assetObj.data ? assetObj.data : null;
+				} else if (roomState.cellSkins["default"] && Array.isArray(roomState.cellSkins["default"].assets) && roomState.cellSkins["default"].assets.length > 0) {
+					cellSkin = roomState.cellSkins["default"];
+					const assetIndex = (!cellSkin.frameInterval || cellSkin.frameInterval === 0) ? 0 : Math.floor(state.frame / cellSkin.frameInterval) % cellSkin.assets.length;
+					const assetObj = getAsset(cellSkin.assets[assetIndex]);
+					asset = assetObj && assetObj.data ? assetObj.data : null;
+				}
+
+				if (!cellSkin || !asset) continue;
+
+				if (cellSkin.repeat) {
+					const pattern = ctx.createPattern(asset, "repeat");
 					ctx.save();
-					ctx.fillStyle = ctx.createPattern(asset, "repeat");
+					ctx.fillStyle = pattern;
 					ctx.translate(offsetX, offsetY);
 					ctx.scale(state.screenScale, state.screenScale);
 					ctx.fillRect((left - 1 - offsetX) / state.screenScale, (top - 1 - offsetY) / state.screenScale, (scaledCellWidth + 2) / state.screenScale, (scaledCellHeight + 2) / state.screenScale);
 					ctx.restore();
-				}else if(cellSkin.stretch){
+				} else if (cellSkin.stretch) {
 					ctx.drawImage(asset, left - 1, top - 1, scaledCellWidth + 2, scaledCellHeight + 2);
+				}
+			}
+		}
+
+		// Calculate visible cell range
+		const minX = Math.floor((-offsetX) / scaledCellWidth) - 1;
+		const maxX = Math.ceil((canvas.width - offsetX) / scaledCellWidth) + 1;
+		const minY = Math.floor((-offsetY) / scaledCellHeight) - 1;
+		const maxY = Math.ceil((canvas.height - offsetY) / scaledCellHeight) + 1;
+
+		// Get boundary cell skin and asset, with safety checks
+		const boundaryCellSkin = roomState.cellSkins["boundary"];
+		let boundaryAsset = null;
+		if (boundaryCellSkin && Array.isArray(boundaryCellSkin.assets) && boundaryCellSkin.assets.length > 0) {
+			const boundaryAssetIndex = (!boundaryCellSkin.frameInterval || boundaryCellSkin.frameInterval === 0) ? 0 : Math.floor(state.frame / boundaryCellSkin.frameInterval) % boundaryCellSkin.assets.length;
+			const assetObj = getAsset(boundaryCellSkin.assets[boundaryAssetIndex]);
+			if (assetObj && assetObj.data) {
+				boundaryAsset = assetObj.data;
+			}
+		}
+
+		// Render out-of-bounds (boundary) cells
+		for (let y = minY; y < maxY; y++) {
+			const top = state.screenScale * y * cellHeight + offsetY;
+			const bottom = top + scaledCellHeight;
+			if (bottom < 0 || top > canvas.height) continue;
+
+			for (let x = minX; x < maxX; x++) {
+				// Only draw if out of bounds
+				if (y >= 0 && y < H && x >= 0 && x < W) continue;
+
+				const left = state.screenScale * x * cellWidth + offsetX;
+				const right = left + scaledCellWidth;
+				if (right < 0 || left > canvas.width) continue;
+
+				if (!boundaryCellSkin || !boundaryAsset) continue;
+
+				if (boundaryCellSkin.repeat) {
+					const pattern = ctx.createPattern(boundaryAsset, "repeat");
+					ctx.save();
+					ctx.fillStyle = pattern;
+					ctx.translate(offsetX, offsetY);
+					ctx.scale(state.screenScale, state.screenScale);
+					ctx.fillRect((left - 1 - offsetX) / state.screenScale, (top - 1 - offsetY) / state.screenScale, (scaledCellWidth + 2) / state.screenScale, (scaledCellHeight + 2) / state.screenScale);
+					ctx.restore();
+				} else if (boundaryCellSkin.stretch) {
+					ctx.drawImage(boundaryAsset, left - 1, top - 1, scaledCellWidth + 2, scaledCellHeight + 2);
 				}
 			}
 		}
@@ -144,29 +223,39 @@ main.drawFuncts.set("entities", ({ canvas, ctx, delta }) => {
 			playerState.gameName = entity.name == null ? mockups.get(entity.index).name : entity.name;
 		}
 
-		const render = getEntityImage(entity);
+		const render = getEntityImage(entity, true, 1.25); // Add padding to accomadate border width and other misc things
 		const screenX = state.screenScale * entity.x + offsetX;
 		const screenY = state.screenScale * entity.y + offsetY;
 		const entitySize = entity.size || 1;
-		// Scale based on screenScale and entity size, normalized by render dimensions
-		const scale = state.screenScale * entitySize / render.width * 2;
+		const scale = state.screenScale * render.upscaleVal
 
 		ctx.save();
 		ctx.translate(screenX, screenY);
 		ctx.scale(scale, scale);
 		ctx.globalAlpha = entity.alpha;
 
-		const scoreText = renderText(entity.score, entity.size/2);
-		ctx.drawImage(scoreText, -scoreText.width/2, -render.height);
+		let scoreText = { height: 0 };
+		let nameText = { height: 0};
+		if(entity.score){
+			scoreText = renderText(entity.score, entitySize*2);
+			ctx.drawImage(scoreText, -scoreText.width/2, -render.height/2 - scoreText.height/2);
+		}
 		if(entity.name){
-			const nameText = renderText(entity.name, entity.size);
-			ctx.drawImage(nameText, -nameText.width/2, -render.height - scoreText.height)
+			nameText = renderText(entity.name, entitySize*3);
+			ctx.drawImage(nameText, -nameText.width/2, -render.height/2 - scoreText.height - nameText.height/2)
 		}
 	
 		ctx.rotate(entity.facing);
 		ctx.drawImage(render, -render.width / 2, -render.height / 2);
 		ctx.restore();
 	};
+
+	if(currentSettings.showFps.value.enabled){
+		ctx.globalAlpha = .25;
+		const text = renderText(`${drawLoop.fps}FPS`);
+		ctx.drawImage(text, canvas.width/2-text.width/2, canvas.height/2-text.height/2)
+		ctx.globalAlpha = 1;
+	}
 })
 
 async function startGame(gamemodeCode, joinRoomId, maxPlayers, maxBots){

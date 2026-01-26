@@ -8,7 +8,7 @@ import { mockups } from "./mockups.js";
 import { Smoothbar } from "./util.js";
 import { multiplayer } from "./multiplayer.js";
 import { fasttalk } from "./fasttalk.js";
-import { lerp } from "./lerp.js";
+import { lerp, lerpAngle } from "./lerp.js";
 import { ASSET_MAGIC, loadAsset, setAsset } from "../../shared/assets.js";
 import "./consoleCommands.js"
 import { drawVignette } from "./drawing/vignette.js";
@@ -148,14 +148,18 @@ class ClientGun {
 
 		this.motion = 0;
 		this.position = 0;
-		this.recoverRate = .25;
+		this.recoverRate = .35;
+		this.lastShotTime = 0;
 	}
 	tick() {
+		this.position += this.motion;
 		this.motion = lerp(this.motion, 0, this.recoverRate)
-		this.position = lerp(this.position, 0, this.recoverRate / 2)
+		this.position = lerp(this.position, 0, this.recoverRate)
 	}
-	fire(power) {
-		this.motion += Math.sqrt(power) / 30;
+	fire(power, lastShotTime) {
+		if(lastShotTime <= this.lastShotTime) return;
+		this.lastShotTime = lastShotTime;
+		this.motion += Math.sqrt(power) / 10;
 	}
 }
 
@@ -175,7 +179,9 @@ class ClientEntity {
 		color = 0,
 		team = 0,
 		health = 1,
+		healthMax = 1,
 		shield = 1,
+		shieldMax = 1,
 		alpha = 1,
 		seeInvisible = false,
 		nameColor = "#FFFFFF",
@@ -198,7 +204,9 @@ class ClientEntity {
 		this.color = color;
 		this.team = team;
 		this.health = health;
+		this.maxHealth = healthMax;
 		this.shield = shield;
+		this.maxShield = shieldMax;
 		this.alpha = alpha;
 		this.seeInvisible = seeInvisible;
 		this.nameColor = nameColor;
@@ -222,6 +230,10 @@ class ClientEntity {
 
 		this.sizeFade = 0;
 		this.hurtFade = 0;
+		this.goals = {
+			x: this.x,
+			y: this.y
+		};
 	}
 
 	setGun(index) {
@@ -235,7 +247,7 @@ class ClientEntity {
 			convert.reader.next(), // width
 			convert.reader.next(), // angle
 		);
-		this.guns[index].fire(convert.reader.next()) // power
+		this.guns[index].fire(convert.reader.next(), convert.reader.next()) // power, lastShotTime
 	}
 
 	setTurret(index) {
@@ -247,6 +259,13 @@ class ClientEntity {
 		this.hurtFade = lerp(this.hurtFade, 0, 0.25);
 		for (let gun of this.guns) {
 			gun.tick();
+		}
+		for(let goal in this.goals){
+			if(goal === "facing"){
+				this[goal] = lerpAngle(this[goal], this.goals[goal], .4);
+			}else{
+				this[goal] = lerp(this[goal], this.goals[goal], .4);
+			}
 		}
 	}
 }
@@ -266,8 +285,10 @@ function newEntity(id, skipSpawnFade = false) {
 		convert.reader.next(), // layer
 		convert.reader.next(), // color
 		convert.reader.next(), // team
-		convert.reader.next(), // health
-		convert.reader.next(), // shield
+		convert.reader.next(), // health amount
+		convert.reader.next(), // health max
+		convert.reader.next(), // shield amount
+		convert.reader.next(), // shield max
 		convert.reader.next(), // alpha
 		convert.reader.next(), // seeInvisible
 		convert.reader.next(), // nameColor
@@ -331,17 +352,19 @@ function updateEntity(entityId, updateType) {
 		}
 		
 		// Position data
-		entity.x = convert.reader.next();
-		entity.y = convert.reader.next();
-		entity.facing = convert.reader.next();
+		entity.goals.x = convert.reader.next();
+		entity.goals.y = convert.reader.next();
+		entity.goals.facing = convert.reader.next();
 	}
-	if (updateType >= 2) { // Minimal
-		entity.health = convert.reader.next();
-		entity.shield = convert.reader.next();
-		entity.score = convert.reader.next();
-		entity.size = convert.reader.next();
-		entity.alpha = convert.reader.next();
-	}
+	   if (updateType >= 2) { // Minimal
+		   entity.goals.health = convert.reader.next();
+		   entity.goals.maxHealth = convert.reader.next();
+		   entity.goals.shield = convert.reader.next();
+		   entity.goals.maxShield = convert.reader.next();
+		   entity.goals.score = convert.reader.next();
+		   entity.goals.size = convert.reader.next();
+		   entity.goals.alpha = convert.reader.next();
+	   }
 	if (updateType >= 3) { // Visual Change
 		entity.shape = convert.reader.next();
 		entity.color = convert.reader.next();
@@ -356,8 +379,7 @@ function updateEntity(entityId, updateType) {
 	// guns
 	const gunAmount = convert.reader.next();
 	for(let i = 0; i < gunAmount; i++){
-		// FIXME: Might need time to calculate if shot
-		entity.guns[i].fire(convert.reader.next())
+		entity.guns[i].fire(convert.reader.next(), convert.reader.next()) // power, lastShotTime
 	}
 	return entity;
 }
@@ -384,7 +406,7 @@ function convertEntities() {
 				convert.reader.take(3); // x, y, facing
 			}
 			if (updateType >= 2) { // Minimal
-				convert.reader.take(5); // health, shield, score, size, alpha
+				convert.reader.take(7); // health.amount, health.max, shield.amount, shield.max, score, size, alpha
 			}
 			if (updateType >= 3) { // Visual
 				convert.reader.take(4); // shape, color, team, layer
@@ -392,8 +414,12 @@ function convertEntities() {
 			if (updateType >= 4) { // Text
 				convert.reader.take(3); // name, nameColor, label
 			}
-			const gunAmount = convert.reader.next();
-			convert.reader.take(gunAmount * 1) // power
+			if (updateType === 0) {
+				// updateType 0: no additional data (no guns) — nothing to read
+			} else {
+				const gunAmount = convert.reader.next();
+				convert.reader.take(gunAmount * 2) // power, lastShotTime
+			}
 		}
 	}
 	

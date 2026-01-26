@@ -115,6 +115,13 @@ settings.drawFuncts.set("settingsMenu", ({ canvas, ctx, delta }) => {
 	})
 	y += text.height + SETTINGS_CONFIG.PADDING
 
+	text = renderText("Show FPS", SETTINGS_CONFIG.SETTING_TEXT_SIZE)
+	ctx.drawImage(text, x+SETTINGS_CONFIG.PADDING, y);
+	renderInput("showFps", "checkbox", settings, (x+width)-SETTINGS_CONFIG.PADDING-text.height, y, text.height, text.height, currentSettings.showFps.value.enabled, ()=>{
+		currentSettings.showFps.value.enabled = !currentSettings.showFps.value.enabled
+	})
+	y += text.height + SETTINGS_CONFIG.PADDING
+
 	text = renderText("FPS Cap", SETTINGS_CONFIG.SETTING_TEXT_SIZE)
 	ctx.drawImage(text, x+SETTINGS_CONFIG.PADDING, y);
 	renderInput("fpsCap", "number", settings, (x+width)-SETTINGS_CONFIG.PADDING-text.height*3, y, text.height*3, text.height, currentSettings.fpsCap.value.number, (newNumber)=>{
@@ -126,6 +133,13 @@ settings.drawFuncts.set("settingsMenu", ({ canvas, ctx, delta }) => {
 	ctx.drawImage(text, x+SETTINGS_CONFIG.PADDING, y);
 	renderInput("clientSideAim", "checkbox", settings, (x+width)-SETTINGS_CONFIG.PADDING-text.height, y, text.height, text.height, currentSettings.clientSideAim.value.enabled, ()=>{
 		currentSettings.clientSideAim.value.enabled = !currentSettings.clientSideAim.value.enabled
+	})
+	y += text.height + SETTINGS_CONFIG.PADDING
+
+	text = renderText("Input Buffer Size", SETTINGS_CONFIG.SETTING_TEXT_SIZE)
+	ctx.drawImage(text, x+SETTINGS_CONFIG.PADDING, y);
+	renderInput("inputBufferSize", "number", settings, (x+width)-SETTINGS_CONFIG.PADDING-text.height*3, y, text.height*3, text.height, currentSettings.inputBufferSize.value.number, (newNumber)=>{
+		currentSettings.inputBufferSize.value.number = newNumber;
 	})
 	y += text.height + SETTINGS_CONFIG.PADDING
 

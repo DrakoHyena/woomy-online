@@ -21,6 +21,7 @@ const serverPackets = {
 const clientPackets = {
 	requestEntityInfo: 0,
 	inputUpdate: 1,
+	levelUp: 2,
 }
 
 export { serverPackets, clientPackets }
