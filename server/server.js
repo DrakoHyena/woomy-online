@@ -8436,6 +8436,12 @@ const Chain = Chainf;
             };
         })();
 
+	function addClassToUpgradePacket(definition, out){
+		out.push(definition.LABEL ?? "")
+		out.push(definition.SHAPE ?? definition.PARENT?.[0]?.SHAPE ?? 0)
+		out.push()
+	}
+
 	function addEntityToPacket(entity, out, playerContext = null) {
 		const lastFrameData = entity.lastFrameCamera;
 		let minimumUpdateType = -1;
@@ -8918,10 +8924,15 @@ const Chain = Chainf;
                 }
                 getSkillUi(output=[]) {
                     let body = this?.player?.body;
+
                     if (body) {
-						output.push(body.skill.points)
-						output.push(body.upgrades.length);
-						for (let i = 0; i < body.upgrades.length; i++){
+						output.push(body.skill.points);
+
+						if(!body._lastUpgradesLength) body._lastFirstUpgradeIndex = -1;
+						const upgradeLength = body._lastFirstUpgradeIndex === body.upgrades[0].index ? 0 : body.upgrades.length;
+						output.push(upgradeLength);
+						console.log(Class[body.upgrades[0].class])
+						for (let i = 0; i < upgradeLength; i++){
 							output.push(body.upgrades[i].index);
 						}
 						output.push(body.skill.name.length)

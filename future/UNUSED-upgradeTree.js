@@ -1,15 +1,20 @@
-import { global } from "../../global.js";
-import { getEntityImageFromMockup } from "../../mockups.js";
-import { lerp } from "../../lerp.js";
-import { drawLoop } from "../drawLoop.js";
-import { Scene } from "../scene.js";
-import { player } from "../../player.js";
-import { keyboard } from "../../controls/keyboard.js";
-import { drawEntity } from "../drawEntity.js";
-import { drawText } from "../canvas.js";
-import { socket } from "../../socket.js";
-import { CanvasCache } from "../../utils/cache.js";
-import { mouse } from "../../controls/mouse.js";
+/*
+I've decided that Im not going to be using this however, when I finished writting it, it was essentially complete.
+Perhaps it should be added as a togglable menu in the future?
+*/
+
+import { global } from "../client/js/global.js";
+import { getEntityImageFromMockup } from "../client/js/mockups.js";
+import { lerp } from "../client/js/lerp.js";
+import { drawLoop } from "../client/js/drawing/drawLoop.js";
+import { Scene } from "../client/js/drawing/scene.js";
+import { player } from "../client/js/player.js";
+import { keyboard } from "../client/js/controls/keyboard.js";
+import { drawEntity } from "../client/js/drawing/drawEntity.js";
+import { drawText } from "../client/js/drawing/canvas.js";
+import { socket } from "../client/js/socket.js";
+import { CanvasCache } from "../client/js/utils/cache.js";
+import { mouse } from "../client/js/controls/mouse.js";
 
 // CONFIGURATION
 const UPGRADETREE_CONFIG = {
