@@ -170,27 +170,28 @@ class ClientGun {
     }
 }
 
+const readMockupValue = () => {
+    const val = convert.reader.next();
+    if (val === ASSET_MAGIC)
+        return loadAsset(ASSET_MAGIC, convert.reader.next());
+    if (
+        typeof val === "string" &&
+        val.startsWith("[") &&
+        val.endsWith("]")
+    ) {
+        try {
+            const parsed = JSON.parse(val);
+            if (Array.isArray(parsed)) return parsed;
+        } catch (err) {
+            console.warn("Failed to parse asset string")
+            // Fall through to raw string
+        }
+    }
+    return val;
+};
+
 function parseMockup(seenIndexes) {
     const index = convert.reader.next();
-
-    const readMockupValue = () => {
-        const val = convert.reader.next();
-        if (val === ASSET_MAGIC)
-            return loadAsset(ASSET_MAGIC, convert.reader.next());
-        if (
-            typeof val === "string" &&
-            val.startsWith("[") &&
-            val.endsWith("]")
-        ) {
-            try {
-                const parsed = JSON.parse(val);
-                if (Array.isArray(parsed)) return parsed;
-            } catch (err) {
-                // Fall through to raw string
-            }
-        }
-        return val;
-    };
 
     const label = convert.reader.next();
     const shape = readMockupValue();
@@ -265,26 +266,31 @@ function parseMockup(seenIndexes) {
     // Parse props
     const propCount = convert.reader.next();
     for (let i = 0; i < propCount; i++) {
-        mockup.props.push({
+        const propId = convert.reader.next();
+
+        mockup.props.set(propId, {
+            id: propId,
+            animSmoothing: convert.reader.next(),
+            scaleSize: convert.reader.next(),
             size: convert.reader.next(),
+            tankOrigin: convert.reader.next(),
             x: convert.reader.next(),
             y: convert.reader.next(),
+            lockRot: convert.reader.next(),
             angle: convert.reader.next(),
+            rpm: convert.reader.next(),
             layer: convert.reader.next(),
-            color: readMockupValue(),
-            shape: readMockupValue(),
+            alpha: convert.reader.next(),
             fill: convert.reader.next(),
             stroke: convert.reader.next(),
             borderless: convert.reader.next(),
             loop: convert.reader.next(),
             isAura: convert.reader.next(),
-            rpm: convert.reader.next(),
-            dip: convert.reader.next(),
             ring: convert.reader.next(),
             arclen: convert.reader.next(),
-            scaleSize: convert.reader.next(),
-            lockRot: convert.reader.next(),
-            tankOrigin: convert.reader.next()
+            dip: convert.reader.next(),
+            shape: readMockupValue(),
+            color: readMockupValue(),
         });
     }
 
@@ -327,7 +333,7 @@ class ClientEntity {
         facing = 0,
         score = 0,
         layer = 1,
-        color = 0,
+        color = 16,
         team = 0,
         health = 1,
         healthMax = 1,
@@ -383,7 +389,7 @@ class ClientEntity {
 
         this.guns = [];
         this.turrets = [];
-        this.props = [];
+        this.props = new Map();
 
         this.messages = [];
 
@@ -395,6 +401,7 @@ class ClientEntity {
             x: this.x,
             y: this.y
         };
+
     }
 
     setGun(index) {
@@ -479,6 +486,35 @@ function newEntity(id, skipSpawnFade = false) {
     let turretAmount = convert.reader.next();
     for (let i = 0; i < turretAmount; i++) {
         entity.setTurret(i);
+    }
+
+    let propAmount = convert.reader.next();
+    for (let i = 0; i < propAmount; i++) {
+        const propId = convert.reader.next();
+        entity.props.set(propId, {
+            id: propId,
+            animSmoothing: convert.reader.next(),
+            scaleSize: convert.reader.next(),
+            size: convert.reader.next(),
+            tankOrigin: convert.reader.next(),
+            x: convert.reader.next(),
+            y: convert.reader.next(),
+            lockRot: convert.reader.next(),
+            angle: convert.reader.next(),
+            rpm: convert.reader.next(),
+            layer: convert.reader.next(),
+            alpha: convert.reader.next(),
+            fill: convert.reader.next(),
+            stroke: convert.reader.next(),
+            borderless: convert.reader.next(),
+            loop: convert.reader.next(),
+            isAura: convert.reader.next(),
+            ring: convert.reader.next(),
+            arclen: convert.reader.next(),
+            dip: convert.reader.next(),
+            shape: readMockupValue(),
+            color: readMockupValue(),
+        });
     }
 
     let gunAmount = convert.reader.next();
@@ -862,30 +898,56 @@ async function onmessage(message) {
             // TODO: Display Text
             break;
         case serverPackets.propAnimations:
-            roomState.propAnimations.clear();
+            const readValue = () => {
+                const val = m[i++];
+                return val === ASSET_MAGIC
+                    ? loadAsset(ASSET_MAGIC, m[i++])
+                    : val;
+            };
+
+            let pEnt = undefined;
             while (i < m.length) {
-                const prev = roomState.propAnimations.get(m[i]);
-                const arr = prev || [];
-                if (!prev) roomState.propAnimations.set(m[i], arr);
-                i++;
+                const v = m[i++];
+                if (v === -1 || pEnt === undefined) { // block end signal, get new ent
+                    pEnt = entities.get(v);
+                } else { // must be a prop id otherwise
+                    const propId = m[i++];
+                    const prop = pEnt.props.get(propId) || {};
+                    if (prop.animSmoothing) {
+                        prop.size = lerp(prop.size, m[i++], .15);
+                        prop.x = lerp(prop.x, m[i++], .15);
+                        prop.y = lerp(prop.y, m[i++], .15);
+                        prop.angle = lerpAngle(prop.angle, m[i++], .15);
+                        prop.rpm = lerp(prop.rpm, m[i++], .15);
+                        prop.layer = m[i++];
+                        prop.alpha = lerp(prop.alpha, m[i++], .15);
+                        prop.fill = m[i++];
+                        prop.stroke = m[i++];
+                        prop.borderless = m[i++];
+                        prop.loop = m[i++];
+                        prop.ring = lerp(prop.ring, m[i++], .15);
+                        prop.arclen = lerp(prop.arclen, m[i++], .15);
+                        prop.dip = lerp(prop.dip, m[i++], .15);
+                    } else {
+                        prop.size = m[i++];
+                        prop.x = m[i++];
+                        prop.y = m[i++];
+                        prop.angle = m[i++];
+                        prop.rpm = m[i++];
+                        prop.layer = m[i++];
+                        prop.alpha = m[i++];
+                        prop.fill = m[i++];
+                        prop.stroke = m[i++];
+                        prop.borderless = m[i++];
+                        prop.loop = m[i++];
+                        prop.ring = m[i++];
+                        prop.arclen = m[i++];
+                        prop.dip = m[i++];
+                    }
+                    prop.shape = readValue(m[i++]);
+                    prop.color = readValue(m[i++]);
+                }
 
-                const readValue = () => {
-                    const val = m[i++];
-                    return val === ASSET_MAGIC
-                        ? loadAsset(ASSET_MAGIC, m[i++])
-                        : val;
-                };
-
-                arr.push({
-                    index: m[i++],
-                    size: m[i++],
-                    x: m[i++],
-                    y: m[i++],
-                    angle: m[i++],
-                    layer: m[i++],
-                    shape: readValue(),
-                    color: readValue()
-                });
             }
             break;
         case serverPackets.serverInfo:

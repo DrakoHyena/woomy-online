@@ -8310,10 +8310,6 @@ const makeTreatment = (type, name, options = {}) => {
 
     output.TOOLTIP = `Passively gain ${output.VARIABLES.generationRate} healing energy per tick. Hold right click to use ${output.VARIABLES.usageRate} stored healing energy.`;
 
-    output.ON_DEFINED = (me) => {
-        me.animations.push(new PropAnimation(me.props[0], 0))
-    }
-
     output.ON_ALT = (me) => {
         if (me.variables.energy > me.variables.usageRate) {// We have big energy and small healing so the numbers are more comprehendible and comparable
             if (me.shield.amount < me.shield.max) {
@@ -8326,16 +8322,13 @@ const makeTreatment = (type, name, options = {}) => {
             if (me.variables.timer < 0.95) {
                 me.variables.timer += 0.05
             }
-            me.variables.poisoned = false
-            me.animations[0].active = true;
+            me.variables.poisoned = false;
         }
     }
 
     output.ON_NOT_ALT = (me) => {
         if (me.variables.timer > 0.05) {
             me.variables.timer -= 0.05
-        } else {
-            me.animations[0].active = false;
         }
     }
 
@@ -8346,7 +8339,8 @@ const makeTreatment = (type, name, options = {}) => {
             me.variables.energy = me.variables.maxEnergy
         }
         me.displayText = `${me.variables.energy | 0}/${me.variables.maxEnergy | 0} Healing Energy`
-        me.animations[0].color = mixColors("#E8EBF7", "#00c900", me.variables.timer)
+        me.props[0].animate({ color: mixColors("#E8EBF7", "#00c900", me.variables.timer) })
+
     };
 
     return output;

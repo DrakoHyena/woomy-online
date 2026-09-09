@@ -249,6 +249,23 @@ global.require = function(thing) {
                     return value > max ? max : value < min ? min : value;
                 },
                 lerp: (a, b, x) => a + x * (b - a),
+                lerpAngle: (is, to, amount) => {
+                    let normal = {
+                        x: Math.cos(is),
+                        y: Math.sin(is)
+                    };
+                    let normal2 = {
+                        x: Math.cos(to),
+                        y: Math.sin(to)
+                    };
+                    let res = {
+                        x: normal.x + amount * (normal2.x - normal.x),
+                        y: normal.y + amount * (normal2.y - normal.y),
+                    };
+                    return Math.atan2(res.y, res.x);
+                },
+
+
                 angleDifference: angleDifference,
                 loopSmooth: (angle, desired, slowness) => {
                     return angleDifference(angle, desired) / slowness;
@@ -5101,30 +5118,185 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
             }
         }
         class Prop {
-            constructor(info) {
+            // Non-animated properties
+            #tankOrigin = true;
+            #scaleSize = true;
+            #lockRot = true;
+            #isAura = false;
+            #animSmoothing = true;
+
+            constructor(info, ent) {
+                this.entId = ent.id;
+                this.id = ent.props.length + 1;
+
+                // Properties
                 let pos = info.POSITION;
+
+                this.#scaleSize = info.SCALE_SIZE != undefined ? info.SCALE_SIZE : true;
                 this.size = pos[0];
+
+                this.#tankOrigin = info.TANK_ORIGIN != undefined ? info.TANK_ORIGIN : true;
                 this.x = pos[1];
                 this.y = pos[2];
+
+                this.#lockRot = info.LOCK_ROT != undefined ? info.LOCK_ROT : true;
                 this.angle = pos[3] * Math.PI / 180;
+                this.rpm = info.RPM != undefined ? info.RPM : 0;
+
                 this.layer = pos[4];
                 this.shape = info.SHAPE != undefined ? info.SHAPE : 0;
                 this.color = info.COLOR != undefined ? info.COLOR : -1;
+                this.alpha = info.ALPHA != undefined ? info.ALPHA : 1;
                 this.fill = info.FILL != undefined ? info.FILL : true;
                 this.stroke = info.STROKE != undefined ? info.STROKE : true;
                 this.borderless = info.BORDERLESS != undefined ? info.BORDERLESS : false;
                 this.loop = info.LOOP != undefined ? info.LOOP : true;
-                this.isAura = info.IS_AURA != undefined ? info.IS_AURA : false;
+
+                this.#isAura = info.IS_AURA != undefined ? info.IS_AURA : false;
+
                 this.ring = info.RING != undefined ? info.RING : 0;
                 this.arclen = info.ARCLEN != undefined ? info.ARCLEN : 1;
-                this.rpm = info.RPM != undefined ? info.RPM : 0;
                 this.dip = info.DIP != undefined ? info.DIP : 1;
-                this.lockRot = info.LOCK_ROT != undefined ? info.LOCK_ROT : true;
-                this.scaleSize = info.SCALE_SIZE != undefined ? info.SCALE_SIZE : true;
-                this.tankOrigin = info.TANK_ORIGIN != undefined ? info.TANK_ORIGIN : true;
-                if (this.isAura === true) this.borderless = false;
+
+                this.cachedMockup = [];
+                this.updatePropMockup();
+
+                this.#animSmoothing = info.ANIM_SMOOTHING != undefined ? info.ANIM_SMOOTHING : true;
+                this.animSpeed = info.ANIM_SPEED != undefined ? info.ANIM_SPEED : 200;
+                this._lastAnimCall = Date.now();
+                this._regenMockup = false;
+                this.animGoals = {
+                    x: this.x,
+                    y: this.y,
+                    angle: this.angle,
+                    alpha: this.alpha,
+                    ring: this.ring,
+                    arclen: this.arclen,
+                    dip: this.dip
+                }
+                this.animStart = {
+                    x: this.x,
+                    y: this.y,
+                    angle: this.angle,
+                    alpha: this.alpha,
+                    ring: this.ring,
+                    arclen: this.arclen,
+                    dip: this.dip
+                }
+
+                this.isAnimating = false;
+            }
+
+            updatePropMockup() {
+                this.cachedMockup.length = 0;
+                this.cachedMockup.push(
+                    this.id,
+                    this.#animSmoothing,
+                    this.#scaleSize,
+                    this.size,
+                    this.#tankOrigin,
+                    this.x,
+                    this.y,
+                    this.#lockRot,
+                    this.angle,
+                    this.rpm,
+                    this.layer,
+                    this.alpha,
+                    this.fill,
+                    this.stroke,
+                    this.borderless,
+                    this.loop,
+                    this.#isAura,
+                    this.ring,
+                    this.arclen,
+                    this.dip,
+                )
+                if (this.shape._assetMagic === ASSET_MAGIC) {
+                    this.cachedMockup.push(ASSET_MAGIC)
+                    this.cachedMockup.push(this.shape.id)
+                } else if (Array.isArray(this.shape)) {
+                    console.warn("Using arrays as prop shapes is bad practice! Animations will not work for affected props.")
+                    this.cachedMockup.push(JSON.stringify(this.shape))
+                } else {
+                    this.cachedMockup.push(this.shape)
+                }
+                if (this.color._assetMagic === ASSET_MAGIC) {
+                    this.cachedMockup.push(ASSET_MAGIC, this.color.id)
+                } else {
+                    this.cachedMockup.push(this.color)
+                }
+            }
+
+            animate(goals = {}) {
+                this.isAnimating = true;
+                this._lastAnimCall = Date.now();
+                this.animStart.x = this.x;
+                this.animStart.y = this.y;
+                this.animStart.angle = this.angle;
+                this.animStart.alpha = this.alpha;
+                this.animStart.ring = this.ring;
+                this.animStart.arclen = this.arclen;
+                this.animStart.dip = this.dip;
+
+                this.animGoals.x = goals.x ?? this.x;
+                this.animGoals.y = goals.y ?? this.y;
+                this.animGoals.angle = goals.angle ?? this.angle;
+                this.animGoals.alpha = goals.alpha ?? this.alpha;
+                this.animGoals.ring = this.ring ?? this.ring;
+                this.animGoals.arclen = this.arclen ?? this.arclen;
+                this.animGoals.dip = this.dip ?? this.dip;
+
+                this.color = goals.color ?? this.color;
+            }
+
+            addAnimFrame(arr) {
+                const lerpRate = (Date.now() - this._lastAnimCall) / this.animSpeed
+                if (this.isAnimating && lerpRate > 1) {
+                    this.isAnimating = false;
+                    this.updatePropMockup();
+                    return
+                }
+                this.x = util.lerp(this.animStart.x, this.animGoals.x, lerpRate);
+                this.y = util.lerp(this.animStart.y, this.animGoals.y, lerpRate);
+                this.angle = util.lerpAngle(this.animStart.angle, this.animGoals.angle, lerpRate);
+                this.alpha = util.lerp(this.animStart.alpha, this.animGoals.alpha, lerpRate);
+                this.ring = util.lerp(this.animStart.ring, this.animGoals.ring, lerpRate);
+                this.arclen = util.lerp(this.animStart.arclen, this.animGoals.arclen, lerpRate);
+                this.dip = util.lerp(this.animStart.dip, this.animGoals.dip, lerpRate);
+                arr.push(
+                    this.id,
+                    this.size,
+                    this.x,
+                    this.y,
+                    this.angle,
+                    this.rpm,
+                    this.layer,
+                    this.alpha,
+                    this.fill,
+                    this.stroke,
+                    this.borderless,
+                    this.loop,
+                    this.ring,
+                    this.arclen,
+                    this.dip,
+                )
+                if (this.shape._assetMagic === ASSET_MAGIC) {
+                    arr.push(ASSET_MAGIC)
+                    arr.push(this.shape.id)
+                } else if (Array.isArray(this.shape)) {
+                    console.error("Cannot animate array-like prop shapes")
+                    //arr.push(JSON.stringify(this.shape))
+                } else {
+                    arr.push(this.shape)
+                }
+                if (this.color._assetMagic === ASSET_MAGIC) {
+                    arr.push(ASSET_MAGIC, this.color.id)
+                } else {
+                    arr.push(this.color)
+                }
             }
         }
+
         let bots = [];
         let entitiesToAvoid = [];
         let entities = new Chain();
@@ -5980,7 +6152,7 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                 };
                 if (set.PROPS != null) {
                     let newProps = [];
-                    for (let def of set.PROPS) newProps.push(new Prop(def));
+                    for (let def of set.PROPS) newProps.push(new Prop(def, this));
                     this.props = newProps;
                 }
             }
@@ -6169,7 +6341,7 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                     }
                     if (set.PROPS != null) {
                         let newProps = [];
-                        for (let def of set.PROPS) newProps.push(new Prop(def));
+                        for (let def of set.PROPS) newProps.push(new Prop(def, this));
                         this.props = newProps;
                     }
                     if (set.MAX_CHILDREN != null) this.maxChildren = set.MAX_CHILDREN;
@@ -6356,8 +6528,10 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                     leash: this.leash,
                     guns: this.guns,
                     turrets: this.turrets,
+                    props: this.props,
                     isTurret: !!this.isTurret,
                 };
+
                 if (this.scoped) {
                     if (!this.control.alt) {
                         if (this.hasScoped) {
@@ -8005,6 +8179,11 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                     out.push(newData.turrets[i].id);
                 }
 
+                out.push(newData.props.length)
+                for (let prop of newData.props) {
+                    out.push(prop.cachedMockup);
+                }
+
                 out.push(newData.guns.length);
                 for (let gun of newData.guns) {
                     out.push(gun.skin);
@@ -8018,6 +8197,7 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                     out.push(gun.lastShot.power);
                     out.push(gun.lastShot.time);
                 }
+
                 return out;
             }
             if (minimumUpdateType === 0) {
@@ -8107,26 +8287,7 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
             }
             out.push(e.props.length);
             for (let i = 0; i < e.props.length; i++) {
-                const prop = e.props[i];
-                out.push(prop.size);
-                out.push(prop.x);
-                out.push(prop.y);
-                out.push(prop.angle);
-                out.push(prop.layer);
-                pushShapeLike(prop.color);
-                pushShapeLike(prop.shape);
-                out.push(prop.fill);
-                out.push(prop.stroke);
-                out.push(prop.borderless);
-                out.push(prop.loop);
-                out.push(prop.isAura);
-                out.push(prop.rpm ?? 0);
-                out.push(prop.dip ?? 1);
-                out.push(prop.ring ?? 0);
-                out.push(prop.arclen ?? 1);
-                out.push(prop.scaleSize ?? true);
-                out.push(prop.lockRot ?? true);
-                out.push(prop.tankOrigin ?? true);
+                out.push(...e.props[i].cachedMockup);
             }
             // Send turret bounds
             out.push(e.turrets.length);
@@ -8225,7 +8386,6 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                         fov: 2000
                     };
                     this.requestedFullContextEntityIds = new Set();
-                    this.animationsToDo = new Map();
                     this.betaData = {
                         permissions: 0,
                         nameColor: "#FFFFFF",
@@ -8371,14 +8531,54 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                     };
                     this.endTimeout = () => clearTimeout(this.inactivityTimeout);
                     this.backlogData = new BacklogData(this.id, this.ip);
-                    this.animationsInterval = setInterval(this.animationsUpdate.bind(this), 1000 / 5);// 5 fps animations
+                    this.animationsInterval = setInterval(this.propAnimationsUpdate.bind(this), 1000 / 5);// 5 fps animations
+
                     clients.push(this);
                 }
-                animationsUpdate() {
-                    let arr = [];
-                    this.animationsToDo.forEach((v) => { arr.push(v.entityId, ...v) })
-                    this.talk(serverPackets.propAnimations, ...arr);
-                    this.animationsToDo.clear();
+                propAnimationsUpdate() {
+                    let arr = [serverPackets.propAnimations];
+                    const body = this.player?.body;
+
+                    const width = this.camera.fov * .6;
+                    const height = this.camera.fov * .6 * .5625;
+                    const searchArea = {
+                        _AABB: {
+                            x1: this.camera.x - width,
+                            y1: this.camera.y - height,
+                            x2: this.camera.x + width,
+                            y2: this.camera.y + height,
+                            currentQuery: -1
+                        }
+                    };
+
+                    grid.getCollisions(searchArea, (entity) => {
+                        if (
+                            entity.props.length === 0 ||
+                            entity.isGhost ||
+                            !entity.isAlive() ||
+                            !entity.settings.drawShape ||
+                            (c.SANDBOX && entity.sandboxId !== socket.sandboxId) ||
+                            (!body.roomLayerless && !entity.roomLayerless && body.roomLayer !== entity.roomLayer) ||
+                            (body && !body.seeInvisible && entity.alpha < 0.1)
+                        ) {
+                            return;
+                        }
+
+                        let pushedId = false;
+                        for (let prop of entity.props) {
+                            if (prop.isAnimating) {
+                                if (pushedId === false) {
+                                    pushedId = true;
+                                    arr.push(entity.id);
+                                }
+                                prop.addAnimFrame(arr);
+                            }
+                        }
+                        if (pushedId) arr.push(-1); // Shouldnt be an existing id
+                    });
+
+                    if (arr.length === 1) return;
+                    this.talk(...arr);
                 }
                 get readableID() {
                     return `Socket (${this.id}) [${this.name || "Unnamed Player"}]: `;
@@ -8869,8 +9069,8 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                                 player.target.x = m[i++];
                                 player.target.y = m[i++];
                                 player.command.lmb = player.command.keyboard[" "] ? i++ : m[i++];
-                                player.command.mmb = player.command.keyboard["shift"] ? i++ : m[i++];
-                                player.command.rmb = m[i++];
+                                player.command.mmb = m[i++];
+                                player.command.rmb = player.command.keyboard["shift"] ? i++ : m[i++]
                                 player.command.scroll = m[i++];
                                 let nextVal = m[i++];
                                 while (nextVal !== -1) {
@@ -12463,14 +12663,6 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                 grid.getCollisions(searchArea, (entity) => {
                     entity.deactivationTimer = 30;
                     entity.isActive = true;
-
-                    for (let animation of entity.animations) {
-                        if (animation.active && socket.animationsToDo.has(`${entity.id}-${animation.index}`) === false) {
-                            const arr = animation.toArray();
-                            arr.entityId = entity.id;
-                            socket.animationsToDo.set(`${entity.id}-${animation.index}`, arr);
-                        }
-                    }
 
                     if (
                         entity.isGhost ||

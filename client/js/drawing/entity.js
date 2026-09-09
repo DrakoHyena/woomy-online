@@ -1082,35 +1082,14 @@ function renderProp(ctx, entity, prop, propColor) {
     ctx.restore();
 }
 
-function handlePropAnimations(entity) {
-    if (!entity.id) return;
-    let animations = roomState.propAnimations.get(entity.id);
-    if (animations) {
-        for (let i = 0; i < animations.length; i++) {
-            let animation = animations[i];
-            let prop = entity.props[animation.index];
-            if (!prop) continue;
-            prop.shape = animation.shape;
-            prop.size = animation.size;
-            prop.x = animation.x;
-            prop.y = animation.y;
-            prop.angle = animation.angle;
-            prop.layer = animation.layer;
-            prop.color = animation.color;
-        }
-    }
-}
-
 function renderPropsAtLayer(context, entity, layer) {
-    for (let i = 0; i < entity.props.length; i++) {
-        const prop = entity.props[i];
-        if ((prop.layer ?? 0) !== layer) continue;
-
+    entity.props.forEach((prop) => {
+        if ((prop.layer ?? 0) !== layer) return;
         let propColor = getColor(prop.color === -1 ? entity.color : prop.color);
         setColors(context, propColor);
         if (!prop.stroke) context.strokeStyle = context.fillStyle;
         renderProp(context, entity, prop, propColor);
-    }
+    })
 }
 
 function renderTurretsAtLayer(ctx, entity, layer) {
@@ -1177,11 +1156,7 @@ function renderEntity(ctx, entity) {
     ctx.lineJoin = currentSettings.pointy?.value?.enabled ? "miter" : "round";
     ctx.lineWidth = (gameState.fovScale || 1) * (currentSettings.borderWidth?.value?.number || 2);
 
-    if (entity.props && entity.props.length > 0) {
-        handlePropAnimations(entity);
-    }
-
-    const hasProps = entity.props && entity.props.length > 0;
+    const hasProps = entity.props && entity.props.size > 0;
     const hasGuns = entity.guns && entity.guns.length > 0;
     const hasTurrets = entity.turrets && entity.turrets.length > 0;
 
@@ -1290,17 +1265,13 @@ function calculateMEC(entity) {
     }
 
     // 3. Props Bounds
-    const props = entity.props;
-    if (props && props.length > 0) {
-        for (let i = 0; i < props.length; i++) {
-            const prop = props[i];
-            const px = prop.x || 0;
-            const py = prop.y || 0;
-            const pSize = prop.size || 1;
-            const pDist = (Math.hypot(px, py) + pSize * 2) * size;
-            if (pDist > maxRadius) maxRadius = pDist;
-        }
-    }
+    entity.props.forEach((prop) => {
+        const px = prop.x || 0;
+        const py = prop.y || 0;
+        const pSize = prop.size || 1;
+        const pDist = (Math.hypot(px, py) + pSize * 2) * size;
+        if (pDist > maxRadius) maxRadius = pDist;
+    })
 
     // 4. Turrets Bounds
     const turrets = entity.turrets;
@@ -1334,12 +1305,14 @@ function calculateMEC(entity) {
 // OFFSCREEN BITMAP CACHING
 // ==========================================
 
+// TODO: Track/clean entity img cache
 const entityImgCache = new Map();
 const canvas = new OffscreenCanvas(1, 1);
 const ctx = canvas.getContext("2d");
 
 function getEntityImage(entity, liveRender, padding = 1) {
-    const imgCacheKey = `${currentSettings.entityResolution?.value?.number || 200}|${padding}||${entity.index}|${entity.guns.length}|${entity.props.length}|${entity.turrets.length}|${entity.shape}|${(entity.size || 1) | 0}|${entity.widthHeightRatio}|${entity.color}`;
+    // Generate a cache key for props so we can differ for working prop anims
+    const imgCacheKey = `${currentSettings.entityResolution?.value?.number || 200}|${padding}||${entity.index}|${entity.guns.length}|${entity.props.size}|${entity.turrets.length}|${entity.shape}|${(entity.size || 1) | 0}|${entity.widthHeightRatio}|${entity.color}`;
 
     if (!liveRender) {
         const savedImg = entityImgCache.get(imgCacheKey);
