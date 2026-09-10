@@ -1312,7 +1312,7 @@ const ctx = canvas.getContext("2d");
 
 function getEntityImage(entity, liveRender, padding = 1) {
     // Generate a cache key for props so we can differ for working prop anims
-    const imgCacheKey = `${currentSettings.entityResolution?.value?.number || 200}|${padding}||${entity.index}|${entity.guns.length}|${entity.props.size}|${entity.turrets.length}|${entity.shape}|${(entity.size || 1) | 0}|${entity.widthHeightRatio}|${entity.color}`;
+    const imgCacheKey = `${currentSettings.entityResolution?.value?.number || 200}|${padding}||${entity.index}|${entity.guns.length}|${entity.propKeyCache}|${entity.turrets.length}|${entity.shape}|${(entity.size || 1) | 0}|${entity.widthHeightRatio}|${entity.color}`;
 
     if (!liveRender) {
         const savedImg = entityImgCache.get(imgCacheKey);

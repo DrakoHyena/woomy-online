@@ -5125,9 +5125,9 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
             #isAura = false;
             #animSmoothing = true;
 
-            constructor(info, ent) {
+            constructor(info, ent, propId) {
                 this.entId = ent.id;
-                this.id = ent.props.length + 1;
+                this.id = propId
 
                 // Properties
                 let pos = info.POSITION;
@@ -5215,7 +5215,7 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                     this.cachedMockup.push(ASSET_MAGIC)
                     this.cachedMockup.push(this.shape.id)
                 } else if (Array.isArray(this.shape)) {
-                    console.warn("Using arrays as prop shapes is bad practice! Animations will not work for affected props.")
+                    console.warn("Using arrays as prop shapes is bad practice! Please fix!")
                     this.cachedMockup.push(JSON.stringify(this.shape))
                 } else {
                     this.cachedMockup.push(this.shape)
@@ -5242,9 +5242,9 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                 this.animGoals.y = goals.y ?? this.y;
                 this.animGoals.angle = goals.angle ?? this.angle;
                 this.animGoals.alpha = goals.alpha ?? this.alpha;
-                this.animGoals.ring = this.ring ?? this.ring;
-                this.animGoals.arclen = this.arclen ?? this.arclen;
-                this.animGoals.dip = this.dip ?? this.dip;
+                this.animGoals.ring = goals.ring ?? this.ring;
+                this.animGoals.arclen = goals.arclen ?? this.arclen;
+                this.animGoals.dip = goals.dip ?? this.dip;
 
                 this.color = goals.color ?? this.color;
             }
@@ -5284,8 +5284,8 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                     arr.push(ASSET_MAGIC)
                     arr.push(this.shape.id)
                 } else if (Array.isArray(this.shape)) {
-                    console.error("Cannot animate array-like prop shapes")
-                    //arr.push(JSON.stringify(this.shape))
+                    console.error("Animating props with shape arrays is like REALLY bad for network performance. Fix this asap.")
+                    arr.push(JSON.stringify(this.shape))
                 } else {
                     arr.push(this.shape)
                 }
@@ -6152,7 +6152,7 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                 };
                 if (set.PROPS != null) {
                     let newProps = [];
-                    for (let def of set.PROPS) newProps.push(new Prop(def, this));
+                    for (let def of set.PROPS) newProps.push(new Prop(def, this, newProps.length));
                     this.props = newProps;
                 }
             }
@@ -6341,7 +6341,7 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                     }
                     if (set.PROPS != null) {
                         let newProps = [];
-                        for (let def of set.PROPS) newProps.push(new Prop(def, this));
+                        for (let def of set.PROPS) newProps.push(new Prop(def, this, newProps.length));
                         this.props = newProps;
                     }
                     if (set.MAX_CHILDREN != null) this.maxChildren = set.MAX_CHILDREN;

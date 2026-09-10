@@ -8321,6 +8321,7 @@ const makeTreatment = (type, name, options = {}) => {
             }
             if (me.variables.timer < 0.95) {
                 me.variables.timer += 0.05
+                me.props[0].animate({ color: mixColors("#E8EBF7", "#00c900", me.variables.timer) })
             }
             me.variables.poisoned = false;
         }
@@ -8329,6 +8330,7 @@ const makeTreatment = (type, name, options = {}) => {
     output.ON_NOT_ALT = (me) => {
         if (me.variables.timer > 0.05) {
             me.variables.timer -= 0.05
+            me.props[0].animate({ color: mixColors("#E8EBF7", "#00c900", me.variables.timer) })
         }
     }
 
@@ -8339,7 +8341,6 @@ const makeTreatment = (type, name, options = {}) => {
             me.variables.energy = me.variables.maxEnergy
         }
         me.displayText = `${me.variables.energy | 0}/${me.variables.maxEnergy | 0} Healing Energy`
-        me.props[0].animate({ color: mixColors("#E8EBF7", "#00c900", me.variables.timer) })
 
     };
 
@@ -161790,12 +161791,6 @@ defExports.bloodbath = {
         expansion: 0.01
     },
 
-    ON_DEFINED: (me) => {
-        me.animations.push(new PropAnimation(me.props[1], 1))
-        me.animations.push(new PropAnimation(me.props[2], 2))
-        me.animations.push(new PropAnimation(me.props[3], 3))
-    },
-
     ON_TICK: (me) => {
         // Blood Management
         if (me.variables.blood > me.variables.decreaseAmount) {
@@ -161812,9 +161807,6 @@ defExports.bloodbath = {
             if (me.variables._savedTopSpeed === me.topSpeed) { // This likely means our speed changed due to a stat change which resets this value thereby, previously, causing this to deduct to too much
                 me.topSpeed /= me.variables.speedMulti
             }
-            me.animations[0].active = false;
-            me.animations[1].active = false;
-            me.animations[2].active = false;
         }
         me.displayText = `${me.variables.blood | 0} Ounces of BLOOD`
 
@@ -161829,14 +161821,12 @@ defExports.bloodbath = {
 
             let alpha = me.variables.blood / me.variables.bloodStartedWith
             let newColor = mixColors("#800000", '#FF0000', (alpha * me.variables.expansion))
-            me.animations[0].active = true;
-            me.animations[0].color = newColor;
-            me.animations[1].active = true;
-            me.animations[1].color = newColor;
-            me.animations[2].active = true;
-            me.animations[2].size = ((8 * alpha) + 0.5) * me.variables.expansion;
+            me.props[1].animate({ color: newColor });
+            me.props[2].animate({ color: newColor });
+            me.props[3].animate({ size: ((8 * alpha) + 0.5) * me.variables.expansion })
         }
     },
+
     ON_ALT: (me) => {
         if (me.variables.blood > me.variables.minBlood) {
             if (me.variables.usingBlood) {

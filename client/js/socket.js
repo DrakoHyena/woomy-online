@@ -293,6 +293,7 @@ function parseMockup(seenIndexes) {
             color: readMockupValue(),
         });
     }
+    mockup.updatePropKey()
 
     // Parse turret bounds
     const turretCount = convert.reader.next();
@@ -402,6 +403,22 @@ class ClientEntity {
             y: this.y
         };
 
+
+        this.propKeyCache = undefined;
+        this.updatePropKey();
+    }
+
+    // Required so we know to rerender entities with dynamic/animated props
+    // Should have minimal effect otherwise bc of caching
+    updatePropKey() {
+        let key = "";
+        this.props.forEach((prop) => {
+            for (let opt in prop) {
+                key += `${prop[opt]}|`
+            }
+        })
+        key += "_";
+        this.propKeyCache = key;
     }
 
     setGun(index) {
@@ -516,6 +533,7 @@ function newEntity(id, skipSpawnFade = false) {
             color: readMockupValue(),
         });
     }
+    entity.updatePropKey()
 
     let gunAmount = convert.reader.next();
     for (let i = 0; i < gunAmount; i++) {
@@ -900,18 +918,25 @@ async function onmessage(message) {
         case serverPackets.propAnimations:
             const readValue = () => {
                 const val = m[i++];
-                return val === ASSET_MAGIC
-                    ? loadAsset(ASSET_MAGIC, m[i++])
-                    : val;
+                if (val === ASSET_MAGIC) return loadAsset(ASSET_MAGIC, m[i++]);
+                if (typeof val === "string" && val.startsWith("[") && val.endsWith("]")) {
+                    try {
+                        const parsed = JSON.parse(val);
+                        if (Array.isArray(parsed)) return parsed;
+                    } catch (err) { }
+                }
+                return val;
             };
 
             let pEnt = undefined;
             while (i < m.length) {
+
                 const v = m[i++];
                 if (v === -1 || pEnt === undefined) { // block end signal, get new ent
+                    if (pEnt) pEnt.updatePropKey();
                     pEnt = entities.get(v);
                 } else { // must be a prop id otherwise
-                    const propId = m[i++];
+                    const propId = v;
                     const prop = pEnt.props.get(propId) || {};
                     if (prop.animSmoothing) {
                         prop.size = lerp(prop.size, m[i++], .15);
@@ -944,8 +969,8 @@ async function onmessage(message) {
                         prop.arclen = m[i++];
                         prop.dip = m[i++];
                     }
-                    prop.shape = readValue(m[i++]);
-                    prop.color = readValue(m[i++]);
+                    prop.shape = readValue();
+                    prop.color = readValue();
                 }
 
             }
