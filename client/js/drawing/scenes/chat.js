@@ -39,6 +39,7 @@ drawLoop.addScene("chat", chat);
 
 const chatEnterDebounce = 200;
 let lastEnterPress = 0;
+
 chat.utilityFuncts.set("enterToChat", () => {
     const enterDown = !!keyboard.keys["Enter"];
     if (enterDown && Date.now() - lastEnterPress > chatEnterDebounce) {
@@ -69,9 +70,9 @@ class ChatMessage {
                 : backgroundColor || "transparent";
         this.entityId = entityId;
         this.creationStamp = performance.now();
-        // start visible (alphaFade used for hover boost/fade) — new messages already use creationStamp-based fade
         this.alphaFade = 1;
     }
+
     getSenderRender(size, maxWidth) {
         return renderText(
             `${this.sender}:`,
@@ -83,6 +84,7 @@ class ChatMessage {
             maxWidth
         );
     }
+
     getContentRender(size, maxWidth) {
         return renderText(
             this.content,
@@ -125,6 +127,9 @@ let selectedMessage = {
     active: false,
     fade: 0
 };
+
+// CHAT BOX
+
 function draw({ canvas, ctx, delta }) {
     // update popup height every frame so other systems (minimap) can query it
     (function updatePopupHeight() {
@@ -138,6 +143,7 @@ function draw({ canvas, ctx, delta }) {
         state.popupHeight = popupFullHeight * selectedMessage.fade;
     })();
 
+    // Open trans 
     if (state.active) {
         state.fade = lerp(
             state.fade,
@@ -147,6 +153,8 @@ function draw({ canvas, ctx, delta }) {
         if (state.fade > 0.999) {
             chat.drawFuncts.delete("drawNewChats");
         }
+
+        // Close trans
     } else {
         state.fade = lerp(
             state.fade,
@@ -156,21 +164,16 @@ function draw({ canvas, ctx, delta }) {
         if (state.fade < 0.001) {
             chat.drawFuncts.delete("drawchat");
         }
+
     }
 
     // overall scale and layout
-    const scale = currentSettings.chatSize
-        ? currentSettings.chatSize.value.number
-        : 1;
+    const scale = currentSettings.chatSize.value.number;
     const baseWidth = (canvas.height / 2.8) * scale;
     const baseHeight = (canvas.height / 4) * scale;
-
     const margin = state.margin * scale;
 
-    // compute border thickness (depends on canvas size & user multiplier)
-    const borderMult = currentSettings.chatBorderSize
-        ? currentSettings.chatBorderSize.value.number
-        : 1;
+    const borderMult = currentSettings.chatBorderSize.value.number
     const baseSize = Math.min(canvas.width, canvas.height);
     const border = baseSize * 0.01 * borderMult * scale;
 
@@ -180,7 +183,6 @@ function draw({ canvas, ctx, delta }) {
 
     state.width = WIDTH;
     state.height = HEIGHT;
-    // position: interpolate from off-screen/right (fade=0) to final X (fade=1)
     state.x =
         (canvas.width - WIDTH - margin) * state.fade +
         canvas.width * (1 - state.fade);
@@ -192,13 +194,14 @@ function draw({ canvas, ctx, delta }) {
         drawSelectedMessage(canvas, ctx, delta);
     }
 
-    // `state.fade` is now 0..1 so chatAlpha 1 => fully visible, 0 => hidden
     ctx.globalAlpha = currentSettings.chatAlpha.value.number * state.fade;
     ctx.fillStyle = ACCENT;
-    // draw border box (thickness scales with canvas size)
+
+    // draw border box
     ctx.fillRect(x, y, WIDTH, HEIGHT);
     ctx.fillStyle = BACKGROUND;
     const boxInputRatio = 0.88;
+
     // inner area dimensions (independent of border)
     const innerWidth = baseWidth;
     const innerHeight = baseHeight * boxInputRatio;
@@ -217,7 +220,7 @@ function draw({ canvas, ctx, delta }) {
         baseWidth,
         baseHeight * (1 - boxInputRatio),
         "Type here to chat",
-        (val) => {
+        (val) => { // on input
             if (val === "" || val === "Type here to chat") return;
             const lengthLimit = roomState.chatMessageLimit;
             for (let i = 0; i < val.length; i += lengthLimit) {
@@ -234,7 +237,7 @@ function draw({ canvas, ctx, delta }) {
             }
         },
         undefined, // nothing on hover
-        () => {
+        () => { // on focus lost
             if (state.openedByEnter) {
                 closeChatMenu();
                 unforceFocusInput("chatInput");
@@ -248,25 +251,33 @@ function draw({ canvas, ctx, delta }) {
         currentSettings.messageHistoryLimit.value.number
     )
         roomState.chatMessages.shift();
+
     let cx = x + border;
     let cy = y + border;
     const height = innerHeight
     const maxWidth = innerWidth
     const textSize = baseHeight * (1 - boxInputRatio)
+
     ctx.save();
     let path = new Path2D();
     path.rect(cx, cy, maxWidth, height);
     ctx.clip(path);
+
     let click = clickableActive(cx, cy, cx + maxWidth, cy + height);
-    if (click.left === true) {
+    if (click) {
         mouse.scrollY += (lastMouseY - mouse.y) * 0.44;
+        if (click.left === true) {
+            yOffset -= mouse.scrollY * 0.3;
+        }
     }
-    if (click) yOffset -= mouse.scrollY * 0.3;
-    if (lowestY - (cy + height) > 0) {
+
+    const yPos = lowestY - (cy + height);
+    if (yPos > 0) {
         yOffset -= 1 + (lowestY - (cy + height)) * 0.03;
-    } else if (Math.ceil(lowestY - (cy + height)) !== 0) {
+    } else if (yPos < 0) {
         yOffset += 1 + (cy + height - lowestY) * 0.03;
     }
+
     lastMouseY = mouse.y;
     cy += yOffset;
 
@@ -313,7 +324,7 @@ function draw({ canvas, ctx, delta }) {
 
         click = clickableActive(cx, msgTop, cx + maxWidth, msgBottom);
         if (click) {
-            // subtle hover boost (avoid clamping the canvas alpha by keeping this close to 1)
+            // subtle hover boost
             chatMessage.alphaFade = lerp(
                 chatMessage.alphaFade,
                 1.25,
@@ -345,6 +356,7 @@ function draw({ canvas, ctx, delta }) {
     lowestY = cy;
     ctx.restore();
 }
+
 let hadMuteFocus = false;
 let lastClick = 0;
 let clickDebounce = 200;
@@ -481,6 +493,8 @@ function drawSelectedMessage(canvas, ctx, delta) {
     ctx.drawImage(text, x, y + height / 2 - text.height / 2);
 }
 
+// CHAT OVERLAY
+
 let overlayX = 0;
 let overlayY = 0;
 function drawNewChats({ canvas, ctx, delta }) {
@@ -547,7 +561,7 @@ function drawNewChats({ canvas, ctx, delta }) {
             maxWidth
         );
 
-        // visibility 0..1 during fade-in only; remain at 1 during steady and fade-out
+        // Per-message position fade
         let vis = 1;
         if (tDiff < fadeTime) {
             vis = Math.max(0, Math.min(1, tDiff / fadeTime));
@@ -561,10 +575,11 @@ function drawNewChats({ canvas, ctx, delta }) {
         ctx.globalAlpha *= .75;
         ctx.fillStyle = chatMessage.backgroundColor;
 
-        // position content right-aligned in the rect and place sender immediately to its left
+        // position content right-aligned
         const contentX = rectLeft + maxWidth - contentText.width;
         const senderX = contentX - state.messagePadding - senderText.width;
-        // include sender area to the left of the content rect in the background
+
+        // include sender area to the left
         const bgLeft = senderX;
         const bgRight = senderX + senderText.width + contentText.width;
         const bgWidth = bgRight - bgLeft;
@@ -578,7 +593,6 @@ function drawNewChats({ canvas, ctx, delta }) {
         const contentY = rectTop + (msgHeight * vis - contentText.height) / 2;
         ctx.drawImage(contentText, contentX, contentY);
 
-        // move up by the (possibly scaled) message height
         y -= msgHeight * vis;
     }
 }

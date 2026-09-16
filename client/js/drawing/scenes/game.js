@@ -202,6 +202,7 @@ main.drawFuncts.set("entities", ({ canvas, ctx, delta }) => {
     }
 })
 async function startGame(gamemodeCode, joinRoomId, maxPlayers, maxBots) {
+    console.log("Starting game...")
     drawLoop.start();
 
     document.getElementById("startMenuWrapper").remove();
