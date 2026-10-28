@@ -23,6 +23,5 @@
         ["norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm"]
     ],
     "X_GRID": 18,
-    "Y_GRID": 18,
-    "BOTS": 16
+    "Y_GRID": 18
 }

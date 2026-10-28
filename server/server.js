@@ -1752,7 +1752,7 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                 this.testingMode = c.testingMode;
                 this.speed = c.gameSpeed;
                 this.timeUntilRestart = c.restarts.interval;
-                this.maxBots = botAmountOverride ?? c.BOTS;
+                this.maxBots = botAmountOverride //?? c.BOTS; // botAmountOverride is always a number, keeping it here just in case
                 this.maxFood = config.MAX_FOOD;
                 this.maxNestFood = config.MAX_NEST_FOOD;
                 this.maxCrashers = config.MAX_CRASHERS;
@@ -2716,7 +2716,9 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                 }
                 for (let key in my) {
                     if (key.startsWith("UPGRADES_TIER")) {
-                        my[key].forEach(add);
+                        for (const tank of my[key]){
+                            add(tank)
+                        }
                     }
                 }
             }

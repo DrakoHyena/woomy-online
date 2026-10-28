@@ -30,7 +30,6 @@ module.exports = {
     })),
     "X_GRID": 22,
     "Y_GRID": 9,
-    "BOTS": 8,
     "DO_BASE_DAMAGE": false,
     "WIDTH": 22 * 500,
     "HEIGHT": 9 * 500,

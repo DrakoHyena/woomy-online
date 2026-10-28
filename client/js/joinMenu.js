@@ -326,7 +326,7 @@ const defaultGamemodes = [
         name: "Growth",
         image: "/resources/gamemodes/growth.webp",
         description:
-            "Everyone for themselves! The more score you have the larger and stronger you get. Get to 2 million score to unlock dreadnaughts.",
+            "Fight on one of two teams to control the nest! The more score you have the larger and stronger you get. Get to 2 million score to unlock dreadnaughts.",
         players: 0,
         code: "growth.json",
     },

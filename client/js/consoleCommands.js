@@ -29,7 +29,7 @@ window["help"] = function () {
 	logger.warn("To use any of the above commands, you need to have beta-tester level 2!");
 };
 window["broadcast"] = function (message, hex) {
-	if (!hex) hex = color.black;
+	if (!hex) hex = "#000000";
 	socket.talk("D", 0, message, hex);
 	logger.info("Broadcasting your message to all players.");
 };
@@ -104,7 +104,7 @@ window["setChildren"] = function (amount) {
 	logger.info("Set your maxChildren to " + amount + ".");
 };
 window["teleport"] = function (x, y) {
-	if (isNaN(x) || isNaN(x)) return logger.warn("Please specify a valid (X, Y) position!");
+	if (isNaN(x) || isNaN(y)) return logger.warn("Please specify a valid (X, Y) position!");
 	socket.talk("D", 9, x, y);
 	logger.info("Teleported to (" + x + ", " + y + ").");
 };

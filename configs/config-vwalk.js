@@ -20,7 +20,6 @@ let map = {
     ],
     "PLAYER_SPAWN_TILES": ["norm"],
     "DO_BASE_DAMAGE": false,
-    "BOTS": 0,
     "BORDER_FORCE": 0,
     "OUTSIDE_ROOM_DAMAGE": 0,
     "BOSS_SPAWN_TIMER": Infinity,

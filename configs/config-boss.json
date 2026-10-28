@@ -18,7 +18,6 @@
     "WIDTH": 5500,
     "HEIGHT": 5500,
     "MAX_CRASHERS": 125,
-    "BOTS": 25,
     "DO_BASE_DAMAGE": false,
     "MAX_FOOD": 0,
     "MAX_NEST_FOOD": 0

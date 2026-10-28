@@ -13,6 +13,5 @@ module.exports = {
     "Y_GRID": 5,
     "WIDTH": 3500,
     "HEIGHT": 3500,
-    "BOTS": 0,
     "connectionLimit": 30
 }

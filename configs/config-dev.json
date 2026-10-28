@@ -5,7 +5,6 @@
     "HEIGHT": 7500,
     "serverName": "Developer Server",
     "RANDOM_COLORS": false,
-    "BOTS": 15,
     "IS_DEV_SERVER": true,
     "tabLimit": 1000
 }

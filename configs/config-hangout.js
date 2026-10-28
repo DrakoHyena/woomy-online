@@ -15,7 +15,6 @@ let map = {
         ["norm","norm"],
         ["norm","norm"],
     ],
-    "BOTS": 0,
     "BORDER_FORCE": 0.025,
     "BOSS_SPAWN_TIMER": Infinity
 }

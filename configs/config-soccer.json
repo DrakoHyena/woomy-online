@@ -18,7 +18,6 @@
         ["norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm"],
         ["norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm", "norm"]
     ],
-    "BOTS": 0,
     "FOOD_AMOUNT": 0.1,
     "SOCCER": true
 }

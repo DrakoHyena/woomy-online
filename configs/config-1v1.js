@@ -79,7 +79,6 @@ let map = {
     "EVOLVE_HALT_CHANCE": 0.25,
     "SHINY_CHANCE": 0.00001,
     "SKILL_BOOST": 5,
-    "BOTS": 0,
     "GLASS_HEALTH_FACTOR": 1.8,
     "DO_BASE_DAMAGE": true,
     "SIEGE": false,

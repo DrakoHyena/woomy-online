@@ -144,7 +144,7 @@ const initSettingsMenu = function() {
                             else element.value = value;
                             setting.set(element.type === "checkbox" ? element.checked : element.value);
                         }
-                        respond("Options have been succsesfully imported");
+                        respond("Options have been successfully imported");
                     } catch (error) {
                         respond("Failed to parse the provided options");
                         console.warn('Failed to load "' + input + '" because ' + `${error}`);

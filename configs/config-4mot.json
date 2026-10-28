@@ -23,6 +23,5 @@
         ["roid", "norm", "norm", "norm", "rock", "norm", "norm", "norm", "rock", "rock", "norm", "norm", "norm", "rock", "norm", "norm", "norm", "roid"]
     ],
     "X_GRID": 18,
-    "Y_GRID": 18,
-    "BOTS": 25
+    "Y_GRID": 18
 }

@@ -37,6 +37,5 @@ let map = {
     "X_GRID": 18,
     "Y_GRID": 18,
     "FOOD_AMOUNT": 0.0334,
-    "BOTS": 25
 }
 map

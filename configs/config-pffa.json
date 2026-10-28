@@ -46,6 +46,5 @@
         ["rock", "norm", "norm", "norm", "rock", "rock", "rock", "norm", "norm", "roid", "norm", "edge", "edge", "roid", "norm", "norm", "norm", "rock", "rock", "rock", "norm", "norm", "norm", "rock"]
     ],
     "X_GRID": 24,
-    "Y_GRID": 24,
-    "BOTS": 25
+    "Y_GRID": 24
 }

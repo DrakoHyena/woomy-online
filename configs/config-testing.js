@@ -6,7 +6,6 @@ module.exports = {
     "MODE": "tdm",
     "TEAM_AMOUNT": 2,
     "SPAWN_DOMINATORS": true,
-    "BOTS": 8,
     "WIDTH": 4500,
     "HEIGHT": 4500,
     "ROOM_SETUP": [

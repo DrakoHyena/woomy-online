@@ -6,7 +6,6 @@
     "MODE": "tdm",
     "TEAM_AMOUNT": 2,
     "SPAWN_DOMINATORS": true,
-    "BOTS": 25,
     "WIDTH": 5400,
     "HEIGHT": 5400,
     "BOSS_SPAWN_TIMER": 500,

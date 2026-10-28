@@ -77,7 +77,6 @@ let map = {
         return base;
     })(),
     "X_GRID": 12,
-    "Y_GRID": 12,
-    "BOTS": 12 * teams
+    "Y_GRID": 12
 }
 map

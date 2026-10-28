@@ -19,6 +19,5 @@ module.exports = {
     "HEIGHT": 4750,
     "X_GRID": 9,
     "Y_GRID": 9,
-    "BOTS": 0,
     "FOOD_AMOUNT": .2
 };
