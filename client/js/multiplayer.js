@@ -211,7 +211,8 @@ multiplayer.startServerWorker = async function(gamemodeCode, displayNameOverride
                         players: data.players,
                         maxPlayers: data.maxPlayers,
                         name: data.name || gamemodeCode,
-                        desc: data.desc
+                        desc: data.desc,
+                        serverSpeed: data.serverSpeed,
                     }))
                     break;
                 case "serverStartText":

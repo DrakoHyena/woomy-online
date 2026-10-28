@@ -2034,40 +2034,40 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                 this.x = x;
                 this.y = y;
             }
-        
+
             get x() {
                 return this.X;
             }
-        
+
             set x(value) {
                 this.X = Number.isFinite(value) ? value : 0;
             }
-        
+
             get y() {
                 return this.Y;
             }
-        
+
             set y(value) {
                 this.Y = Number.isFinite(value) ? value : 0;
             }
-        
+
             null() {//dis resets the vector
                 this.X = 0;
                 this.Y = 0;
             }
-        
+
             get length() {
                 return Math.hypot(this.x, this.y);
             }
-        
+
             get direction() {
                 return Math.atan2(this.y, this.x);
             }
-        
+
             isShorterThan(d) {
                 return this.x * this.x + this.y * this.y <= d * d;
             }
-        
+
             update() {//this is an unused class
                 this.len = this.length;
                 this.dir = this.direction;
@@ -2080,11 +2080,11 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                 if (len === 0) {
                     return new Vector(0, 0);
                 }
-        
+
                 return new Vector(this.x / len, this.y / len);
             }
         }
-        
+
 
         function newMockups() {
             // Pre-calculate constants
@@ -2716,7 +2716,7 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                 }
                 for (let key in my) {
                     if (key.startsWith("UPGRADES_TIER")) {
-                        for (const tank of my[key]){
+                        for (const tank of my[key]) {
                             add(tank)
                         }
                     }
@@ -5649,7 +5649,7 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
         let players = [];
         let clients = [];
         global.updateRoomInfo = () => {
-            const obj = { type: "updatePlayers", players: clients.length, maxPlayers: maxPlayersOverride, name: room.displayName, desc: room.displayDesc };
+            const obj = { type: "updatePlayers", players: clients.length, maxPlayers: maxPlayersOverride, name: room.displayName, desc: room.displayDesc, serverSpeed: room.mspt };
             console.log("Updating room info in WRM", obj)
             worker.postMessage(obj)
         }
@@ -8797,14 +8797,12 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                         lastHeartbeat: util.time(),
                         previousScore: 0
                     };
+                    this.inactiveMouseScore = 0;
                     this._socket.binaryType = "arraybuffer";
                     this._socket.on("message", message => {
                         this.incoming(protocol.decode(message))
                     });
                     this._socket.on("close", () => {
-                        if ("loops" in this) {
-                            this.loops.terminate();
-                        }
                         this.close();
                     });
                     this._socket.on("error", e => {
@@ -8873,13 +8871,6 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                 } catch(error) {
                     util.warn("Unable to fetch from proxyDB!");
                 }*/
-                    api.apiConnection.talk({
-                        type: "checkIp",
-                        data: {
-                            ip: this.ip
-                        }
-                    })
-
                     /*let ban = bans.find(instance => instance.ip === this.ip);
                     if (ban) {
                         this.lastWords("P", "You have been banned from the server. Reason: " + ban.reason);
@@ -8893,32 +8884,8 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                         return;
                     }*/
                     this.nextAllowedRespawnData = 0;
-                    this.loops = (() => {
-                        let nextUpdateCall = null,
-                            trafficMonitoring = setInterval(() => traffic(this), 1500);
-                        return {
-                            setUpdate: timeout => {
-                                nextUpdateCall = timeout;
-                            },
-                            cancelUpdate: () => {
-                                clearTimeout(nextUpdateCall);
-                            },
-                            terminate: () => {
-                                clearTimeout(nextUpdateCall);
-                                clearTimeout(trafficMonitoring);
-                            }
-                        };
-                    })();
                     this.spawnCount = 0;
                     this.name = undefined;
-                    this.inactivityTimeout = null;
-                    this.beginTimeout = () => {
-                        this.inactivityTimeout = setTimeout(() => {
-                            this.talk("P", "You were disconnected for inactivity.");
-                            this.kick("Kicked for inactivity!");
-                        }, (c.INACTIVITY_TIMEOUT || 360) * 1000);
-                    };
-                    this.endTimeout = () => clearTimeout(this.inactivityTimeout);
                     this.backlogData = new BacklogData(this.id, this.ip);
                     this.animationsInterval = setInterval(this.animationsUpdate.bind(this), 1000 / 5);// 5 fps animations
                     clients.push(this);
@@ -9024,7 +8991,6 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                                 }
                             }
                         }, below5000 ? 1 : c.disconnectDeathTimeout);
-                        if (this.inactivityTimeout != null) this.endTimeout();
                     }
                     util.info(this.readableID + "has disconnected! Players: " + (clients.length - 1).toString());
                     if (isBanned !== true) sockets.broadcast(trimName(this.name) + " has left the game! (" + (players.length - 1) + " players)")
@@ -9302,7 +9268,6 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                             }
                             this.spawnCount += 1;
                             this.name = trimName(name);
-                            if (this.inactivityTimeout != null) this.endTimeout();
                             // Namecolor
                             let body = this.player.body;
                             body.skill.score += Math.pow(this.status.previousScore, 0.7)
@@ -9371,6 +9336,9 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                                 y: m[1],
                             },
                                 commands = m[2]
+
+                            this.inactiveMouseScore += Math.abs(player.target.x - target.x)
+
                             // Verify data
                             if (typeof target.x !== 'number' || typeof target.y !== 'number' || isNaN(target.x) || isNaN(target.y) || typeof commands !== 'number') {
                                 this.kick('Weird downlink.');
@@ -10678,8 +10646,12 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                 }
                 const slowLoop = () => {
                     let time = util.time();
-                    for (let socket of clients)
+                    for (let socket of clients) {
                         if (time - socket.statuslastHeartbeat > c.maxHeartbeatInterval) socket.kick("Lost heartbeat!");
+                        if (socket.betaData.permissions < 3 && socket.inactiveMouseScore < 1) socket.closeWithReason("Inactive for too long! If you believe this was a mistake or too sensitive let us know.")
+                        socket.inactiveMouseScore = (socket.inactiveMouseScore ** .8) - 2;
+                        console.log(socket.inactiveMouseScore)
+                    }
                 };
                 setInterval(slowLoop, 8000);
 
@@ -13221,7 +13193,6 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                         if (body.miscIdentifier !== "No Death Log") {
                             util.info(trimName(body.name) + " has died. Final Score: " + body.skill.score + ". Tank Used: " + body.label + ". Players: " + clients.length + "."); // Assuming util.info and trimName are defined elsewhere
                         }
-                        socket.beginTimeout();
                     }
                     //player.body = null; // Dereference the dead body
                 }

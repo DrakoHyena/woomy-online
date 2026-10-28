@@ -448,7 +448,18 @@ function clearRooms() {
 }
 async function showRooms() {
     let rooms = await multiplayer.getRooms();
+    const hangouts = []
     for (let room of rooms) {
+        if (room.gamemodeCode === "hangout.js") {
+            hangouts.push(room)
+        } else {
+            addRoom(room)
+        }
+    }
+    for (let hangout of hangouts) {
+        addRoom(hangout)
+    }
+    function addRoom(room) {
         let template =
             roomFilter === "gallery" ? roomGalleryTemplate : roomListTemplate;
         let ele = template.cloneNode(true);
@@ -496,6 +507,7 @@ async function showRooms() {
 
         roomEles.push(ele);
         template.parentElement.appendChild(ele);
+
     }
 }
 
