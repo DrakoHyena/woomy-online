@@ -6450,7 +6450,7 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                 if (!this.control.alt && this.onNotAlt) {
                     this.onNotAlt(this, entities);
                 }
-                if (this.onTick) this.onTick(this);
+                if (this.onTick) this.onTick(this,entities);
             }
             addController(newIO) {
                 if (Array.isArray(newIO)) this.controllers = newIO.concat(this.controllers);
