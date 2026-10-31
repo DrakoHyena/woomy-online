@@ -1,12 +1,23 @@
 import { assets, ASSET_MAGIC } from "../shared/assets.js";
 import { oneVsOne } from "./modes/oneVsOne.js";
+import { warfront } from "./modes/warfront.js";
 
-const modeFuncs = {oneVsOne}
+const modeFuncs = { oneVsOne, warfront }
 
 // COMPAT //
-const worker = typeof parentPort==="undefined"?self:parentPort
+const worker = typeof parentPort === "undefined" ? self : parentPort
 const global = globalThis
-if(typeof global.fs === "undefined") global.fs = undefined;
+if (typeof global.fs === "undefined") {
+    global.fs = undefined;
+} else { // node
+    // Keeps the process alive instead of exiting
+    process.on('uncaughtException', (err) => {
+        console.error('Caught unhandled error:', err.message);
+    });
+    process.on('unhandledRejection', (reason, promise) => {
+        console.error('Caught unhandled rejection:', reason);
+    });
+}
 
 global.utility = {
     log: (e) => { console.log("[LOG]", e) }
@@ -22,7 +33,7 @@ const SERVER_PROTOCOL_VERSION = 2;
 const userSockets = new Map()
 const bannedPlayers = [];
 
-worker.onmessage = function (msg) {
+worker.onmessage = function(msg) {
     const data = msg.data
     switch (data.type) {
         case "startServer":
@@ -31,7 +42,7 @@ worker.onmessage = function (msg) {
                 worker.postMessage({ type: "serverStartText", text: "Loading game..." })
                 global.initExportCode = res.initExportCode
                 console.log("SERVER START DATA:", data.server)
-                startServer(data.server.suffix, res.defExports, data.server.displayName, data.server.displayDesc, data.server.maxPlayers, data.server.maxBots)
+                startServer(data.server.suffix, res.defExports, data.server.displayName, data.server.displayDesc, data.server.maxPlayers, data.server.maxBots, data.server.roomHostToken)
             }).catch((err) => {
                 console.error(err)
                 worker.postMessage({ type: "serverStartText", text: "Failed to load definitons", tip: "Please reload the page and try again" })
@@ -47,12 +58,12 @@ worker.onmessage = function (msg) {
             userSockets.get(data.playerId).close()
             userSockets.delete(data.playerId)
             break;
-		case "roomId":
-			for(let [k,v] of userSockets){
-				v.talk("nrid", data.id)
-			}
-			if(global.updateRoomInfo) global.updateRoomInfo();
-			break;
+        case "roomId":
+            for (let [k, v] of userSockets) {
+                v.talk("nrid", data.id)
+            }
+            if (global.updateRoomInfo) global.updateRoomInfo();
+            break;
     }
 }
 
@@ -78,10 +89,10 @@ function ultraFastAtan2(y, x) {
     // Fast NaN protection
     if (y !== y || x !== x) return null;
     if (x === 0) return y > 0 ? PI_2 : y < 0 ? -PI_2 : 0;
-    
+
     const absY = y < 0 ? -y : y;
     const absX = x < 0 ? -x : x;
-    
+
     let angle;
     if (absY <= absX) {
         const t = absY / absX;
@@ -90,13 +101,13 @@ function ultraFastAtan2(y, x) {
         const t = absX / absY;
         angle = PI_2 - t / (1 + 0.28125 * t * t);
     }
-    
+
     if (x < 0) {
         angle = y >= 0 ? PI - angle : angle - PI;
     } else if (y < 0) {
         angle = -angle;
     }
-    
+
     return angle;
 }
 
@@ -112,17 +123,17 @@ function oddify(number, multiplier = 1) {
     return number + ((number % 2) * multiplier);
 }
 global.mapConfig = {
-    getBaseShuffling: function (teams, max = 5) {
+    getBaseShuffling: function(teams, max = 5) {
         const output = [];
         for (let i = 1; i < max; i++) {
             output.push(i > teams ? 0 : i);
         }
-        return output.sort(function () {
+        return output.sort(function() {
             return .5 - Math.random();
         });
     },
 
-    id: function (i, level = true, norm = false) {
+    id: function(i, level = true, norm = false) {
         if (i) {
             return !!level ? `n_b${i}` : `bas${i}`;
         } else if (norm) {
@@ -135,7 +146,7 @@ global.mapConfig = {
 
     oddify: oddify,
 
-    setup: function (options = {}) {
+    setup: function(options = {}) {
         if (options.width == null) options.width = 18;
         if (options.height == null) options.height = 18;
         if (options.nestWidth == null) options.nestWidth = Math.floor(options.width / 4) + (options.width % 2 === 0) - (1 + (options.width % 2 === 0));
@@ -172,13 +183,13 @@ global.mapConfig = {
     }
 }
 
-global.require = function (thing) {
+global.require = function(thing) {
     switch (thing) {
         case "../../lib/util.js":
         case "./util.js":
         case "./lib/util":
             let angleDifference = (() => {
-                let mod = function (a, n) {
+                let mod = function(a, n) {
                     return (a % n + n) % n;
                 };
                 return (sourceA, targetA) => {
@@ -212,7 +223,7 @@ global.require = function (thing) {
             let formatTime = x => Math.floor(x / (1000 * 60 * 60)) + " hours, " + Math.floor(x / (1000 * 60)) % 60 + " minutes and " + Math.floor(x / 1000) % 60 + " seconds"
             let getLogTime = () => (time() / 1000).toFixed(3)
             let serverStartTime = Date.now();
-            let formatDate = function (date = new Date()) {
+            let formatDate = function(date = new Date()) {
                 function pad2(n) {
                     return (n < 10 ? '0' : '') + n;
                 }
@@ -222,7 +233,7 @@ global.require = function (thing) {
                 return [month, day, year].join("/");
             }
             return {
-                addArticle: function (string, cap = false) {
+                addArticle: function(string, cap = false) {
                     let output = (/[aeiouAEIOU]/.test(string[0])) ? 'an ' + string : 'a ' + string;
                     if (cap) {
                         output = output.split("");
@@ -236,15 +247,15 @@ global.require = function (thing) {
                         diffY = Math.abs(y2 - y1);
                     return diffX > diffY ? diffX : diffY;
                 },
-                getDistance: function (vec1, vec2) {
+                getDistance: function(vec1, vec2) {
                     const x = vec2.x - vec1.x;
                     const y = vec2.y - vec1.y;
                     return Math.sqrt(x * x + y * y);
                 },
-                getDirection: function (p1, p2) {
+                getDirection: function(p1, p2) {
                     return Math.atan2(p2.y - p1.y, p2.x - p1.x);
                 },
-                clamp: function (value, min, max) {
+                clamp: function(value, min, max) {
                     return value > max ? max : value < min ? min : value;
                 },
                 lerp: (a, b, x) => a + x * (b - a),
@@ -345,7 +356,7 @@ global.require = function (thing) {
 
                 formatDate: formatDate,
 
-                constructDateWithYear: function (month = (new Date()).getMonth() + 1, day = (new Date()).getDate(), year = (new Date()).getFullYear()) {
+                constructDateWithYear: function(month = (new Date()).getMonth() + 1, day = (new Date()).getDate(), year = (new Date()).getFullYear()) {
                     function pad2(n) {
                         return (n < 10 ? '0' : '') + n;
                     }
@@ -355,7 +366,7 @@ global.require = function (thing) {
                     return [month, day, year].join("/");
                 },
 
-                dateCheck: function (from, to, check = formatDate()) {
+                dateCheck: function(from, to, check = formatDate()) {
                     var fDate, lDate, cDate;
                     fDate = Date.parse(from);
                     lDate = Date.parse(to);
@@ -376,7 +387,7 @@ global.require = function (thing) {
             }
             break;
         case "./lib/random":
-            const names = ["That Guyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy", "SOMEONE", "꧁༺𝓘𝓷𝓼𝓪𝓷𝓲𝓽𝔂༻꧂", "🅸 🅰🅼 🅶🅾🅳", "I", "jaffa calling", "Ill Tear your eyes out..", "Me-arac", "Aniketos", "🌌Miñe🌌", "ℭ𝔬𝔣𝔣𝔢𝔢", "Akilina", "Mythical", "exc", "=", "o o o o o o o o", "!!!", "Lixeiro do mal", "Thanks M8", "Frost? Mobile", "Dream", "We Do A Little Trolling", "earth", "NightFire", "Free to insult", "dino", "AMOGUS??????????????", "bruh", "No Surviors", "<[AXS]> RASHOT", "Pizza Bread", "[lag]Armando", "Gay Overlord", "willim", "Everything RAM Mobile", "General", "H̵͊̕ė̵̮l̷͎̈́l̵̅͛ơ̸͊", "{WOF} Nightwing", "footeloka", "[⚔️wiki]₵₳V₳ⱠłɆⱤ", "Jes;/;ter", "Team Boom", "🖤ISAAC🖤", "naruto", "занято42/Busybody42", "A+", "Raul39", "Lety <3 :)", "team protect", "i will troll :D", "heroy_105", "[FBI]Σvi₺ℭℏἏ❀₴#1628", "BigBadBoom", "nope", "glurip", "ffk the desrtroy", "Spin=Team", "comrade", "Alkali", "Impact of TY-77", "😈Stormys Domain😈", "YOUR BAD = YOUR DEAD!!!", "pushmetothe sancuary", "Im not a tank", "Snow", "Hm", "DanceTillYou'reDead", "gmonster", "Die!!!", "developer", "noob", "zX-TwinChilla-Xz", "[BK] [XC] PAKISTAN", "Bryson", "Musa♗ - The Shipwrecker", "bob", "Mothership Drone", "t-rex vs raptor", "mai", "Arisu", "gamer.io", "RİKKET FAN", "FOLLOW ME OCTO TANKS", "XP_Toxic_CJS", "TV", "constructor", "among us", "jkl", "XP_Toxic_CST", "d", "I love nahu", "Spade", "XxNicolas GamerxX", "xAd_rian", "FabianTu", "Eminx", "max", "OOOOOOOOFfffffffffffffff", "WalleeE", " KA2", "MIKE", "pedro :(", "BEDROCK", "Frostbite#6915", "koishi", "eu tenho a melhor mae^-^", "asdfghjkl;:]@ouytrewq", "😎👿david988😎👿", "Zaphkiel", "tryhard mode on !!!!!!!", "⚰️🔥👻WITNESS ME👻🔥⚰️", "[Σϰ][Ωϰ] ...", "That Guy", "Aniketos", "Play wommy-arras.io", "ARMADA", "// jAX", "🔱Ƒιяєωσяк🚫", "DEATH TO TEAMERS", "Milan", "your worst lightmare", "XxshadowxX Ilove u", "Alkaios", " 🥧π🥧", "🔱 𝓽𝓲𝓶𝓮𝓽𝓸𝓭𝓲𝓮 🚫", "Can u see me? :D", "Apollon", "ok", "Crazyattacker9YT", "XtremeJoan", "cz sk", "give me your butt dude", "[🌀]Brain𝐼nHalf", "Hexagon Temple", "-_-", "You", "CACA", "Athena", "Artemis", "DOEBLE TOP!", "the only one", "hi (original)", "SOMEONE", "can you beat me smashey", "s7ㅋㅋㅋ", "pika :P", "Fallen", "Big Papa", "m̸̐̽ᵃ𝔭ʟₑ౪🌸🎀🌺🌷🩰🧁", "GONIALS", "прівіт", "lnwZa007", "🐸🐌【HapPy】", "Daluns the one?", "CAMALEON", "factory not op :(", "/BIG BOYRockety", "circus of the dead", "𝒮𝔭00𝔡𝔢𝔯𝔪𝔞𝔫", "hackercool", "🔱⨊ $؋₲₥₳🚫", "Go Away", "Protector Of Worlds", "me", "vn", "RAHAN", "........................", "Soviet Union", "Flash", "❰𝞑𝞡𝞣❱ 𝝙𝝼𝝴𝝶𝘂𝝴", "🌌Miñe🌌", "King Pikachu", "EzzeKiel", "h", "Homeless man", "Asdfghjkjjhgfdsdfghjhgfd", "Felchas", "starwarrior", "Spin=Team", "TERA BAAP✿AYA★💓Bhagwanmr noob", "Dream", "DIEGO", "Lagmat YT = 🎷 channel", "be dum like me", "lagg", "APplayer113", "tiky", "🇧🇷HUE🇧🇷", "am low, I Need Backup!", "Thunder(Tapenty)", "Beeg Yoshi Squad", "reeeeeeee", ";]", "Arena Closer", "abd lhalim", "Badaracco", "emir", "Türk  polisi", "Paladin", "stop plz", "d", "glenn <3 rachel", "[AI] Kidell", "dan", "I am milk", "Türk'ün Gücü Adına🌸 OwO", "҉s҉h҉u҉n҉a҉", "Teuge", "Dave", "abbi_alin", "im a joke", "huy vn :D", "🌊🦈🌊", "scortt reach 1m friend", "ET", "vlasta", "𝒰𝒞ℋİℋ𝒜", "Nyroca", "German", "[ɨƙ]ɳøʘɗɫɚ", "I'm so lag(sinbadx)", "🇸🇦", "asdf", "X℘ExͥplͣoͫຮᎥveﾂ✔", "Apollon", "^^", "I", "natasha", "no me mates amigos", "dáwsda", "FEWWW....", "lol", "A team with 💚 is doomed", "Raul39", "Noob AC", "ddqdqwdqw", "[MG] GLITCH TR", "LemonTea", "Party_CZE", "Diep_daodan", "What?", "kuro", "cute pet", "demon", "ALEXANDER👑💎", "Cursed", "copy The tank", "", "dsa.", "Vinh HD", "Mago", "hi UwU", "avn", "d", "naruto", "ARRASMONSTER KILLYOUha5x", "MICAH", "Jotaro", "king vn", "𝕰𝖓𝖊𝖒𝖞_𝕯𝖔𝖌", "Raoof", "Leviathan", "SUN", "❬☬❭  ⚜️Ð𝐙𝕐 ッ 〜 🌷", "FALLEN SWORD", "🇧🇷HUE🇧🇷", "BoyFriend [FnF]", "motherhip", "𝓼𝓮𝓻𝓲𝓸𝓾𝓼𝓵𝔂", "lolera", "Dark Devil", "press F", "Detective Conan", "Pet", "MAICROFT", "Holy", "IXGAMËSS", "h", "umm,dab?", "Ihavelocty", "ewqasd2021vinicius", "[🇻🇳] Hùng", "I Love you", "Healer", "hacker lololololol", "boooster.io", "dscem", "bibi", "TEAM POLICE", "", "jj", "SHARK", "arena closer", "•长ąϮëąℓ⁀ᶜᵘᵗᵉ╰ ‿ ╯ ☂", "Weяw𝕖𝐑ώ€я𝓺q2️⃣prankeo", "nani?", "OTTOMAN EMPİRE", "------------------------", "kr9ssy", "not P", "winnner", "friendly", "genocide BBB", "HI", "I'm poor:(fortnine duo", "JSABJSAB", "jmanplays", "starwarrior", "were", "PLAYER", "mothership protrector 1", "Gamer🎮", "6109", "PRO", "enr", "_____P___E___N___E______", "annialator", "kaio", "(UwU)", "Arras.io", "...", "Denied", "Paladin", "Zaphkiel", "Pikachu ^~^", "ah~", "Steve", "{<:Void", "AƓ Aηgєℓ#Use AƓ  Tag", "Amyntas", "⁄•⁄ω⁄•⁄卡比獸🖤", "poui", "PH - r҉a҉i҉n҉", "A M O U G U S", "idk bro", "Artemis", "Hey team", "b T規RㄩIes矩W ˋ*ˊd", "한국 Lime Lemon", "phong fan vn!", "me fan valt shu lui free", "Mobile no work", "Hi 香港😘> pls don't kill�", "[/G]/O1D SL/Y3R", "mil leches", "Major Meowzer YT", "Providence", "Lore", "ОХОТНИК", "vordt", "Linghtning McQueen", "Pentagon Nest Miner", "꧁☬☬😈꧁꧂ ☠HARSH ☠꧁꧂😈 ☬☬꧂", "vovotthh", "Nope :))", "||||||||||||||||||||||||", " ꧁ℤ𝕖𝔱𝔥𝔢𝔯𝔫𝕚𝕒꧂", "CTRL+W=godmode(viet nam)", "🔱LordΛภ𝓰𝖑Ɇ🚫", "1 + 1 = 3", "XYZ", "[PFF][|| ı'ɱ ცąცყ||]", "Boop", "RAPTURE", "o", "/.//.[]", "", "Roskarya", "no. 9", "Lost MvP#7777", "Jon", "🔱Saint LilY⚜🚫", "Green.grey.purple.blue.", ":P", "C - 4 Spank Spank", "VN", "Snapwingfriendstriker007", "overlord is:):)", " pluss亗", "[Repsaj]ĎąŗĸMãştɛɾ", "Phoenix_Gamer", "Relatively Harmless Tonk", "Array.io", "Spin=Team", "I am your shield :)", "j", "1", "TheBasil", "【The L1litle One】", "X.Clamator .YT", "ENDERMÉN", "CC", "BEST", "Among Us", "lobo", "asky", "Opan Come Go Note Yeah", "Bowler", "ad", "haha bowler no 1M", "Tin", "[GZ]GESETA", "woomy arras.io", "Remuru Tempest", "PvPok", "Scarlet Rage(mobile)", "nam", "STRIKER007", "[VN] MeltedGirl", "100000000000000000000000", "eee", "Q", "mắm tôm", "REVENGE✨", "Achi", "AC Perú", "bvnfgh", "hi", "Pet :3", "little bitch", "khang", "lets be freinds guys!!!!", "sans pro", "phantanduy", "[AC] VGamerZ", "StevenUniverseFan", "azen", "Waffles", "jesian", "Ⱬł₭Ɽł₮₳Ӿ", "Gay Overlord", "pikachuboi124", "mundo x bomb", "ducky", "🌀DESTROYER🌀", "Stupid Overlord", "++", "phantantri", "VoteOutRacists", "Denied", "floof", "Bowler", "Sinbadx", "🎈IT🎈 APOCOLYPSE", "ExpectMe2BeDeadCuzOfLag", "Damage", "Aniketos", "⨝∑₮ξ₹ͶΛL⨝", "Artemis", "_", "Archimedes", "♪KING♫♕-dev#3917", "no", "Doofus", "MINI defender", "꧁✯[🕋]MÂRSHMÆLLØW 𖣘✯꧂", "Alkaios", "(・ω・＼)i am(/・ω・)/pinch!", "Việt Cường 2A5", "I Love you", "fdsmn", "!", "R", "you shall not pass!!", "harmless shower", "lol", "Mythical", "oath sign", "finland", "bob", "hetman666", "lio", "VN~I LoVe You Chu Ca Mo", "Your mom", "Friendly", "the protector", "leave me alone pls", "Grill my flippen butt", "n o i c e", "bo", "onsen", "._.", "Frostbite#6915", "💞", "CTRL+W=godmode", "noob", "ad", "Soviet Union", "be freind", "   HCM MUÔN NĂM", ":P", "FALLEN SWORD", "anh tuấn anh nè tôm", "fnf is a poop", "Zp r oZ", "꧁҈$ꫀꪖ  ,҉ℭն𝚌մꪑ𝜷ꫀ᥅ ༻", "VN:P", "margaret thatcha", "[VN]Ảo Vãi Lồn🤔", "ㅋㅋㄹㅃㅃ", "pin h 3", "Vỹ đẹp zai", "Snapwingfriendstriker007", "everybodybecomespike", "a", "1", "vyde", "Mothership Drone", "op", "click 'F'", "Noob", "🐰chiro🐰", "PJfd13", "CELESTIAL", "Team", "Pet :3", "FeZTiVAL", "anime", "t", "C - 4 Spank Spank", "Rockety", "Valley", "Im New,dont kill me pls", "Friends?", "하이루", "KILL ME I DARE YOU", "pet basic -(======>", "pet", "♕ ❤VIỆT NAM ❤♕", "team ?", "꧁༒☬✞😈VîLLãñ😈✞☬༒ ꧂", "Công", "Opan Come Go Note Yeah", "1 + 1 = 3", "Elite Knigh*", "vn{CHP}", "Dasher8162", "Xlo-250", "under_gamer092", "VN", "Mtp tv tiktoker", "Denied", "Paladin", "『YT』Just𝕸𝖟𝖆𝖍ヅ", "shame", "Corrupt Y", "spin= team", "Please no more Y team", "Syringe", "Pickerel Frog", "Bitter Dill", "Your Triggering Me 🤬", "117", "FleRex", "Archimedes", "Neonlights", "🌌Miñe🌌", "〖-9999〗-҉R҉e҉X҉x҉X҉x҉X҉", "FEWWW....", "bob", "0800 fighter¯_(ツ)_/¯", "◯ . ◯⃨̅", "𝕁𝕖𝕤𝕥𝕖𝕣", "Apollon", "Ɓṏṙḕd Ṗläÿệŕ {✨}", "i never bin 1 mill", "残念な人", "KillerTMSJ", "Дракон", "[VN]Ảo Vãi Lồn🤔", "😎", "warrion", "ARMADA", "asd", "alr-ight", "AAAAAAAAAAAAAAAAAAAAAAAA", "♣☆  ⓂⒶ𝓻s𝐇Ⓜ𝔼𝕝ᒪσω  ☯♚", "FREJEA CELESTIAL 1.48MXyn", "poker 567", "C", "4tomiX", "meliodas", "Việt Cường 2A5", "(ZV) foricor", "", "Marxtu", "me?? 😢", "m̸̐̽ᵃ𝔭ʟₑ౪🌸🎀🌺🌷🩰🧁", "PeaceKeeper", "Eeeeeeva", "diện", "[MM]  Ⓕ𝓸𝓻𝓫𝓲𝓭𝓭𝓮𝓷", "Doofus", "TS/RRRR", "Nothing.", "🐶(X)~pit¥🐺te matare jajaja", "⌿⏃⋏⎅⏃", "go", "[PFF][|| ı'ɱ ცąცყ||]", "hola", "polyagon", "Galactic slush", "9999999999999999999999dx", "zaphkiel celestial", "noob", "$$$%$la plaga$%$$$", "Sorry broh", "Roberto", "EHSY BAAA", "Nnmnnnmmmnmmmm", "use fighter plsss :)", "Mini", "spitandsteelfriend", ";)", "lol", "Mobile player", "the ultimate multitool", "i vow to protect", "oofania", "hi", "why am i here", "H̵͊̕ė̵̮l̷͎̈́l̵̅͛ơ̸͊", "A.L.", "Hi", "ONE SHOT", "luis", "saitan", "Felchas", "Im gonna knock you out", "Aquiles TEAM LOVE", "qwertyuiop", ":3", "diep.io", "invisible drones", "team plz:(", "DIONAX", "again and again", "100000000000000000000000", "nicolas123", "JESUS E AMOR", "Alice", "Bob", "Carmen", "David", "Edith", "Freddy", "Gustav", "Helga", "Janet", "Lorenzo", "Mary", "Nora", "Olivia", "Peter", "Queen", "Roger", "Suzanne", "Tommy", "Ursula", "Vincent", "Wilhelm", "Xerxes", "Yvonne", "Zachary", "Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Hotel", "India", "Juliet", "Kilo", "Lima", "Mike", "November", "Oscar", "Papa", "Quebec", "Romeo", "Sierra", "Tango", "Uniform", "Victor", "Whiskey", "X-Ray", "Yankee", "Zulu", "The Bron Jame", "[MG] Team", "team??!", "trump", "facu++", "TEST", "Jake", "PEST_YT", "GOKU", "big me!", "arras > diep", "k", "[MG] PRO TEAM", "Solomon", "novice", "noob", "Angel", "😈", "max", "Allah Is King", "Hug Me", "dont touch me", "leonardo", "colombia", "", "Friends ? ", "✈", "Kim Jong-Un", "1", "An unnamed player", "agar.io", "road to 1m", "FEED ME", "DOGE", "GABE", "boi", "[GZ] team", "buff arena closer", ".", "Ramen", "SPICY RAMEN", "Jera", "[insert creative name]", "Rake", "arras.io", "KOA", "die", "king of diep", "Hagalaz", "Ehwaz", "Dagaz", "Berkanan", "Algiz", "Blank", "Mango", "TOUCAN", "Bee", "Honey Bee", "oof", "Toast", "Captian", "Alexis", "FeZTiVAl", "kitten", "Derp", "Gabogc", "U S A", "name", "[IX] clan", "LOL", "ur mom", "llego el pro!", "Impeach Trump", "luka modric", "bob", "MATRIX", "no", "e", "kek", "read and u gay", "Decagon?", "take this L", "mm", "Aleph Null", "summoner", "T-REX", "buff basic", "stink", "jumla", "no team Kill", "pet", "V", "Broccoli", "toon", "Sinx", "JTG", "Hammer", " ", "Basic", "Discord", "NO WITCH-HUNTING", "salty", "CJ", "angel", "a salty discord kid", "satan", "NoCopyrightSounds", "Am I Sinbadx?", "AHHHHHH!", "rush", "squirt", "AMIGOS", "Windows 98", "FeZTivAL", "illuminati", "Fallen Bot", "Anonymous", "koala", "iXPLODE", ":D", "BrOBer The Prod", "OwO", "O_O", "UwU", "Alpha", "TheFatRat", "kokak", "D:", "YouRIP", "WOOT", "𝕯𝖆𝖙 𝕺𝖓𝖊 𝕭𝖔𝖎", "hell", "Y", "why", "Lucas", "LOCO", "FeZTi Fan", "0", "AK-47", "Friend pls", "cool", "NO U", "hmst", "Sub 2 Pewdiepie", "T-Gay", "t-series succs", "Balloon", "CX Fan", "The Nameless", "What?", "Our World of Tanks", "Real AI", "Totally Not A Bot", "...", "Fallen AI", "green square", "Dagaz 2.0", "Internet Explorer", "teamplz", "Paradox", "Fallen Nothing", "developer", "ruler of tanks", "IRS", "king slayer", "sael savage", "Zplit", "CUCK", "Popo", "¡AY PAPI!", "Vogelaj", "Ruthless", "BOMBS AWAY", "im new", "best", ".-.", "dont feed me", "rIsKy", "Brian", "Angel", "Knoz", "Caesar", "Baller", "¿Equipo?", "¡Vamos!", "Road To 10m", "Real Hellcat", "Real Kitty!", "Canada > USA", "A named player", "Tyson", "Slayer", "666", "Nooblet", "M8", "Trans Rights", "Bar Milk", "Jambi", "Elmo is gone", "The Grudge", "Rosetta Stoned", "Lateralus", "Fourty-Six & 2", "Vicarious", "Judith", "Give Me Wings", "The Pot", "look behind you", "Bruh Momentum", "Sucko mode", "ArenaC", "!foO", "Lateralus", "Disposition", "Reflection", "Triad", "Mantra", "The Patient", "Real CreepyDaPolyplanet", "Real Despacit.io", "Mew", "Magikarp", "Real Dark Knight", "ok boomer", "PP Tank", "COPPA Sucks", "meme", "Womp Womp", "W = Team", "Real CX", "Neo", "crasher", "Minecrafter", "King of Pros", "Vanze", "Have mercy...", "Im scary", "cookie", "Liberty Prime", "bruh moment", "Rubrub", "Banarama", "poyo", "Nova", "Creeper, Aw Man", "Theory of Everything", "DJVI", "jotaro kujo", "Faaip de Oiad", "MrBeast", "ForeverBound", "Are you okay?", "BUSTER WOLF", "MJK", "F-777", "Dex Arson", "alpharad", "ORA ORA ORA", "Waterflame", "DJ-Nate", "penguinz0", "#teamtrees", "Electrodynamix", "brogle", "im beef", "Salsa Verde", "The Audacity of this tank", "Joe Mamma", "Red Hot Chili Pepper", "Halal Certified Tank", "Coronavirus", "The Common Cold", "The Flu", "Ight Bro", "Little Red Rocket", "Bruh Monument", "Bruh Monumentum", "Spree", "KING CRIMSON!", "THE WORLD!", "ZA WARUDO!", "taal volcano", "Synth", "Brotherhood of Steel", "Railroad", "A Settlement Needs Your Help", "final destination, fox only", "food", "fezti fan", "FeZtiVaL", "CATS", "Careenervirus", "Dumb", "[AI]", "Insanity", "Steven Universe", "MrBeast Rules", "Oswald Veblen", "how to get testbed?", "Mahlo Cardinal?", "mf=r", "dragons go mlem", "丹†eÐiuϻbee††ℓy†", "TωorᴍaͥHoͣrͫnet", "NoͥteͣwͫoℝthyCสtHeสt", "ᴴᵃⁿʸᵐᵖᶜᵘᵗᵉᴾᵃⁿᵗˢ", "Oᶠectบสlsereedl", "CℓeDⱥiryVⱥiͥήtͣeͫℓ✨", "EyeCⱥnᖙyᖘunᖙeseg", "Witψภclคi", "⫷PนℝeMiͥℝeͣyͫ⫸", "𝓕𝓸𝓵𝓿𝓮𝓞𝓵𝓭𝓳𝓸𝓴𝓮⚔", "⦃φօʂìէìѵҽԱʂէìէմąɾ⦄", "🎻Hiקle𝔶lutקuᖙiѕh", "✐ЯΣΛ爪ΛПΣЦЯΣ", "∉Eᴍiภeภ†Miภa多iho∌", "[M๏ℝec𝔥Muy𝔊๏rᖙØ]", "やlachaҜ𝔢d๖ۣ•҉", "FicบℝneCบʝo", "Jame∂iͥPaͣtͫtψMeℓt", "PℝoͥfuͣsͫeOftsΐ", "Hiภⱥls†MiAlmⱥ", "Cสneͥຮeͣfͫight", "Ŧฬeͥirͣoͫ͢͢͢Tฬin🅺les😎", "VenomoบຮNorτnear", "🎲๖ۣۜƤⱥranAsian𐌁øyz", "StͥedͣiͫรDilrubⱥ", "ᖘiͥŇgͣeͫsτri", "Ac𐍉͢͢͢ᵐᵐSiรcuᵐMum🌼", "⫷EᴍiήentOffec☢ne⫸", "Evalingђteᖙseᖙi", "FoบຮervͥᎥdͣeͫ", "⪓Offigeร℘er⪔", "Vuͥldͣrͫatediesio", "⁅🆂🅴🅽🆂🅸🅱🅻🅴🅰🅽🆃🅴🅽🆂🅸🅾⁆", "Houℝgͥΐcͣaͫr︾", "Doe£🆄lMψSo🆄l😬", "Ǥrel𐍉resit", "𐄡𝒫𝑜𝓉𝑒𝓃𝓉𝒯𝒾𝑒𝓃𐄪", "୨𝔄𝔟𝔫𝔬𝔯𝔪𝔞𝔩𝔄𝔫𝔫𝔞𝔩𝔤𝔞𝔱⪑", "ElfuภΐBΐBαr͢͢͢rel", "Liͥveͣrͫiภgบi", "𝕆𝕗𝕗𝕠𝕦𝕝𝕕𝕠𝕨𝕚𝕥𝕚𝕝⚡", "Na†eℝaŇiŇgs⚠", "𝓗𝓪𝓭𝓭𝓚𝓱𝓪𝓷𝔃𝓲𝓻", "Partℽ𝓌𝔥ᎥꜱᎥภ∂บc", "Aήสℓroseℓ♛", "Aຮiaτinga", "⑉Elͥegͣeͫήτreα⑉", "Inͥ∂eͣlͫψຮtr", "CoϻpePregy", "〖Grͥetͣyͫdrest〗", "⑉S☢mp☢รpͥGuͣmͫp⑉", "丹pสτheτᎥcṨømpⱥthⱥ", "⁣𓆩NօthΣurΣeŇtment", "Ofͥ†eͣnͫcheye", "「FℓuͥttͣeͫriήgItingenv」", "😻SƤ𝔯iήgy🅼orkingɭ", "〖ṨoftOftwTนft〗", "GℝegⱥℝiouຮMeⱥℝee☂", "🏄", "😌CømiภgPoթcorn", "MossfนlthapeᖙyŇ☘", "๖ۣۜ山☢uͥsiͣaͫℓℓeﾂ", "A𝖙hedi🆁on", "✰QนestaΐŇgl✰", "Wⱥsͥ†iͣoͫnfℝou", "｟VoℓคtᎥℓeAtentᎥⱥt｠", "Arninℓץie", "★彡[๖ۣۜƊreคᖙ͢͢͢๖ۣۜƊeωᖙrop]彡★", "JบicץJบnᖙen", "Öµł†µÐï†ê§", "「Ate∂iͥDiͣlͫly๖ۣۜßØo」", "〖Aήthent฿ⱥdbreⱥth〗", "🎹ͲօցìօղժƓմղժ", "᚛VerรeᖙTurรeᖙΐe᚜", "Sקityℝicђe", "❅Camedΐℝ๖ۣۜƊℝedd❅", "IŇeττivie♛", "﹄𝔇𝔬𝔫𝔨𝔢𝔶𝔒𝔠𝔨𝔢𝔡𝔲﹃", "Dousermⱥi∂ﾂ", "彡ΛЯᄂƧΣᄃΛ彡", "⁣𓆩🅰🅳🅼͢͢͢🅸🅽🅴🆆🅴🆁🅴🅽🆃", "AŇergeNeesคnค", "💤Fสή†สຮ†icͥAfͣfͫic", "⌁NaτemacτᎥ⌁", "LΐvͥesͣeͫsChΐℓΐ", "íɑʍOภຮgrⱥigน", "𝓟𝓻𝓸𝓰𝓷𝓲𝔁𝓽𝓾𝓻", "😶ＧｕｔｔｕｒａｌＰｕｔｈｅｒｉｐ", "Ϛageร𐍉HϚ𐍉ℓ☢😇", "𝕹͢͢͢𐍉τempℓeᴀɾ😠", "🚣AՇitℽสrDสrͥinͣgͫ", "༺Hⱥrm๏ni๏us๖ۣۜ山ermisty༻", "CoͥŇeͣrͫŇizαr⚔", "Tormaภτmerΐcaภg", "⦇ƑⱥℓiKi𝖒多๏Ṩℓice⦈", "⚡Uppontork⚡", "C𝓪ge¥W𝓪gencie︾", "彡Ri๏ภt͢͢͢αhαbigiv彡", "😐🅲🆄🆁🅽🅰🅽🅱🅾🅽🅰🅵🅸🅳🅴", "ShⱥŇdΐDΐŇyͥerͣoͫ❥", "EήthHⱥlfPint", "𝕴ภc☢meMสch☢mคn🏀", "๖ۣۜ山Øozץ๖ۣۜ山ome♛", "J𐍉viαℓC𐍉vi𐍉", "Exͥamͣiͫckร☢ή", "🌰🆂🅴🅽🅸🅽🅶🅻🆂🅸🆁🅴🅽🅸🆃🅰", "⑉Officђ𐍉uττi⑉", "❅Ju͢͢͢diciøusᖘheสdjur❅", "Ｗｅｄｉｓｐｉｃｈａｖｉｔ▒", "▥Jeสncies†i?", "JohŇiteƤⱥ", "𐐚ewil∂ere∂Ne∂iภ", "ñê§łê§þê🐨", "Rᴇsp☢ήsΐvᴇC☢ήsi", "〖Is†rͥสlͣlͫץpe〗", "L𐍉veCaภdψMaͥภdͣeͫra✨", "F๏นghτsere", "𝕃𝕠𝕘͢͢͢𝕖𝕕𝕦𝕒𝕝𝕚𝕒", "☁Ofเrethe☢", "Aᖙeth☢☢LØυᖙmØυth💌", "CyͥniͣcͫalIntudynt", "CoภsนdBeสภs", "TheͥℝvͣeͫᖙS†aℝveᖙ", "Iτedeຮeded", "♐OfficebᵒℽOffee", "︽CӨ🅽𝔞ℓsoᴍe𝔱tee", "🐯ᎠⱥrlΐภgArҜs🅱ⱥt", "Heͥstͣsͫookerinec", "TaleήtedEήtiรa⚔", "S๏ñcͥifͣeͫ͢͢͢Mนñchie🎤", "JeͥcrͣeͫสCleʝerrℽ", "❅ᴛᴏᴀꜱᴛʏᴀꜱɪᴏɴᴅꜱᴛ❅", "թг๏Ɔoupsoɹʇɥ", "HeaຮΉ𐍉ducҜᴸᴵᶠᴱ", "⁅๖ۣۜƤoeτicViτhic⁆", "S𝒽ⁱlⁱŇgบre", "IfΐeรeŇUŇΐverรe", "Offᖙ🅰𝔶botᴳᵒ", "𝓟𝓸𝓻𝓮𝓽𝔂𝓷𝓽𝓼𝔰𝔲𝔭𝔢𝔯", "𝓗𝓮𝔂𝓸𝓗𝓸𝓷𝓮𝔂𝓬𝓪𝓴𝓮🎨", "ƤlคץรChⱥή∂☢ese", "Awes๏meStanψt๏m", "FαcͥτoͣrͫyInτorτ", "≪Nummiຮ๖ۣۜ山his𝔱l͢͢͢er≫", "IssℓαtSℓoͥppͣyͫ", "PђeαlαHitcђeภ", "ⱮօղѵҠօմҟӀąʍօմ", "🎮丹թթєɐli𝓃gQuɐli𝓃gє", "「Grǝacklψeτ」", "IήesนrͥŇeͣmͫ", "≋Beήτic͢͢͢ediή≋", "Meͥภeͣqͫuสles♦️", "😦UnwielᖙℽNexק", "WateᖙeToℝ℘eᖙo", "Veℝ∂สntͥSiͣmͫสntสc", "「ƤสrigͥCoͣrͫriᖙor」", "Anͥkeͣnͫtscru", "⪨Äภioภ§Jสภeman⪩", "ᴵᴬᴹDaͥzzͣlͫᎥŇgWᎥlieรτi", "Naΐgͥΐcͣaͫℓℓef", "『WสψstℝWสt🅲hfส🅲e』", "🐅Exקreαrfer", "OfͥfeͣcͫKΐck𐍉ff", "☽乃ץՇ๏קץՇђ๏ภ☾", "ṨuήnyAuserสny", "Meℝaͥ∂lͣyͫקen⚠", "ͲąղէìçմҍӀ", "Se∂iสCสucสsiสŇ", "OfͥfeͣcͫelŦec†𐍉", "He∂uαlrigive", "⧼Deͥpsͣeͫᄂfarg⧽", "AήixecemØcultiή", "Ŧollicuรectior", "W๏rͥteͣsͫSᴍartie", "丹ภefFคภgs", "Ot☢☢sℓคwคℓtede", "❅WђizคJคckWђi†e❅", "Heɭɭ฿☢ᴿåbo", "「Abi∂iŇgDicaŇℽ」", "Isͥheͣrͫΐτaℓes", "᚛Θficຮoภeຮ᚜", "๖ۣۜᖘⱥuͥncͣhͫyCⱥustiᴍ", "🚊Ӌeสτenͥτrͣiͫ͢͢͢n", "𝔗ec†iga†eechersҜ♐", "⚡U†eͥreͣvͫe∂a⚡", "𐄡ɢlaήsaรailØrM͢͢͢aή𐄪", "ⲘสysτᎥnⲘᎥnou😌", "°”Ṩi𝓭ityethicl”°", "J๏ѵiaℓP𝓇iaℓ", "๖ۣۜℜevⱥsนpSⱥssⱥfrⱥs", "M☢tivͥαtͣiͫngB☢nαtiff", "༺Thøuɾnᵃnꜱt༻", "I๓թe𝒸cąbℓeMusper☘", "✰Aאָiͥcaͣpͫђeℓ✰", "ᶠ͢͢͢ᵉⁱᵍⁿᵉᵈᴸᵉˢˢᵃᵐᵉᵈ", "𝒞𐍉nl𝖞r𐍉𝖇s", "Grαcΐ๏uຮCaͥ๏uͣnͫc", "Mสmm☢τhT☢τh☢ldi", "𓊈卄ανσ͢͢͢ℓ丂αναє𓊉", "✰W☢☢ℓutte∂espect✰", "⁣𓆩ⱮմʂʂҽąⱮմʂէąçհҽ", "Ofͥerͣsͫやr𐍉fess𐍉r", "๖ۣۜ฿uͥ†sͣiͫ多Mu††er", "SⱥτBigPØτⱥτØ✪", "Inf𝔞M𐍉nFr𝔞ΐรe", "〖IŇviŇci多leAdeŇƤual〗", "🐯Hคndy͢͢͢Hคtiɭity", "ˢᵐᵒᵘᵗᵉᵐᵃᶜᴳᵒᵈ", "Ofͥteͣdͫΐe฿edbeⱥuty", "⦃ExtegสExtℝ𝒶H☢t⦄", "Orͥ∂sͣmͫนcessน⚔", "Y𐍉utђr𐍉uภ", "✰Tђℝ☢titsc✰", "íɑʍ≋AℓtŁiℓŦ𝓇Øℓl≋", "FiήgtFiggץ⚔", "ScieήtificPสti", "GrͥesͣsͫB𐍉sslคdψ", "Mⱥภumbℝip", "T๏iͥndͣeͫLⱥcewing", "★Shͥouͣlͫ∂en∂ieve★", "Suallizatiᴍe", "♐P͢͢͢herstst☢", "I†iͥonͣgͫingeℝna⚠", "Ofͥfeͣdͫg๖ۣۜßαllØfFαt❥", "๖ۣۜℜaͥnsͣtͫredu", "MØcipParรήip", "Se∂iͥรhͣiͫmส∂", "𝔚𝔥𝔞𝔫𝔡𝔢𝔱𝔉𝔞𝔫𝔞𝔱𝔦𝔠⇜", "๖ۣۜOffeℝtBαffy", "AttentiveFornate", "Faͥveͣrͫnext", "UnusuⱥʟFrøungdø", "Geຮຮionͥຮtͣaͫ", "୨丹𝓃d𝓼e๖ۣۜƤⱥ𝓃cⱥce𝓼⪑", "ร๏ɭɭร๏ภɭץ", "S℘iяiᵗe∂Pie🅽t💦", "L𐍉𐍉ภψSi𐍉ภaͥlsͣeͫ❥", "🎮𝕊ecτolαrץຮτ", "◤NorNoRegαrᖙ◢", "DeͥℓiͣgͫhτfuℓAnᖙeg", "Rec†scess", "✫Itͥคlͣlͫsømme", "⧼ᴀภqͥ𝕦eͣsͫτeds⧽", "๖ۣۜ山angຮᎥRagຮ", "HeͥᴍaͣdͫeDelᎥ𝖗Ꭵum😇", "⫷M🆄ɔtsΐ𝕓lest⫸", "Iภge†eͥℝeͣdͫu", "🐥IภêℝtAshtaℝt", "Pieceℓᴮøøkie🌺", "Ƒrͥedͣeͫτw☢u", "Imק𝔯essi𝕧eや𝔯iτs", "Reͥivͣiͫ๖ۣۜᗯeiner", "ReήsecoEnglishRose", "᚛UήisliήBigHuήk᚜", "TΐrelessToήdessΐ", "Sµccessfµ͢͢͢𝖑Toccesse", "HⱥŇceIcepicҜ❥", "Trͥitͣeͫ丹ภtຮeภtr", "AlสrᴍingSђerᴍ", "୨Fei𝓈tyLexte∂i𝓈⪑", "⚡H☢sH☢neͥℽbͣuͫn⚡", "🍃𝕲rคᎥŇคÈlคᎥs", "CℝectͥℓiͣgͫŇe", "Sollℽstriongst", "⦇¢aphօℓօSnappy⦈", "◤𝓟𝓲𝓰𝓰𝔂𝓒𝓸𝓾𝓰𝓰𝓵𝓲𝓼୧", "⚡Abͥ☢nͣdͫynᎠynสm☢⚡", "∉Gℽmͥnaͣsͫт🅸𝖈丹terΐamn∌", "▥ƆouƆouʌıɔʇıou¿", "𐐚ץƬuƬtepØω", "OffeรeรSugαrͥᖘuͣfͫf♛", "【Çðñêð₥͢͢͢å¢ïł】", "Aгti𝒸ulateUภtalaภ", "🆆🅷🅴🆂🅿🅸🆂🅷🅰🅳🅾🌗", "★AbͥreͣcͫuℓCuթieDoℓℓ★", "∉𝕾nappʸ𝓝alꜱ๏∌", "Fℓน††eriή𝓰T๏ήce͢͢͢∂in", "PeℝfectIteήeℝ⚔", "😋𐌁𝔯αήgsτ𐌁ruddah", "🌳H𐍉Ňe͢͢͢st𝓘Ňew", "ℓเττℓєA𝕤𝒾𝕤͢͢͢ul🅰natedes", "Agͥreͣeͫⱥ多leCⱥ多liรรi☂", "◤AŇdสtMสŇŇeͥℚuͣiͫŇ◢", "CaภdefJefe", "Neττeຮ℘andaττr", "Ofτeᖙบree", "Ƥ𝕣αlØ𝔫scallᴳᵒᵈ", "✰Habi†ualΘn∂ingua✰", "【EaℝŇestͥIsͣtͫaŇdne】", "ArΐsVΐssψ✨", "฿eenGoatees⚔", "Atereatha", "Θffi多ℓoTrou多ℓe", "GraվรⁱRนgraτ🌻", "𝕴ñⱥτ🅸vScrⱥtchy🐆", "AƤeͥndͣiͫMonLaƤຮin", "StͥunͣnͫingAndin", "⩻๖ۣۜᗯorl𝒹ly๖ۣۜᗯonsi𝕥u⩼", "Men†e∂eem", "〖CoℝdsђWaℝdoŇ〗", "🐫PønΛctiαrsenaℓ", "ᴴᵃⁿᶜᵉˢʰᵃⁿᵍᵒ▒", "PℝocͥRoͣbͫotobαmα", "BℝeͥncͣyͫtRสncoℝ", "▓TreήdץTrคm", "𝕻𝖑𝖆𝖙𝖎𝖘𝖊𝖓𝖙𝖙єค๓", "๖ۣۜBloαtyAnat͢͢͢e", "【Cบrruτiv𝖊͢͢͢ภ】", "✰VΐcͥtoͣrͫΐousStor∂eส✰", "✹Shΐll๖ۣۜᗯildfire", "Noωαselli", "Guͥΐlͣtͫless𐐚otlץsΐs", "RⱥyRⱥyDisђirⱥƤ", "𝔚hΐ†eℽWhΐm", "「Ciaℓiͥᖘhͣoͫbia」", "𐐚eeͥᖙgͣeͫήve", "千lu🆃🆃er𝕚𝓃gṨαu🆃e🏂", "᚛BℝαzenBℝeα᚜", "CoήMonƑrสise", "๖ۣۜ山iͥggͣlͫץ๖ۣۜ山ing⇜", "FeͥllͣsͫoϻƤlo", "㍶𝕎𝕠𝕟𝕕𝕖𝕣𝕗𝕦𝕝𝕍𝕖𝕣𝕗𝕠𝕣", "Sτiᵛeʀmin〽️", "Rilαtoℝyᴍ⚔", "₧Anสτ͢͢͢Rสτit☢", "Wสs†eGℽmⲘสs†eℝ", "PlaภtøƤee", "⚾ꜱcrค℘℘yIsτraℓΐf", "DittØήSqͥuaͣtͫty", "⚡O多ʝecτiveDeco⚡", "TสiͥsiͣgͫerƤsץmend☘", "OrryᎥeรᎥ๏", "Ƒuͥℓdͣsͫhinec", "ThaͥŇkͣfͫulChaℝᴍis", "íɑʍIsτʀᴇթ๏sᴇτ", "★Θfferencesթece★", "Ar†h☢uldre🅽diส▤", "ForgivingForn", "N𐍉ᴍbec𐍉ήts✨", "๔เгєςՇгє๔เς🐵", "〖Oภvest𐍉pΐ〗", "⫷Ofteภ𐍉Gift⫸", "🚣ᴅʀɪᴠᴇɴᴇᴠᴇʀʀ", "RⱥsƤberrψ๖ۣۜ山heriesi", "Affeuredi", "MⱥiήτFunͥτoͣnͫ", "ΘffireKhⱥήzir", "Meͥdeͣmͫeήdiήgeή", "★I†uℝFuͥℝmͣuͫzzℓe★", "⫷FⱥrϻbØyFⱥϻb⫸", "Itarᖙรcreϻa", "⋉Direllooductຮe⋊", "TreαNeαt𐍉", "SuթerBoℽAvetℽթe", "°”φմէէҽԱէʂվβìէʂվ”°", "Oⁿeรsitedit⚠", "⸔Ṩaΐηg↻haΐ͢͢͢nຮ⸕", "I𝓃gMøn🅰nge", "A∂aptableやapti☢ng", "〖WⱥsτrSτⱥbͥbeͣrͫ〗", "ཌInͥgeͣdͫighØ𝓊ndད", "█▬█ █ ▀█▀Asser†iveSegingin", "Ofteᖙucee︾", "CђⱥrᴍingPⱥcerᴍⱥr♛", "฿eͥirͣoͫᴍeŇclo", "∂яα¢σηιαη卄αη∂яє∂υ", "EthΐcαlͥHoͣdͫyetre⚠", "〖Tiͥสnͣyͫouℓthom〗", "AbrasiveBrivilly", "InceirKissyFace", "Ittelitingly", "SomentsSoul", "Wooksommen", "UnizPizzawife", "FersoPowerpuff", "MelodicDell", "SoftyOffee", "Joidaskin", "WhowerHotsnap", "PassionateLasiste", "ProbseVinDiesel", "ForessiKisses", "DawbufBunrose", "JudensPendulum", "DayeSaySay", "Watertitur", "AntilkMilkman", "Magaltyea", "Houstsibl", "IngheoAngon", "Byribibeg", "Gingentray", "Hichicapho", "ResoluteAntardso", "Andivedyngstims", "BeautifulToldif", "HostilityBustay", "IngiShinyGaze", "Anytimple", "NowSnookie", "WereituAtum", "Gortaitic", "ImposingVelsical", "Witionsips", "WhiteyWhati", "Grabourch", "ToastyImpaspen", "SensibleAlsem", "Enendscandspip", "Itycomplandshor", "VictoriousWousi", "OfteOfficeboy", "Phoodyeang", "BeneficentTocen", "ItisBityarani", "Hourabony", "Autooligue", "IngenScrooge", "YoulloDulhaniya", "CoolguySkinqu", "Itiattive", "CambessCupcakes", "Oferbelogr", "Ofewposicu", "JockyAckn", "HumptyImpelic", "ComptsBaldyDom", "Whaviatte", "SoftOffel", "Werediand", "RegralPlegasus", "ReacPokerface", "OffingeCoffy", "Beedaltyo", "ConsistentOffortsi", "AstoundingEst", "Onquentabliate", "AwesomeTomostur", "DullDozyLemodu", "EsionlyGillygum", "OptimisticPtinknew", "VoluntaryRary", "SublimeItsubi", "ModestEctoormo", "AnglysSilly", "AmetionMinion", "MentMedusa", "Rompleseral", "AxiomaticMantr", "Arsecritom", "WarleffBuffalo", "YieldingForier", "Maternize", "PerfectWeregife", "Beganiateds", "EvesevStSteve", "InsibilWinkyDink", "OndoingDomino", "ProgetcBucket", "SairaciElais", "RectProject", "ObservantLarbsedi", "EthicalPriametr", "Nowerstope", "OutitiTooti", "BeautifulFoutes", "MilwaspChiliPepper", "FessoPissant", "SedoFirebred", "WasedlaTiddles", "AliveKelichap", "PuringiTinyBoo", "LincystColestah", "CentoodDoobie", "ScratchyScra", "Ityretuddynt", "Offeckert", "GymGuyMgbil", "FireBerryBethindi", "CrankyBanc", "Shitislonesp", "Whowediff", "WervidVivitar", "CarthaHatred", "EminentKinteeni", "Phystudeat", "Aneumenctr", "DiplomaticBerat", "ItyansSugarBuns", "ZealousMovereat", "MelodicOloodpor", "Fookeyedep", "BooBooKittyRettlyst", "BeirstHairBall", "IngmerRhino", "Gelsouldi", "Ingdpoici", "Ingledible", "PrettyProessi", "WherviKicker", "DalikTikku", "IninFeint", "Aestudireastal", "LumpyNemples", "SmokeyMorsiall", "Founititag", "FrownyTownswe", "AntionFunTime", "Keestingko", "AltruisticFaric", "MyonlyDestrion", "Herrionati", "Adyintred", "DevoutItlereve", "IngshiDingo", "Wormserld", "OfficeboyFillan", "PositiveNovermal", "UldfuBaldman", "Diedinsto", "CosseaPoppyseed", "Meashichem", "EtionSeatides", "KissableDontrisd", "WaysidKidSister", "AborTurboMan", "Encipansoncla", "BlueJayJaimingi", "Hissiodustomer", "Eponesibadedge", "SincereAnce", "Forightse", "Peraddiesphic", "MookyPorPooh", "Paideliti", "UnpunUnoShoten", "Elegirionvedr", "InguDerange", "Offermang", "TorClaymore", "VengefulPentse", "PrincenHitchen", "Medeconlyme", "『sʜʀᴋ』•ᴮᴬᴰʙᴏʏツ", "꧁༺₦Ї₦ℑ₳༻꧂", "༄ᶦᶰᵈ᭄✿Gᴀᴍᴇʀ࿐", "×͜×", "Sᴋ᭄Sᴀʙɪʀᴮᴼˢˢ", "亗", "꧁༒☬sunny☬༒꧂", "𝓑𝓻𝓸𝓴𝓮𝓷 𝓗𝓮𝓪𝓻𝓽♡", "༄ᶦᶰᵈ᭄✿Gᴀᴍᴇʀ࿐", "×͜×ㅤ𝙰𝙻𝙾𝙽𝙴ㅤ𝙱𝙾𝚈", "꧁▪ ＲคᎥនтαʀ ࿐", "꧁༒☬ᤂℌ໔ℜ؏ৡ☬༒꧂", "Ⓥ", "メ", "꧁༺J꙰O꙰K꙰E꙰R꙰༻꧂", "░B░O░S░S░", "Sᴋ᭄Sᴀʙɪʀᴮᴼˢˢ", "꧁༺ ₦Ї₦ℑ₳ ƤℜɆĐ₳₮Øℜ ༻꧂", "✿ • Q U E E N✿ᴳᴵᴿᴸ࿐", "🅑🅛🅐🅒🅚🅟🅐🅝🅣🅗🅔🅡", "༺Leͥgeͣnͫd༻ᴳᵒᵈ", "🌻ｓｕｎｆｌｏｗｅｒ🌻", "꧁ঔৣ☬✞𝓓𝖔𝖓✞☬ঔৣ꧂", "꧁☬⋆ТᎻᎬ༒ᏦᎥᏁᏳ⋆☬꧂", "ᴹᴿメY a h M a t i ☂️", "꧁༒Ǥ₳₦ǤֆƬᏋЯ༒꧂", "ϟ", "༄ᶦᶰᵈ᭄✿Gᴀᴍᴇʀ࿐", "ꨄ", "𝕯𝖆𝖗𝖐 𝕬𝖓𝖌𝖊𝖑", "꧁⁣༒𓆩₦ł₦ℑ₳𓆪༒꧂", "Sᴋ᭄Sᴀʙɪʀᴮᴼˢˢ", "꧁༒☬ᤂℌ໔ℜ؏ৡ☬༒꧂", "Dɪᴏ፝֟sᴀღ᭄", "⸙", "ＦＺㅤＯＦＩＣＩＡＬ亗", "Aɴᴋᴜsʜ ᶠᶠ", "Lixツ", "♔〘Ł€Ꮆ€ŇĐ〙♔", "꧁H҉A҉C҉K҉E҉R҉꧂", "OPㅤㅤVICENZO√", "𖣘ᴰᵃʳᴋ᭄ꮯꮎᏼꭱꭺ🐲࿐", "『sᴛʀᴋ』ᴷᴺᴵᴳᴴᵀ༒࿐", "ꔪ", "『ƬƘ』 ƬƦΘレ乇メ", "Ꭺɴᴋᴜꜱʜㅤᶠᶠ", "꧁☯ℙ么ℕⅅ么☯꧂\ufeff", "Ꭵ°᭄ᶫᵒᵛᵉᵧₒᵤ࿐♥", "•`🍓Valerie xavier axelelyn🍥", "αиgєℓ _ℓιfє ❤️🥀", "ㅤㅤㅤㅤㅤ", "ᴛᴜʀᴜ ᴅᴇκ友", "━━╬٨ـﮩﮩ❤٨ـﮩﮩـ╬━❤️❥❥═══👑ľøvē👑 ═", "×͜×ㅤ𝙰𝙻𝙾𝙽𝙴ㅤ𝙱𝙾𝚈", "ᴛᴜʀᴜ ᴅᴇκ友", "『sʜʀᴋ』•ᴮᴬᴰʙᴏʏツ", "ᴶᴬᴳᴼᴬᴺ・𝙀𝙢𝙖𝙠友", "BSK・L E G E N Dᵀᵒᴾ", "亗", "꧁ঔৣ☬✞𝓓𝖔𝖓✞☬ঔৣ꧂", "BSK・L i e e Eᵀᵒᴾ", "BSK • ＫＩＬＬＥＲ亗", "ᴶᴬᴳᴼᴬᴺ 𝚃𝚞𝚛𝚞友", "🍎", "꧁༺༒〖°ⓅⓇⓄ°〗༒༻꧂", "꧁༺₦Ї₦ℑ₳༻꧂", "ᴶᴬᴳᴼᴬᴺ・Bocil 友", "꧁☆☬κɪɴɢ☬☆꧂", "꧁༺nickname༻꧂", "★彡[ᴅᴇᴀᴅ ᴋɪʟʟᴇʀ]彡★", "『Ѕʜʀ』• ℑℴƙℯℛᴾᴿᴼシ", "☯︎Ꭱ Ｏ Ƴ Ꭺ Ꮮ 亗 ×͜×", "", "matao", "kkkkkkkkkkkkkkkkkkkk", "Hiiiiiiiiiiiiiiiiiiii", "Emmett", "spencer", "copy my tank", "all i know 2x", "RATATATATATATATATATATA", "Thisislie", "jungleman", "austinz", "Austinz", "ur nub", "why yall so bad", "mi(mobile)", "awesome soccer(pog)", "2377285 auto triangle", "THE NEW BOSS", "hawaii", "M.", "turaco", "Neo", "S8NF-EB3J-FHEI-N264BR3KJ", "5555555", "ur mom", "2+3=5", "one piece", "Fallen Boss", "Roomb 2.0", "earth = sphere", "Roomba 2.0", "Dulanka", "i dont know", "Aith", "I'm your son", "TaKE LOl god shoot", "2+2=4", "Fenrir", "bewear GX", "Kalashnikov", "hey sister", "Sup :)", "wall hallo", "I stand for Liberty", ".", "OliwierQ Chojnacki", "MetatronXY", "Arcturus", "OP", "teste", "ink sans", "ropell", "PLL", "Solaris", ":v", "OBL", "teach me", "-_____________-", "rwegwerg", "n to level up", "thiago", "FAST", "This is far", "jojo", "Anak why u solo", "Lunatic", "sin", "nate", "popa peg", "Sssssssssssss", "Meepet", "hose man", "Beast", "angel", "}{eonyao", "minty fresh", "Evil }{eonyao", "Tango", "pet :3", "knbg", "underverse delta sans", "fallen booster", "COMMAND.Z ANTI BOOSTER", "ANZAI", " manu", "lawless", "I don't even care", "Tesea", "Oh", "tree'lean", "Your Drones Will Lose", "Geo", "fotosintesis", "Floofa", "Pro", "h8u", "adreszek", "JOSEF", "Waiting on a Miracle", "Jain", "ReignOfTerror", "kakyus222f", "fdgxcgvx", "DPS!!", "Sentry :3", "oh im noob", "Math you", "twilight", "Soccer", "ikandoit", "RopeSteel", "no-one", "omni", "kkk", "putre", "value1", "Fart", "REEEEEEE", "{AI} Bot", "xdnha", "Ni", "sheild", "CrAsH", "play", "Shadow closer", "Fire", "Actual Pro", "ATK_X", "Unravel", "PSYCHO", "Yrneh!", "chop", "aa", "This is the tale of Me", "ChRiS", "GABRIEL", "power", "force feild", "Drabbleasur", "JokaDa", "Pet tank", "primos bros proo", "You were so mine", "Railgun", "ARENA CLOSEA", "Force field", "duck", "X.ALEXANDER.X", "Wolfgang", "baited!?!", "PERU", "force field", "Aespa", "oni-chan~?", "copy my tank pls", "ns", "64M3R_999", "Fartington", "Yimo", "Stand For Ukraine", "hi.", "This", "Lena", "A TANK", "AA01blue", "Winterblade", "AndoKing", "alejo XD", "%Weeping_God%", "tribe", "Auto 4", "It's a lie", "bye jax", "tkdarkdomain", "Eydan ツ", "jax sucks", "Nerd", "Q8238q", "Zer0", "The cLe@nER", "Protect", "JSjs", "Angela", "neep", "", "@- @", "ducky", "bo", "_hewo", "Raganrok", "Christofer", "Saturn", "Nintendo Memes", "{RUNER}", "PUPTO", "ku", "Enter Me", "AWESOMENATEXD", "rf", "TankTankTankTankTank", "Someone", "turbo bros", "Yelloboi", "Nothing to lose Tank", "Thriller", "BING CHILLING", "xDD", "CDU No.30", "lenin12", "junhu", ",,", "super stinker", "Base", "pro", "oreo", "ggking", "GiGa LEN", "PH|Player!", "Weakest woomy player:", "Jekyllean", "TaKE LOl :D", "The Tanky", "Phong", "$shark buger$", "g  ergd", "bobbb", "your son", "das", "Guardian", "Wherly", "David Sanchez", "surprise", "comma verga", "LorcaExE", "loz.", "Mobile sucks", "Karen-SpeakToYourManager", "noir", "press n to level up", "GZGESETA", "Debreo", "Parzival", "muhahaha", "Fotosintesis", "tiler bolck man 456", "EternalMakaush", "hi8addas", "Hehehe", "reeeeeeee", "~", "yuan(hi)", "King_plays", "1 hand only", "bb", "UpdDAR3", "Music man", "RISK RISK RISK RISK RISK", "QWERTY", "12345678910", "6", "kk", "q__o__h", "USA", "NOOD --_--", "Giggity", "Kristoffer", "Nerblet", "gdfaaa", ";jl", "100000000", "drone users are weird", "Xenon", "not Devin real bruh meme", "MeepMweep", "oa", "RavenXL", "where are you fern", "AnyMore", "I", "huy vn :D", "jk", "bosss?", "Loop", "farmer's tan", "Until next time", "KK", "Ultra", "?????", "Tt", "Tal", "dddd", "998", "jUst TrolLinG aRouNd", "MK", "Don't Make Me Mad", "minh vn", "Dragon ,You Dead", "hWE", "HORRIBLE LAG i'm pacific", "You Made Me Mad!", "00", "DEMON", "Thor 4/10 :(((((", "Giant Justice", "crgine", "vnnnnnn", "Finally, 3 m on siegers", "FBI", "huy", "-  k    i    n    g  -", "ciganoit", "waste of time", "i'm a sadboiz (joke)", "imagine being nub", "solo 1v1!!!!!", "leonardo YT", "nobodynoticedyouweregone", "jack.vn", "Evan", "(:", "Astral Java", "Me n You", " hihihihuhihihihhiihhihi", "hara", "B", "Nooby", "EZ", "MrYoungSir", "manne", "Ragnarok", "Truchenco", "m", "LEGEND", "SINBADX", "let me farm alone", "Friendly /j", "bye error i gtg", "Pollo", "7/11/22", "jimmy", "Guilherme", "meb", "victor", "I use handphone", "PEGA(SUS)", "owo", "Mort", "the j", "yang", "go", "Very dangerous", "I'm harmless! -Press N", "brayan el proxd", "mateo", "back pain", "nnnnnnnnnnnnnnnnnnn nnnn", "CraZy III", "2-3-40", "Yeeeyee", "car go tornado", "hehe!", "taco", "@@@", ".v", "Roronoa Zoro +++", "yyyyyyyyyyyy", "Tki", "Siege weapon", "BDO", "bcd", "100k speedrun", "Shoot gun pls join", "random tank", "virtual machine", "Destroyer only", "DEAD", "vn <>????", "Ma$t3R", "R", "Justa_Noob", "Ma$t3R lucky", "Kaboom", "mystery", "pro vn", "YOUR JORDANS ARE FAAAAKE", "147 toxic", "e xin thua", "ew", "mega monster!", "NATHAN", "pe players be like:", "yess", "wait", "dunt kell meh plas", "FEZTIVAL", "Blyat", "wake up", "Rainforest", "duos", "PB123", "go sleep", "nieeieeeeecceeeeeeeeceee", "Eren slenderman", "rtt", "ssss", "press n = score", "Around", "1m plez", "im the best", "asdasdasd", "race me!!!!!!!!!!!!!!!!!", "lp lithium", "queue", "ttjjl", "heyy!!", "Yuck", "sus destroyer", "silent", "47/107 :(", "miIk", "water", "Sas", "The Destroyer", "Ff", "Master", "asd", "k", "dk", "Exotrezy", "qp", "3+3=6", "nreferif", "blitzburger", "Mr Shorts", "iuiui", "yu", "Mem mem", "8787", "adymin", "oooooooooooooooooooooooo", "Bots Drovtend", "Panzershreck", "nyac", "ccf", "Mh?", "joshs", "beep", "hsg is sb", "404 Not Found", "Michael", "thinh", "ABC", "ggwz", "Indo", "uwu", "THE King", "Nagi", "Pato Lime", "aaeaeae", "BUGEN", "Area closer", "Unbalanced Build", "//", "nnw'", "Door", "Matias", "ky", ";", "Gavin", "Lucy", "Kitzuneko", "This is the tale ofn", "Hank", "hiiiiiii", "^---------^", "screw", "LSV-005", "Hiary", "jonh real", "Nothing overlord", "Portaun", "20240123", "ggs you are good drone", "NoU", "mcbeef", "sg ez", "Chase", "it's a lie it's a lie", "qwertyqwerty", "LEGENDARY (VN)", "NATH", "backrooms", "Daffa", "MATHUEL", "vn luffy", "HAHAHAHAHAHA", "Oofed", "Hung dayy", "noob vn", "Sensor", "Marco the great", "Ghgft", "unscientific", "EnemyTracker (LookAtMap)", "yeey", "oh, dear", "Anderson", ":> hi", "redhood", "Volderet", "Harry Styles", "WINNER", "r u dangewus", "odo", "maksim", "Im uwu", "eryweufhw8r46yq3782edtqf", "Katya", "Unlucky", "Maga", "BASE MAKER", "td", "sure sure sure", "Zarma", "octavo", "evan", "U  N  K  N  O  W  N", "jbc", "exc (real)", "sonick12", "exc (fake)", "~A~", "shadow", "Yoriichi Tsugikuni", "p1", "Hanumanumani", "bob the builder", "BLITZKRIEG STRAT", "sus", "India", "Oof", "kiyo", "Toopy&Binoo", "I'm Innocent", "GujiGuji", "SANS", "LoSTcar", "UNGA BUNGA", "add me", "Meeps", "afafafafafaffalafel", "........................", "Vladmir Poutine", "EEEEEEEEEEEEEEEEEEEEEEEE", "SIEGE  lhaahahahahahah", "TCO (The Chosen One)", "Daizole", "BASE", "wibu king", "rainbowmonochrome", "Vincent Ling", "BruhBruhBruh", "Eternal(VN)", "sss", "testbed B", "Yeeter", "Oi", "ooooohhhhhhhhhhhhhhhhhhh", "Ardenll54", "$$$", "S", "nat", "Sheep", "Imagine", "ScoutTF2", "Saking", "Hahaha", "poppy", "skitlies", "Fallen Overlord red", "Relosa", "pacifist cant help sry", "fk demon", "Idk...", "D=EMON$ do u know?", "sinx (fk demon)", "Fruits", "Hehe", "Fallen Overlord", "Faster", "BulutMobile", "Awzcdr", "mega", "Giang~Mweo", "General", "Winner", "=)))))", "..............", "DEFEND", "Hiary4", "Eye", "Merdka!", "Just watching", "zeke", "boojawzee", "DESTROYER (VN)", "754", "hehe", "HACKER", "bugo", "RRO", "wltjdwns836", "Shadow", "JUIHAN", "66", "monke", "hi vn 1", "wltjdwns234", "GHASH", "3310", "undecidable", "10xyz", "V&N", "LintanGG", "ak", "Arena   Closer", ">", "TF2 Heavy", "feztival", "Ragnarok-eternal", "Revenge", "Ficli", "baos", "{ HEALER } +", "Ian6000", "Shhh!", "loxc", "Banned from seige?", "1457", "666", "deezs", "nn", "Use me as a shield", "Yocto To Yotta", "Dorcelessness.", "3+4=6", "superium.", "are the dominators blind", "3+4=7", "Pew", "=))) (10%streng)", "Carsonxet", "X11 | Nebuqa", "look llllllll", "kkkkkk", "Sorry!", "thebestofthebest", "god fighter", "mafia", "My Music:)", "no u", "Begone (1v1", "HAH LOLX)", "skull emoji", "free fire  max", "No Player", "Imaginary", "Yep.", "| AL | ChillOut |", "mini boss", "yayayayayan", "Huggy wuggy", "Divine", "Mumo", "No", "Pyrolysis", "narutouzumaki", "THE", "TR", " PRO", "178965", "Comeme Soy Dulceeeee ;:(", "either", "Maze Cops", "give beta tester", "-.......", "i need score", " pimp <3", "nm00{", "you are my father", "DDDDDD", "6666666666666666666666", "AUTO 555", "me best", "Crozo", "longest run", "blood for the blood god", "i m a protector", "q", ":(eu tou triste", "Sheeps", "i asia so 300ms", "not an easy target", "MyLittlePony", "little one", "oo", "cool kid", " BUB", "TTroll", "Onyx, The Fall of Hero's", "ツ", "ba", "Josh", "revenge:(", "La meilleure", "The leader", "n level up", "}{ello", " vikas", "Alpha Fart", "Matt", "fisch", "guy", "Cozy.", "Preku", "stuff", "friend to all", "Inverse", "no ;)", "Souper?", "):)                  ???", "Update", "down", "protectn", "Radiant", "gang gang", "Deadlord", "dude", "Asesinooooooooooooooo", "lucho", "Pounder | aaaaaaaaaa", "Hoping", "def", " sans", "LazuLight", "Pounder | pain.", "WHERED MY RELOAD GO", "eh", "RP", "wat?", "ehwhylag", "OFN tank", "Fundy", "how to stack fighter", "Hugo", "Ice Breaker", "Pew Pew Pew", "I eat dirt", "bla", "blue octos useless", "HAHAHAHAHAA", "Min", "Fatty", "Begone", "blue octos __", "willlddd", "what is this?", "Aleph", "Demon", "Error 505", "Horizon", "The Tale Of Tanks", "1+1=3", "sdddd", "ven", "Yujin_05", "99999999", "dead", "Flight", "ma ta", "anime", "cyan", "wreck", "senti <3", "Uh what", "Nya~", "APE", "Through the Rain", "no pew and paw here", "idol askib", "2...00++++", "jjjjj", "firework", "Jacob gomez _ Jadenian", "I'M CHILLIN", "yoavmal", "eternal.exe", "Bye :)", "no plz", "REVEnGE__+=!!!!!!!!!!!!!", "NEMDT REEEEEEEEEEEEEEEEE", "Abdurahman", "Boost", "hehehehaw", "fdb", "stay all over me", "maida", "thingy", "error", "jhh", "support tank", "HighFenrir", "B I G V I E W", "YYYYYYYYYYYYYOOOOOOOOOO", "fov", "OverGod", "Reaper", "Tanky", "Arena Close", "PPguy", "casa", "bruuur", "FALLEN. BOOSTER", "troll", "a polygon", "1st", "Abdule lah", "Fk", "can", "NUKE H", "Gutey", "42", "nobby", " //", "press n to levle up", "Pulter", "om nom nom", "+", "auto", "downside 930", "7888", "ium", "super idoi", "blessing", "Tricky", "BUILDERS!!", "Barry", "sandbox", "Y U NO?", "Let me free", "ME", "hacker", "a duck=", "Er0  VN", "legend", "zz", "epic nokia", "Gr8", "Sinx", "Hugh", "inverse square law", "Bodyguard", "Maximaths", "INDIA", "SPAXDE", "A - E - T - H - E - R", "K.I.L.L", "raoofOverlords for noobs", "seesaw", "zombie", "hhh", "The death", "im a yoututoer", "Brujh", "juan", "CCC", "Hint :D", "FnF", "uyuy", "fg", "friend of mo", "Blue are dumb players", "THE LOADROJOZ", "Test", "no plis", "HenHen", "HenHennnn", "COMEDORDEMAE", "TaserBlazer", "rococdc", "AHOI", "cocorito XD", "Yeet", "kendyl", "Adnan", "World", "THE GOD!++", "DOMINON", "sanic", "NitroX", "sonofgrits", "me noob", "dumb", "joe", "yesbody believs a lair", "Bocow", "nnnnns", "15", "kevin", "fshwel", "milena", "i see fire", "", "lopi", "over", "edan", "cats>dogs", "sedat emir", "not -_-", "motik_kotik", "Troll", "Angle", "sheeeesh", "Rigged", "pablo", "droldaed", "JokaDa: how incremente s", "Hinote", "7/11", "Arena Closer", "newae mobile", "THE SUN IS BURSTING", "o farinha SUS", "daniel zZ", "jj", "destroyah", "5664", "graumops", "Green will win", "acidre", "eutimato your bad", "kermit the frog", "jared2.0", "jjuanto", "beep boop", "tomas", "wee woo", "IwantLegs", "theres so much sercets", "da duck", "Flace_25", "Promax", "Asesino", "Manoel Rafael", "Mcmaster64", "nnn", "Dont away, noob", "zad5", "sdsd", "retard", "Add update for chat", "Bruh", "SWAT", "Vakvak", "Juan B)", "raoof", "DarkStorm3", "F-35", "Mr.Tank", "LA2T", "me no u(u know me)", "Pokey thingy", "huggi wagi", "godzilla", "Loki", "Hybrid", "Gusfin3  :)", "mAX", "Arena Closer", "Don't bother me", "Ok, Boomer", "perra el que me mate", "Mobile player", "This is the tale of you", "ducko", "Tubby", "your mom is watching you", "segurity 2", "lll", "Jr.Greeen", "Dddd", "rid", "aaaaargh", "stegosaurus", "Free Points? Nuh-Uh!", "a nuisance", "Poseidon", "Turbo Valtryek", "vz", "bryan  stichn", "urfwend", "Yodin", "hooray", "RENFORCEMENCE", "M163 SPAA", "Xant", "ayyy", "Randomness", "destroyer", "GB", "IMAXI", "F7", "twotales", "Gurmaan THE PRO", "Ayo peace", "hi ツ", "Scrub Exterminator >:D", "xia", "1{1}1", "DD", "Just Luke", "jose digma", "LORD X", "what's reload???", "AL|Air", "non't", "TryMe: DodgeBot2.0", "HexaDecagon(I grind)", "TryMe:360NoScope", "Error 404", "EDP445", "rsn.", "GEESER", "help me", "rotten punk", "solo vs 3", "all monsters", "ari", "Lore", "&__.._._:-:-:-.&", "Kalijia", "Rusty", "GUGUn", "hi :)", "truper", "goofy ah single", "ServentOfDeath", "J.L", "THUGGER", "ARKE:D", "The beep  duo", ">>>", "im bad", "Qscxz5", "CSDulce  Legend stop ._.", "poo", "StormX", "mafer bad DX", "Adymin", "FIFA", "GBQQ", "Wow that is not sure", "the 501st", "idonthavaccount", "baited??!", "Orn20", "theCityCR", "healersruseless", "Sin (watch my videos).", "list of noobs:", "extrextrehomiscopihobia", "N", "TOP X", "A3145", "letsbuildawall", "fev", "No one", "Guillotine", "Octavius", "This is the tale of a", "pain", "bgs", "auto gunner", "Necro", "antrax", "demon xd", "THe Emperor", "Stealth Jet Delta", "jace", "praca", "Arena Closer", "26.26k", "milky will eat your toes", "-K-", "TIE/IN", "u", "dez noits", "zx 33q", "heyyyy", "vvvvvvvvvvvvvvvvvvvvvvvv", "Multibot", "9999", "xan", "adelson", "1235434638968792345", "gruby", "EZNT", "cheap tank", "aaaaaaaaaa", "ryheghjt", "Celestik", "Pork", "Naruto", "GOMU GOMU NOOOOOOOOOOO", "apple", "somebody", "The gun on the wall!!!", "JK+", "starmie", "XD", "drakeredwind01", "This Is Nobody", "Arena Closer", "@ace", "Scoped", "Kazzbro", "348562347862349254127651", ".....", "NO MORE OVERLORDS!!!!!!!", "no c-", "Buzzy", "mom", "Chekks", "HAHA HEHE HUHU MOBILE", "bert", "leader Slayer", "na", "ZACHARY", " Iv", "Dogs On Mars", "Aquiner_ouo", "Thinh", "gas", "lautaro", "I also helping blue", "pet(XD)", "wow", "hj", "CraZy II", "laranon br", "XDDDDDDDDDdDDDDDDDDDDDDD", "eaeaeaeaeaeaeaeaeaeaeaea", "You", "zero to hero", ":3", "Lux", "magic_cheese", "good morning", "HAHA HEHE HUHU", "Red is best", "JK", "not onyxd", "help", "But you keep on breaking", "huttutu", "jjj", "hansith", "mds", "goofytank", "Korone Chan", "el pendejo", "razenezyou", "voltic", "qoh", "nya~~", "KL", " jeje", "asdfjkl", "Daisy", "zarity", "NobleSkele", "shhhhhhhhhhhhhhheeeeeesh", "kevynz", "Pewpew", "Star Ender", "Copy my tank ok pls", "JOIN THE PENTA PARTY", "bob AT", "basic", "jesus proooooooooooooooo", "um", "q00000", "adljsaknckjas", "OOOOOOOOOOOOOOOOOOOOOOOF", "TallStop", "Ops...", "underated tank?", "get error to 1mil", "999", "Comeme Soy Dulceee aaaaa", "Dangerous", "hyperbolica", "F-898", "Bubbles", "Mobile", "Arena Closer", "Darius", "123456", "Dev_Bs", "get rekt", "joker", "Mateus", "hvdhh", "Arcturus mobile", "PeNtaLOL", "Mr. Porridge", "go jax!", "E?", "Pew!", "BLAST", "level", "Vunda = Mythical", "Hi Levi!", "Hi Travis!", "Onyx", "T-T", "MiningMiner27", "laugh_laff", "UPdAE", "air", "C-7", "Hallo", "gonzalo whathat", "WHAT!", "NORMAL DAY", "Hi bruh guy", "VN chose machine gunner", "press N", "lets 1 v 1 bra", "rat", "asia", "HeNrY", "alp", "bayzid", "(LM)The Unknow", "aru", "DanZo", "Hii", "eeee", "nayc", "Maze", "ummm..... ok", "~Real_K~", "phong", "Support", "<1.5 is not enough", "=Z~", "Ban she", "comm ander", "Sei", "vcl", "Dapa", "T.Khang", "maikesito", "hihihi", "Dyaranhi", "W a t e r", "Fluffy", "223", "!ARNA LOSER !", "leave me alone!", "i use hacks", "EEEEEEEEE", "Always not alway kid", "GX .ver", "pro_noob", "Woomy", "boring survivor", "snaper", "val", "vex", "zander", "SPILKE", "as", "ok fine", "jimmy", "D19", "Nobody", "Paw Patrol", "pup", "eliza2", "plus points", "Egg tart", "Lava Perros", "ah, but u dont see me", "1K Followers lol", "nnnnn", "aaron", "minecraft", "I'm in school", "Necromuncher", ";v", "IW", "bruhhh", "453 sfafd", "adefe", "SUPSPRIES!!!", "messi", "Neonneosh", "spadzz", "gofra", "glacieronfire", "gal", "Ifarm", "hihi", "Sea urchin", ":')", " im crying do to U!", "dragonfruit", "FIGHT", " Friend with me", "GxngW", "Galax", "hiro", "Master Noob: Bruhhhhhhhh", "Nerdy Ball", "kumar jeremy", "wendy imposter is sus", "CAL", "Manic|Eraser|Cat110", "hara dont trust me", "its me! the", "sinx", "Dr.Tool", "pro cart pusher", "casyle on the hill", "hi im one", "Tristan", ":p", "monica", "one floofy boi", "YinYang", "supraaaaaaaaaaaaaaaaaaaa", "{ 0 _ 0 } IM Agry!!!!!!", "lena<3", "Jolo", "antontrygubO_o", "Leo hacker", "lakalaka", "1nFerN0 - 1 mil?", "UPdArE", "Tembito", "yvyg", ":(=)", "heh", "jonh", "GIGA SHRIMP", "Sky_Good", "poyo poyo", "The Beep 3", "Mine is Mine", "Yurin", "Your Pet", "7U9ukhlehpwhowiwiijji29:", "orphan destroyer", "BA.2.75 Omicron", "Astagfirulla", "Fallen Spiddy", "lee77", "ghg", "PretendToBeANoob", "zuesa", "The Void", "rdagonfruit icy", "time too tryhard", "democrats SUCK", "erro 1mil im so bad:(", " {}?{}{}{}{}{}{}{}{}{}{}", "get error to 1m", "why is anni overrated", "kakyus222", "Have you seen me", "Arena Closer", "hiiiiiiiiiiiiii", "im noob", "Tattletale", " GoodLuck", "bazooka", "FFOx", "wellerman", "dont trust anyone", "eng pa", "Summoner boss", "kostas friends ? greece", "V:", "CorruptedSpectro", "hohohoimsanta", "1M ????", "BOOSTER AIRSTRIKE ORELSE", "nashe", "Algi", "(vn) go with me pls", "FPT", "2020 im new", "Player", "jkhhgg", "Cody", "Eiffel Tower", "BEST", "EVERYONE BE DESTROYER", "Pray for Ukrainian ppl", "prb", "Attacker", "RACE", "Yael", "Q Checked These Names", "(W!) Solo w!", "111111111111111111111", "GiantJustice-", "Nate", "Can pls be your friend", "Cxrrupted", "yourself", "you(VN)", "khoa fake:)))", "1VS2?", "IDK", "plplpl", "minh7cvn", "hehe boi vn", "Sinbadx", "One.", "Q is Awesome.", "laco", "RPs", "meris", "Harder Demon", "Florentino", "Well", "jerry", "Hut", "Pet bird (eat triangles)", "mustfarm", "I bet you never", "FeZTivAL", "Kid", "ABC", "PH", "Starlight", "MOONLIGHT", "STARLIGHT", "drift", "vilad", "MURIQI 03", "The Light", "cat", "DRUNK DRIFTER", "WHy", "mmm", "arR", "FINz'D", "aaaaaaaaaaaaaaaaaaaaaaaa", "biba338", ".chao", "HNY", "$$$$", "cat o' nine tails", "Block Craft 3D", "BRUH", "-vn-", "Azra", "bin huhu", "00123", "CN Tower", "t143", "Te", "Gun", "Sans", "Fggf8ytr ftrfbtruf7rtfru", "Ryuu", "overlord king x", "emir", "empire", "Player 1", "NAtZac1424", "BOT-342465", "Hdujdb", "We_peace_farm", "tuan", "A1D2J3", "323f", "MYJ", "bbebebebe", "T", "peace_farm", "hoang118", "lol2", "lol1", "gtegnugnbdbdtui", "the guy", "sang", "/SUP Maths", "_-zErO_-", " Gaurdian", "5C", "DJT", "silvally 1v1 me pls", "Arena Closer", ">:))", "valer", "G,bdx m", "|A", "No Ski||s", "Etz", "The Comeback of 0800", "sinbadx", "QWEr", "I need 3 1m more", "Njayy", "NOBDY w", "Sh |             _", "xs", "Jet(pet)", "INDIAN", "The Immune System", "TATICAL NUKE INCOMING!!!", "bigmac", "jjjj", "woi", "protecter_of_free", "bye", "WZ_120", "let me protect u my lord", "IMAGINE DRONE IN TDM", "wewewe", "Max", "Nothin", "uh", "Ancient", "NNNNNNNNNNNNNNNNNNNNNNNN", "MAXICHIBROS", "Belowaver", "trboo", "T^2", "Carpyular", "e04", "turbo", "Sei GF:3", "trbo trbo trbo", "Hymness", "red sun in the sky", "maze goblin", "Wojak R FuNNy", "Cloudless", "Hey!", "stacked", "sudu", "Launchers no buff no gg", "Sh | cc_", "Xentnya~", "Xjso", "Void", "nobody", "Pop", ":) cavite", "ja", "THEIA CELESTIAL RULE 34", "2 0 2 2", "i Saw LimeinSoccer penta", "WatchMeDestroyYou", "the new era", "osuer", "NOOB VN", "aleph", "cjccsqb", "lusy", "uudsibfhb", "ssdd", "trying out factory", "bo ckick R", ":b", "DarkHeart", "sd", "Bi", "ax", "23", "Ht", "rest area", "korne", "Around Calm", "duo octo", "Know", "Bruh player", "huh", "LintanR", "all my friends are cool", "lth", "Ilikefarming", "mie", "yo racingboi", "Kylaura", "HI!", "Leonard", "None", "ya", "Evaden K", "AZU", "Eating Fighter ^Silvy^", "Jeff", "elecgance", "667ifjfjijfo", "Necromancer Pet", "Vakst", "Forgor", "The Sliding Door Com", "Nest Keeper", "ka boom", "niitrooooooooooooooooooo", "mada fking", "Inside Out!", "healer", "Average DPS enjoyer", "i'm friendly", "Pablo", "Necromancer", "saffy", "Manager", "nmnmn", "Leon", "(vn)TTT", "NucelAR", "benni", "-1", "proo..", "chicken wing", "Zasriel", "Ground", "Fairy", "='))", "KSA", "DOMINATOR", "packy", "rrrrrrr", "xyz", "Gianan", "=", "VEISEL", "space", "bibi a", ":3 s", "600k is how far ive got", "u POO", "dfhdhgsdgf", "pighati", "BT_O", "3w3f9", "@@@@@@@@@@@@@@@@@@@@@@@@", "rain and fezti", "Arena Closer", "Sara", "b b/", "MG Post", "Rock", "The Truth Untold", "FireStorm", "chew 5 gum", "EreN0", "", "AI", "netherlands", "la couronne", "stone", "bello", "SUS", " OVERLORD HEROBRINE", "Chaini", "nhi015042012", "meo & sup", "tomnguha123", "uoivhhfgrryttyhj", "tyty", "taem?", "Nividimmka", "I use underrated tanks", "u stupid", "ferrari", "", "thearch.hmmmm it lurks", "i won't let it end", "college sucks", "color", "l7er max", "Duy Lee", "ugok", "Booster race :D", "im a joke", "ms tang", "ssssssssusssssssssssssss", "Elson", "BILL WIN", "Root", "el pogero momento", "I'm Friendly", "huggy wuggy 2", "wibu", "Griffy", "solo1 -1", "Like crashers", "wispy", "nice", "BUB", "X-BOX", "Gregoryelproo", "NEYONSTANK", "Closeyoureyes", "Utilisateur", "1% Power...", "SillyPantalones", "over 'GOD'", "First Time Play", "Arena Closer", "BoW", "Data Expunged", "Sped demon", "JOKER", "SIRENHEADYTs lost pet", "ggs", "hfski", "Taklao", "hack", "hi!", "karol43", "Aaa", "My struggle", "Italok", "Ghi", "Phycron", "fkdla", "dinogis", "HxD", "Battle Tank", "rt", "kral kaan", "leo!", "ndn", "222222222222222222222222", "leo! hel", "lumity", "kha", "552", "V VAG", "Windows 8.1", "'>'", "888", "mwr_csqb", "ANTI OCTO TANK", "mwrtql", "2022 SUPORT UKRANIE(2)", "thomas tank engine meme", "johnrobin", "Lostvayne", "ck to la roseanne", "Guard", "Bartek", "ww3", "doomsday bunker", "Hydra", "REVIVAL:", "Gggg", "Rick Astley", " HEROBRINE", "AFK", "BaLu...", "fux", "yes", "Raul39", " Sinbadx", "SAENG", "LittleBana<3", "TAIWAN protector", "bird said the n word", "me(duh)", "19$ fortnite card", "use this tank with me", "got 3m og save cant use", "sheesh", "Override", "Xiggy", "Saika", "jeb", "sant the sant the sant t", "uYu", "Panzer", "steeg", "Arena Closer", "i go UP and DOWN", "i like walls:3", "azuris lol", "HMMMMMMMMMMM you are L", "Murdock", "Optimus Prime", "Sleak Override", "ridah", "ballistic 2.0 fnf", "pulp", "u really like to hide", "ltbc", "when the", "Gangsters_Paradise", "Cochon", "Just Having Fun", "kavin", "Good Job Chicken", "0____0", "25m", "im poppin' off", "koral", "peace :D", "Medium tank", "dark:)", "kiet", "The One", "tilvlad", "Superchad factory", "meids", "the ruler of eveything", "GetRekt", "Nothing", "h1h4", "FOLLOW ME TO VICTORY!", "ciken", "this is the tale of", "Lera", "-heix-", "insta: 'brn.o.z'", "lena", "Ur4ny4n", "Byakugan!", "Lx1000000000000000000000", "turtle", "what tis going on here??", "Comeme Soy Dulceeeee xd", "Arena Closer ", "uirouri", "bruno", "Kaiju spacegodzilla", "haiw", "Heandy", "78d", "S. Liza Yt", "I don't need a Partner.", "CS Dulce oh ok -_-", "ninja", "CS Dulce i some tired-_-", "| AL | ChillOut | WWS++", "dragonfruit icy 1212 X4", "CS Dulce u no are friend", "i like cheese too", "Don't touch me", "look llllllll kkkkkkkkkk", "Dogs On Mars | no N", "box", "super", "CSDulce  .      _      .", "hope i dont dc", "A A A", "im your pet", "venom", "Hlp my ky r brokn", "ok la :)", "ffdf", "soccer", "(-)", "Mikasa Ackerman", "peasant", "get better bozo", "CARELESS(I care less)", "xz", "MARY", "DVS|| BuiltKIDD", "|AL|ChillOut|", "jajajaj", "Yimo (Friendly forces)", "HECool", "Just Spinning", "KermitHasAGlock", "AL| JustICE-theresaclone", "Sean", "ezzzezezezezezeze", "-Corrupt3d-", "Greg the Hunter", "hypertone", "eRAnnnnnnnnnnnnnnnnnnnnn", "mafer im sad 3<", "Nageron", "Eric.  The. Unstoppable", "Earth is Super Cool", "annoying tank", "ovMasted", "Turt Talks to Much.", "tanvik", "Here Were Dragons", "Cheese and Perfect RNG", "Mega :)", "Betelguese is Super", "error error error error", "Boomer Humor", "Violin is Interesting.", "Elite Celestial", "PROFIN try's 1m scores", "Big Poppa", "BUGEN+", "Saika/Na2/500ms+", "devil", "JACKSON", "Masher", "shuna no 6m", "YOU NAAASTY", "yahhhh", "Zephr is Mod???", "$1,000,000", "Rk", "1010", "idrk", "Calob", "It's all okay.", "fr0z3n", "TRASH", "Abrar", "c@rt3r", "pwease?", "thearchy", "Zort", "pwease lemme get 1m :D", "shush cat", "Mr lord have mercy on me", "xDer", "tennis", "ZEN", "multibxersin2tdm", "Bisax", "hhhhhhhhhhhhhhhhhhhhhhhh", "Arena Opener", "This is a Laser tank", "GOTTA SWEEP SWEEP SWEEP", "167", "Rusher", "bcj8721yt", "awa", "Ron_scratch", "Ahmad", "highh", "(O.<)b", "Op", "Tenzo", "Xlemargg", "hghg", "Legend", "PewPew", "Auto factory 19187944889", "Taha and Sardar", "Cc", "Wheaple the great", "VT", "LEGENDARY BEST", "Rd h", "GX", "maxi", "Doanh: basic win vn :)??", "bb8", "breaden", "1 cannon only chall", "Kino", "quang", "FRIENDS TO ENEMY", "NB", "hoang", "Inevitable X", "say cheese", "Anken", "gun boll", "soy sauce", "PUNSIHMENT", "Domain YT mobile player", "badog", "longvn racing boiz", "nicola", "race", "RJ", "eloxus", "kjiegu835946793", "Level  fun", "Purple2", "Hmm", "vicrouss", "GIGA CHAD", "Auto factory 37448936323", "NO ONE", "cai chua", "Spring Bonnie", "ALPHA CHAD OF CHADISTAN", "ajajajjaja", "dustnine22", "let's begin....", "DuckBatmann", "125   mn", "giraia", "Shoot double", "Spawner > Factory", "Fade", "Pat", "Kol", "max", "njs", "1+1+1+1=4 OK!!!!!", "POU 2", "morbius", "Sven.", "Prm", "Arena Closer", "no teem", "forest", "Im friendri your order", "(Tank) snowy! (Tank)", "Ur momma's", "rowan", "boknoy", "Shide", "redrealm", "lor", "-CN-", "yup", "Ahmet", "-CN- ", "JUMP ROPE 10 TIME IN ROW", "YOTTA CHAD", ".ium expanDeR!", "elecgance4", "fix performanz, devz plz", "UrBadLOL", "suffer", "Destroyer", "ZZZ", "IM AWESOME", "tHE great king", "Nafi", "micsodaaaaaaaaaaa", "Raid", "W1lleZz", "saibou", "That_Thing", "hexagonal", "Panda <3 FFA", "Koala", "NEVER GONNA GIVE YOU UP", "simba", "Crush Limit", "No pp for u", "Arthur", "kiriloid", "AZERBAYCAN  TURK", "Arena Closer", "thien5011", "Raymond bince", "not  tifo", "THE FAT RAT", "greedy", "lightz squad", "64t", "Tri Angel-Booster", "sanesytp", "wasd", "Ryland", "Fallen", "PUSH ME", "dgfdgr", "Booster join", "Dorcelessness", "obed", "soy noob :,(", "Triangle Gang", "Dont pee on the floor", "Good!", "Andy", "ccc", "Gee, thanks", "WHATS UP BOI", "aronnax", "Person", "Annie", "Mellow", "TU VIEJA", "ace", "WoW", "friendn", "kirilloid", "meme", "sacapak", "Ethad", "Da boss", "XLF", "abominacja", "doge", "I'm Real", "sprotto", "Polandbanner oo", "brazen", "QUESO Y TORTILLA", "EDI", "A tank", "bvaietd?!?!", "eda", "I don't know", "badda", "threuagnduirx 1234567890", "gabi", "pastry king", "Ball", "gab", "Catalyst", "sssssssssssssuuuuuussss", "Healer", "put Factory", "Funky Fresh", "XRECS", "mlk", "3-D Julie Cat", "Elite Crasher", "Nina", "One Floofy Boi", "Tailred", "raindog", "SPEEEEEEEED", "unikit", "adrik", "Fallen Factory", "OWO", "Caca", "orange", "Cj", "carlitos pro", "ghostly_zsh", "poly :/", "imagine spinning", "kom", "austo asa", "0 helpful blues lol", "Sandwich", "The Influence", "F for Froot Loops", "Machine Gun", "Director", "ChEeSe", "Mud Muppet", "RSN", "5th base = best base", "A Poisonous Egg", "'CADO ON THE 'BOARD", "blue suck XD", "lumos - kms", "blue suck so bad XD", "Lifeless..", "igh", "<<< Saved by Grace >>>", "agdgdgdr", "youencounterHIM!yourDEAD", "dinmor", "Jess", "La-BareTTA", "Aim(^-^)Bot", "78d pounder op", "Update me", "Comeme Soy Dulce wateer", "mafer  <3<3<3<3<3<3<3<3", "Ainnim Loof", ":)           (:", "Windows8.1 Pro Build9600", "a spinner", "FAIRY", "Better Than U", "Eesti", "sssss", "Friendly Elite Crasher", "MAICK", "EIDOLON", "cx", "YO what? bro im out...", "Rest", "TheHero383", "Swohmee", "Swohmee: HowDidIDoThat!?", "pet brick", "houses", "SIUUUUUUUUUUUUUU", "S45vn steel op", "Astrageldon", "ijklmnop", "afk leave me alone", "Anti-Hax", "protec me pls", "Gonials > Bird", "Jachris", "Aj is dumb", "code master", "MONTER", "kase", "JaredUwU", "devon", "kase is good", "spider .,,.", "lily the pad", "Arena Closer", "Gorilla gang", "Alejandro 22", "botanical torture", "Egg Spawner", "ghhhhhhhhhhhtoast", "Chungus B.", "Maksim", "Enderian Overlord", "eef freefzz", "Little Timmy", "Flashbacks", "dread", "ffa till 1m!!!", "wuzz buzz chuzz", "percy", "Space", "kraken", "BR PARADO", "Sry m8", "Chobblesome", "yee", "gtrr56e4e5eerer", "ELITE", "Krystal110607", "Survivalist", "Kalijia GG", "Kalijia Let's Peace", "eeeeeeeeeeeeeeeeeeeeeehh", "coriander", "Mat (Bocow)", "SIUUU", "bro doesnt have a life", "your tail", "eeeeeee", "<call me", "Numb The Pain", "hi ;)", "pierre", "the quiet kid", "nom nomnomonm", "ggggg", "Adventure", "notable", "777 ////. ./. /./-.---77", "PowerPoint", "FALLEN BOOSTER", "Ecxel", "ye", "LIBE", "bukaka", "notlazar", "errora", "ManiaC", "NobodyIsReaching500K>:(", "pescah", "fvha", "pesca", "Innkeeper Worm", "Blarg", "=ZZZ Bannanas Are Yuky =", "GRRR", "Try Thalasin Today!", "Thalasin OH GOD HELP NO", "SILIKA", "Fallen Auto-Tank", "SYSTEM", "is op on siege mode", "G vytvyv", "guardian", "ya mom", "Lorain", "A br stranded", "matew", "matatoe", "dante", "Maize", "Arena Closer", "Ouake", "khe", "i only farm", "DESTRUYE SQUADS", "let's go!", "no pressure", "Manoso G", "Indeed", "Lets be frands", "Bunzo", "vyn", "ok so...", "haha", "cooooooooool", "Ye boi", "Quest", "GOAT", "kool", "8hu", "bryan", "Aadhy", "Basic", "Eleanor", "OXZ", "speed", "az", "ura bot", "78d 714k bruh", "Partisan", "eli", "fwen -w-", "Death", "Hewwo :3", "Stalk Is Actual Pain", "fdfdf", "extreme hapiness noise", "begone", "Apex", "Wynder", "oof", "im watching you", "chill", "p", "-heix-", "Savage xD discord?", "crocty gets 1M first", "iv vs 3", "im bored", "ERROR windows xp", "(B) Wehrmacht", "FRNDL", "Lonely :/", "The N2R", "qqqqqqqqqqqqqqqqqqqqqqqq", "sven", "phi", "Uwu", "P", "Mushroom", "1MiL", "stinky/ gg jax!", "bay sorry.", "ツSpazeツ", "Mine craft", "nob", "/:", "Legendary", "vinh", "Moragull is JOHN CENA", "A-K 8000", "CorruptedPenguin", "C@t has C@p", "Stealth Tank Delta (STD)", "I WANT A HIGH SCORE", "tim", "UltraOmega", "PPPIIIGGG", "shark bait", "nek minet", "g'day mate :)", ":_:mx", ">=<", "run", "fire exe", "The Best Player", "susicoi", "Nerdy Ball :)", "cor", "Defender", "SlowKnife", "1+1=11", "my", "HUNG", "Deep", "Emilnines", "lol:):):):)", "Orca", "the legend hero", "/donotello/raider/", "YT=GLITCHER TM", "Jagdtiger", "On mobile", "The General Lee 01", "TeSt", "The Palidin Tank", "DaRk", "0jgojettreedew089", "ghost", "213", "twan", "Spectator:)", "uywu", "{}{}ALEX{}{}", "daniel", "Sol Blaze", "poly gone :D", "im 100 years old", "Re Fachero", "Blumin", "jhonny", "supreme", "D0M1NAT1NG++", "SAS", "Nailguns HELP!!!!!!!!!!!", "Arena Closer", "darwin", "djbd65", "JustLurkin", "im sorry", "race with me!", "on de xd", "Paladin-Celestial", "russia", "CHN fed", "sj", "13isaluckynumber", "i suck", "ah, but u cant see me", "a mongoose", "rae", "Z", "323f54", "lev", "Ultimate Dominator", "WWZZX", "Goku drill", "laffy taffy", "good luck", "EpsiCron", "Eye Of The Sahara = City", "Shields and Guns", "Tester BT", "outrun my gun", "invincible man", "Necromonkey", "HENRY      ANOS7", "TailQZ", "PPANG", "Tester", "a sentilen", "Jhon the nub", "arrowz", "Annihilhator bravo 1m po", "just boone", "hybrid", "gg gmzin", "we do i little trolling", "Jorge", "NgocAnVNA", "Sh l", "DUO MONETER", "Coapc", "timi po", "Why Buff Factory?It's OP", "Storm King", "Enter to the Dungeon", "frrrrrr????", "shutgun", "debris", "NOE BODY", "Dr pizza eyes", "Protect me", "How to get you", "sit", "Caracal", "trashmxnn", "Cat", "Angel", "baLu is kinda cool", "Tanky's 30th 1mil?", "i need a pee", "josh", "ggs (1m!)", "fed", "(Ai) bot", "hijo de su putisima madr", "slowpoke", "NO IDEA", ">_>O_O<_<3456", "hi saya", "ryuuddddddd", "Random Guy", "vn nha", "Just a Spectre", "manoso", "joshkidkid", "sg", "TON | 618", "mogerath", "vc landmine", "worst impact", "Ma$t3R=No Ski||s", "aajlrtgtrtty", "korea no academy", "Behemoth", "VN TOXIC", "dh_hniV", "no vn", "bruhhh (vn)", "1M=100M", "frrrrrrr???", "ggh", "lakf", "imscared", "Wow", "(<(:)>)", "STOP", "Tale", "Leo", "!^_^D0M1N4T1NG^_^!", "vortex", "blue", "Sr. GT", "eat my bullet", "fudgg", "RATA INSANA :3", "Find Me", "PHRENTINO", "bro follow me", "Xyx Wdtcfgzezgk", "fencer add me on disc", "super shock", "GGui", "Rafael", "moblie 1.37m siege woo!", "Surprise Surprise", "king pug", "Emily", "Hm", "Marchin Through Georgia", "Aha!", "huff", "jummer", "bixent boo", "Bao", "AAAAAAAA2A22222222222222", "uhyi", "press u", "HI Yoou", "aaaaaaa1", "LMGshooter", "1922", "-KONZ-", "Waloh", ":(((((((((((((((((((((((", "obyness", "BaLu", "Zod", "spin=friend", "Ashes", "the UNTIMATE DESTROYERb", "MYLEFTBALLHURTS", "Xh", "ravi", "sorry sorry", "ZasrielDreemurr", ": )", ":?", "TaKE LOl EPIC auto 4", "Shankerith", "Hunker down", "!!!", "being afk", "TienBach", "fun.", "Zzz", "Annoying", "Juna", "new player", "Xander", "duda", "ppoppoppo", "One of your pets", "kolibri", "panzershreck", "EwE", "Deus ex Machina", "Pilav", "berd", "NO your mom", "1e+999", "Cristay", "nuiw", "UHF", "OwO", "PandaNa", "nnnnnnn", "Energized", "Cirrus5707", "Ferge", "not boster", "shuna wakuwaku", "Rongomatane", "press n to level up", "bubble shooter", "Turret", "super pro prot 4 you", "45453", "Despair", "Ho Ho Ho", "Y.S", "Arena Closer", "john", "96", "Auto's power", "2 Booster = Fun :D", "Press C+E: Octotank", "you were so mad", "Sky", "need protector", "Great Bydgoszcz Reich", "superman", "ridge", "hahaha!!!", "HELO GUYS", "vyey", "Vinaphone", "hiiii", "ZERO", "el epepep", "T   W   I   N", "5252525", "121", "iar", "avex", "Taboo", "since 1986", "meow", "AUUUUUUGH!", "xtrw", "On Mobile", "PRO123123123123123123123", "Kira", "gray", "eeeeeeeeeeeeeeeeeeeeeeee", "StUfFy_ChEeZe", "????????", "4th Form", ": ) ha ha", "OL Impossible On Mobile", "1v1", "BBoRRaBBiDDo", "hu", "pp", "slow but friendly", "vn", "loler", "Atumkj.", "fast boi", "MYRIGHTBALLHURTS", "1111WW", "odszdc", "Withering", "eafscx", "eeeee", "Sudu", " sub to", "T-Chan 13", "|^Robo-Birb^|^Silvy^|", "Korea :D", "Sidewinder-firebolt", "asdasd", "Agent Sauce", "vinud", "1 + 1 =1", "Xqaris", "WatchMeDestroyYou ol 1v1", "builder", "nnnnncaptiann", "Gawr Gura", "WatsonKong", "yx", "aewrsd", "Mmmm", "...VN", "REVENGE", "Mwoon", "turbo bro", "Hiu VN", "FF9JesT", "Fallen E", "hgdgt", "Fallen Hybrid", "SORRY..I'M..(vn)im so :(", "yaaaaaaaaaaaaaaaaaaaaaa", "supperlenny123", "The Underspeeder", "Anime", "AntsAreCool", "king of ...", "ghgh", "arslan", "I see", "chicken", "dkd", "777", "Engineering", "Push me for barrier", "oop zeros", "Mini moving safe zone", "goku", "fgg", "Jagdpanzer IV", "()UTi6", "zaq", "USSR(Russian)", "Stocxk_", "the things we do to surv", "asd fake", "HHH", "Swooper", "ayo", "hara ...", "ya YYYYYYEEEEEEEETTTTT", "Kyrie o.O", "Updog. Dying Breath. 2", "WHYANDWHY     Y_N_Y", "hara )))=", "I'm Q", "-Monster-", "Anak", "Mine says hi fake anak", "the sky", "Master Noobpet", "Viva", "maze", "oompa loompa", "Egg'in", "f(x)=k", "go to 10 mil record", "Trying to be peaceful", "Tunnel Wanderer", "Boop skdoo bep", "The Beep MAD>:(", "Speeedrun 200k plss", "The Boop", "Kaiju you", "dragon sleep no brakezzz", "kracc bacc", "24686872678", ":", "OnovonO", "Arena Defender", "Arena Closer", "naga", "asdfasdfasdfasdfasdfasdf", "Ace", "Pkao", "insta 'brn.o.z'", "aswon", "sodbazar", "The Hybrid", "aswon(ur bad)", "Troller", " nothing", "IKEA Box", "Vaskrano", "Si", "A+", "the beep !!!", "A+ Yeah spin", "Dr J.I.D eyer", "xijinping", "shheshhh", "pRo LiFe", "AZERBAYCAN  TURKIYE", "Just Existing", "3.14, 1.61, 1.41", "Ozymandias", "ok i pull up", "funnylemon", "TURK", "1212", "Learn with pibby", "LUKI", "happy mafer <3<3<3<3<3<3", "Seer", "mkZZZ", "niwa niwa", "nhan", "1223332111111111112321", "Arahana", "The Robot Kid", "vokki8skand", "Turret LV 1", "AQEEL", "AnA", "yahya", "ninjin", "Soulless", "EMO", "1010971", "pokemon", "VN 3", "alright buddy", "FR|Fajro", "Walorried-TR", "abuk", "Dead server", "Arena Closer", "zae", "zeraora", "imnew", "elecgance404", "heck", "Tomi", "SPAS-12", "tran duc hieu", "GGuisa", "viwpo", "BERD", "Blocker", "bcr", "come with me guys", "ehehe", "rule.txt", "big chungus", "t. food bc why", "lk;k", "SERIES 113 JAPAN", "sir bobybop", "G1019_t", "grendel", "andria", "VousyX", "LAINofLAIN", "ferge", "vilad pro!!!!!! :)", "Ali", "xzxz", "This is the tale of FFA", "MIKKEL ", "knjbfhiu", "Raknar", "free fire", "The Unknown", "Motar2K", "drifting", "OrangeCat", "Ddddd", "hi long tri", "some random oreo", "WEEEEEEEEEEEEEE", "speedrun", "DatBoi", "Michel", "71", "jacquie", "Exendern", "Jack Daniel", "Bob le bricoleur", "=W=W==", "ft. Karmatoken", "Arena Closer", "stfutduy", "vaboski", "HAAAAAAAAAAAAAAAAAAAAAAA", "alsterercrak", "The Big One", "Sorry", "JzF", "ZZZ ZZZ ZZZ!", "hey moskau!! moskau !!", "EL TRUENO PRO", "<3 Doreen~", "tokar6", "nho", "Dusk Defender", "ooooooooooooiygf,fss';", "Wa Sans ashinenguna!", "aeaea", "nothing's", "the  best PEOPLE IN THE", "4/4/6/6/6/6/5/4/1/0", "Kazakhstan", "starlight!thunder!", "Mr D", "protected", "Uncle Iroh", "><II  gg", "dssfb sk", "Roly poly player", "jonyy0814", "KOREA", "1 min", "Winter", "zaid x", "Will join me?", " lucas", "MATI", "xDer MY FiRST 1M", "Seig", "oopsie", "nhat", "DAN GYUL", "Claire", "567", "stalker", "kotetsu", "124", "DraXsaurus", "My 10th life", "bhosdike", "sjw", "Karthik", "hhhh53535", "ciao", "sumoga", "brrrrrrrrrrrrrrrrrrrrruh", "jony0814", "rubyslime", "Yuvyyuy vyu", "Sppooky", "THIS IS INSANE!", "Bozo", "hex", "EJIT", "+S", "RENGAR!!!", "Nelly", "sadf", "UNKNOWN LEGEND(UL)", "hi im friendly :)", "llllllm", "Jekyll Why", "AL | 2 Week No Play", "Protector", "{o} Liza <3", "toothpaste", "sasukeuchiha", "ricegrain", "Deed", "vikitor", "fIrEbOt", "Machine gunOP", "mini", "Nice~", "quant2345677", "Oxylit", "totie", "hhhhh", "scx", "Ayrton", "LETS GOO", "Izumi-san (VN)", "Panther", "meckazAN", "men treibe", "never gonna give u up", "never gonna let you down", "never gonna turn around", "Arena Closer", "never gonna let u down", "yeahs", "Ruan=_= ", "Panzerfaust", "emp", "Tiny", "THE BIG ONE", "The Ranger", "DuckBatman", "Hatsune Miku", "ara ara...", "Basic Enjoyers", "hhfggddfdf", "The Mind Flayer", "Dance", "Ar 15", "XSET", "Milton Friedman", "Mr KaRbS", "Duong 20712", "playeur", "<======Lasi======>", "Mardi 1", "Ethan", "fellen 0", "Venom", "-_-Aigle Royal 72-_-", "Alt+f4", "swrmur op", "Bean Man", "atomic", "Annoying drones", "Colors all around me", "okey", "GIANNIS ANTETOKUMPP", "it's a lie", "hy", "pc", "mustard the rohirrim!", "Kingdom Hearts", "Mebh", "Dr. Eggman", "Choose otto we stronger", "protectsage", "pov:u need 5 prot for 1m", "TR Angela", "MadCroc", "sage", "robo cop", " weirdo", "Shiny Triangle!?!?!?!?!?", "Gem!?!?!?!?!?!?!?!?!?!?!", "blon td siix", ":: Saved by Grace ::", "maze runner", "MadCroc 1.21mToday", "be free", "Carry", "I JUST SUCK", "gemgemgemgemgemgemgemgem", "ur all bAAAAAAAAD", "Spin = Free Protector", "HELPE ME FOR HELP YOU", "Rosenrotteneggs", "Mr. Lord", "PFC|| KEVYNZ", "Hybalixa", "hows your day", "b I protected u before", "awootube", "there", "Julia", "seve", "Arena Closer", "hguyuthg", "hop", "i go high", "the return of chewy pie", "Jerry", "mf yeezys", "King Hans", "sven drop", "I Voyage Around Map", "biggest noob", "dog", "IM SUPER RETARDED!!!!!!!", "The End!", "Engineer Army", "lolnub", "Salt", "MOAR OCTO TANKS!", "KN-23", "nothing", "sonic", "Nirviar", "asw", "dom is easz", "sghhgsfhgsfghsffhshg", "Jerry - LOL", "server", "D4C", "BigBrain Time", "player 8483", "Turkey", "Deve", "LintanG", "STPSPMMNGSNPR 64M3R_999", "PaX|A1ma|YT", "kaan", "afes", "ly", "ulan", "Purple", "Hahahahahahahahaha", "fahrradsattel", ":('", "he", "NoSpeak", " lu", "Fugitivo BR", "Crossboi", "Noob", "Gabriel8", "pinkie pie", "Wowkoks", "Zweilous", "oui oui", "asian kid", "top mozis xd", "Kofolka", "AcidRain", "a shield", "glitch tale", "Crong crong crong", "!!!!!!really happy!!!!?", "(vn) :p", "udhe7f", "phil", "Mort (pc)", "askib", "jygghhjj", "Last remote", "tttttttttttttttttttttttt", "asddasda", "LIGHTNING DRAGON X 96", "Minimal", "jelly", "Your Mom", "Peaceful", "respect women", "Darius_575Pro", "csabi", "7859", "tenk", "rayyan", "Fei", "Pango", "eeebot", "giranha", "spirit of the forest", "dark", "pro player", "Yeat", " %<AzEr<%", "notPickle", "Reflex", "Me", "Stalker Army", "Qin", "Predator Army", "NYADRA'ZATHA", "Roaster and Toaster", "CSDulce im boring :=", "Szymon", "es ta la vida que toca", "@RAFAEI  PR0", "$:$gc", "Suomi", "spankthemonkey", "KANG OF WAKANDA", "Ark", "tiny ones my friends", "op xd", "fence", "III", "GPA", "Bonaventure", "witherrrr", "mahiru shiina??", "(B) THE RISE OF THE FALL", "mahiru", "May I Fuq You?", "ID", "trying for world record", "75882310770", "PressNToLevelUp", "Dont TaLk 2 mE", "Do Not Disturb (oops)", "Wyd_Josh", "Pentagon protector", "tri-angle is paccific", "Good", "Do Not Touch Im AFK", "WiFi-Kun", "Bullet Bill", "pentagon protector", "%<AzEr<%", "PROOO", "ice tea for free", "Waiting", "busco pareja7w7", "agabaga", "SOLO AGO MI TRABAJO", "necro pet", "Kael", "Trash Anni", "Sev", "wypk", "G.A.P(MG)", "nokia", "Twin-Twin", "bronzzy", "Guy", "Ytt", "Ayman", "Zyiad", "Ahmed", "the general lee", "a littl' bad", "Bonk?", "SEBASTIAN.", "aIIan y sonic", "bigchad", "N05O7G", "Tengen Uzui", "Prees N", "tree", "SPILL THE BEANS BRO", "Escort Carrier", "HEEHEE", "X_DROP", "XboxUser", "55564", "porscheHUB", "Tenth Circle", "Spectator (dont attack)", "summoner2", "sentry", "The Covenant", "Storm", "itachi", "Only 1 Factory Can Stand", "TOBI MARCH", "Come Back Here!", "Spider cochon", "Crash And Burn-Dayseeker", "Clearing shapes...", "BOONE!!!", "tr ndxd", "lurker", "SONIC GO FAST!!!!!!!!!!!", "Covid 19", "tar tar teha tar sal-t", "Ray of doom!!!!!!!!!!!!!", "lautayo", "Herobrine", "let u know", "Peace and Unity", "kelly", "wingarr", "aIIan", "SEBASTIAN", "Sonic.EXE", "fghjijb", "the all seeing eye", "blitzburger is pro", "trust me do this", "Beans", "qwerty", "lucas", "Domb", "Kronos - Eternal", "45a,i", "unavaliable", "happe", "Racing?", "Buyandeho", "Mobile Not As GOod", "Arena Closer", "Ok Ur Done.", "alex", "Siren", "Defenders of The south.", "Ok Ur Done. Again", "ssad", "SAGAGH", "dwada", "Says Overlord in Green", "Wolf272", "Sry had to go afk", "WerestLuck", "press t", "corner base trust me", "nah i", "FIGHTONTHEHIGHTS", "jaxon", "Dark Pheonix", "porfavor venganxcadddddd", "Toxic", "iurgitues", "lolstar", "harnesto", "koby", "Shiny Beta Pentagon!?!?!", "Everyone Go MachGunner", ":3 hi", "GREEN Barricade", "oo i m friend", "ASKED", "Xtrem", "NopeTurtle", "porfavor vengan", "Chompy610", "Drones are gae", "Penta takeover", "one of the players", "Avenger!", "Sleeping Quadrilith", "dewfew", "king bob", "one of the newbies", "Spectator", "Fistandantilus 39 AC", "BIG POPPA", "diana <pleayr>", "Really:D", "Kenobi!!!!", "arias", "Arkaic", "i have sponks :)", "jor", "Arena CloserSinx :)", "ALL GO BENT", "Evades 2", "freee", "76...", "rigeeS", "Arena Closer", "ZEB", "koten-", "green", "little one :D", "Factory Takeover", "PRODIGGY", "Scratch", "1% Power", "Thank you", "OTD", "pet lvl 30", "world's best anni", " DONCRAK", "gnghfiukfhfj", "MASTER", "mi(moblie)", "let be friend", "defenders", "father landmine", "overlord takeover", "Bloop", "ayy", "Fighter", "W.A.R", "robococ", "TEQUILA!", "As lc", "ezz", "xQD", "AGUST-D", "USS Enterprise", "Visitor", "Wolfy_11_BR", "jonas", "Takeover", "Fall Guys", "momo", "ChickyNuggyCat", "today is christmas", "NotThebest", "NO ONE", "secks", "Overdrive", "Seb", "Machine Gunner =best", "Yevery1BetrayME:(", "Nathan_1", "Tickflung", "323f54", "boone", "ALAN PAPI", "Jikang", "lenin pro", "hydro", "Toxic sugar", "M.D", "gart", "wall", "Arena Closer", "grandmas ashes", "Eat my Doritos!", "No no!", "mr.cola", "Tundra cat", "AR", "david", "nnnnnnnnnnn", "study yo orgo (chem)", "Death Is inevitable", "Stuck", "dragon", "droplet", "HI  you mom is here", "Zeezees", "necro", "luchi", "rp - on mobile", "bored rn", "Pandrian.", "master", "Lightning", "CLEAN", "arisen", "raaaaaaaaaaaaaaaaaaaaa", "3k", "qusimocho", "Trolling Me :(", "weak tank", "HunggVn", "Touriat", "use adblock please", "Q", "Arena Closer", "I'm_Chris", "fvdr5", "bman", "skrill", "royce", "Star", "QQQ", "MONDAY", "armtumroom", "Ssunseer", "duji", "ryy", "sanggggggg", "hai", "oty", "148 toxic", "no mouse", "232523", "h..hi :S", "vvn", "sire soral", "frost", "btw", "lqkf", "Senator Armstrong", "Vn hi", "Fake.Fake.Fake", "molkin", "lEFF", "notsudon", "korean", "Henrystickcmans", "crongemaster", " dyllan", "A Goat", "TaKE LOl EPIC factory", "TaKE LOl EPIC machinegun", "Tiny Celestel", "asdfasdf", "BF An", "cooper", "Unwelcome School", "EtRNInja", "supernintendo meme", "15 fps player", "Day, day, da-da-da-da-", "i will download osu", "asdfasdfasdf", ".jpg", "Arena Closer", "kkj", "pet XD", "matias", "MAY BE HAPPEN", "heeeeeeelo", "BIG BRAIN TIME", "Koronoe Chan", "BOOOOOOOOOOOOOOOOOMM", "not the guy you just saw", "shark", "The Ghost", "get in wall", "o.o", "hara vi", " ElguerreroHastaElfinal", "literally the changelog", "top", "Minul", "Trutch", "Eternal Guardian", "JOSHUA", "End", "TANK", "531714", "senbonzakura kageyoshi", "minhhihi", "LUMBRE", "HEy Im frendly ;)", "just joe", "BonaventureVT", " i look into ur soul", "Teddybear", "Overload King", "alone", "peter", "Russo-Baltique Vodka", "Don't Let's Start", "nice one", "I Will Give U My Points", "toeless_monkey", "GANG", "0=IQ", "super booster", "seperate", "Prograde", "what does reload do", "Kevin Heckart", "CAVE- CE", "happy day", "Void Fighter", "race me?=Support <3 Bop!", "I'm protecting you! Sort", "hara- XDDDD", "Peacekeeper", "stares into ur soul", "Can I help you today?", "fdf", "Friend", "AYOOO", "odin <:)20", "Arena Closer", "Respect", "DontJudgeABookByItsCover", "OAO", "3vs2Ol", "Trinity", "yuan(A PENTAGON DDDDD:<)", "NO TIMMING", "wait in doing some work", "New", "Spin=peace", "retnuH", "Wall Protecter", "MUSTAFA/TR", "the deep", "CAN", "definitely not mq", "imbad", "Huy ;-;", "Gosu General", "Klair", "Ugly Beautifulness", "Dexter playz", "All Dead", "run  {ANGRY}", "VN.HM", "555 }{", "foon", "WHERE ARE THE DOORS", "toilet destroyer jordan", "No doors no fun", "Rico", "Giann", "SSS", "floppa", "Dominador", "ttttaaa", "ltester2000", "roberto", "Directors are Overused", "OverBrain", "Celestial", "HUH?", "Deepr", "Steve", "mathias", "1410065404", "ShinyG", "miguel", "yoyo", "subin", "Pega(SUS)", "cracked", "Arena Closer", "NO BAD WORDS", "PORT", "tale", "triangle drones = nolife", "TargetLocked", "Directors Are Overused", "(GG)", "qwe", "DUMB", "crocty poo", "creeper", "i just want shiny shapes", "Tommy Gun", "Your Mom is overused", "Overused Vibes", " jeje.2", "SONIC.EXE", "Planet", "-.-Razoix+?>", "Happe", "exc", "seensan", "cronge", "overused is overused", "Give Me Underused Vibes", "Extreme Speed", "j bert", "PARA", "Alan", "Friends?", "git gud", "Giant Justice YT", "yOU HAD YOUR CHANCE", "Jacob gomez_Jadenian", "mega monster", "Giant Justice YT - GG", "schrodinger = loser", "reaper of souls", "111111111111111111111111", "hostile", "ryuudddddddddwdw", "nononononononononononono", "Rocket shooter", "TTCBernard", "you deserve this", "raku", "why me???", "Rose", "top 1", "-KhangWasBroken-", "Uouuuuaju", "Fighter tank", "Solar Fighter", "sqrt_-1", "(<(?)>)", "du hund", "Ben", "A polygon", "AVIRA", "A.T. Beerful", "QER", ".exe", "GHHGR'986452|", "ck to la roseannenn.", "Orxan487", "zzx", "Clink", "popoi", "reicardo avocasde", "Doraemon", "Bandu", "oofoomode", "Sneaky annileatter", "Lofi", "Cancel Those Directors", "LeaderboardAllDirectors.", "1M + StormMachinegunner", "DR. BEEEEEEEESSSS!!!!!!!", "BH_FireFreezer", "frjhjhvt", "The Beast", "S u p e r", "Nice:))", "kdk", "Legacy", "jz", "ded", "yuco", "like", "rei", "atleast spare me till 1m", "Arena Closer", "Burning eye ;(", "Petsalt VN :)", "~|{boss fight}|~", "Reb", "mahluktakkasatmata", "EEEEEEEEEEE", "LowKey", "Praying for Winter", "tinh vn", "Phat", "AditGA", "cats nya nya ;)", "On the day you left me", "into my head", "CThanhYT", "NgontoL", "spin = friends", "Expand: 8(5y+88)", "Baroydroyd", "fewillos", "poper", "149 toxic", "The _________", "rsg23", "mwmwmwmwmwmwmwmwmmwmwmwm", "msalqm", "thx ", "150 toxic", "crescent", "dark karma link:wc2100", "NobleCrafter3219", "O K A Y ( ^ 3 ^ )", "egvda", "dark karma link:wc2118", "Gemma", "link ...", "DANGG", "This is the tale off", "Heeh", "The Fire Club", "c.ew.11.1.11.1.11.1.1.11", "pro is nood", "Random Tank", ":P", "Super Sonic", "Thai dark", "dfdfdf", "syron!!!", "strong tank", "main menu", "oblitereight 1000 ms", "its me pekola", "plungebob", ":(:(:(:(:(:(:(:(:((:(:(:", "ssd", ";kooo", "Kozuki Momonosuke", "SDASD", "Ha...Get Rekt", "be", "Wew", "321", "}{ex", "via", "Save The J'S", "ms. cold person", "FwgKing", "AnythonJS", "Theo", "BOB", "Mustafa", "dm", "Cgfsd", "Help", "{CHICK}", ",mnji", "<op>1", "SharkBuger$", "ATM", "Nining", "NEO ROY NEYEAH NAH", "Haunted", "Fireworks!?!?!?!?!?!?!?!", "Minhaaal", "Bobro", "YUU", "bob xllnnnnn", "Ailoki", "exu boi", "XYZ", "sus.", "star kirby", "Machine Gunners, unite!", "5min+5 overdrive", "Newsletter", "Meletiscool/", "allmyfriend.aretoxic VN", "Pet", "ivoree", "Twin Pro 3/3/4/7/7/7/7/4", "ka yawa", "SIUUUUUUUUUUUUUUUUUUUUUU", "ClosePro 2/2/4/7/8/7/6/6", "Snap ( Peace)", "???(vn)", "noob123", "Militant", "Banana", "fffffftt", "Hoi", "Ready For Another?", "Bossy", "ewltjdwns3673", "sa", "Don't worry I'm harmless", "freakshow :)", "aeaeae", "falc", "king4a", "ddt", "bangladesh", "Exterminate", "vIVIVgREYdOVE", "105050", "HI Youvn", "how? what? why?", "sdasda", "PYTHON", "lo hoc hanh", "who want race", "Arena Closer", "Xiao-Ling", "top 1000s", "A_C_L", "A flower tank", "Jash", "KRYZ", "Speed Build", "Tia", "Ha!Get Rekt", "hiboiXD", "Pro of ............", "vvv", "Rare", "draco", "Disaew", "Let's work together!", "iar chary", "Aqua", "Tgvy", "Ihv2010", "ASDUA", "Arena Closer", "chase him", "Nothing here", "Schwerer Gustav", "Dedeeeee", "Firnas", "yolo", "Psychic", "PLSSSSS FA", "mercy pls", "ur Being Fed", "FedEx Box", " not anak", "spinnnn", "proo...", "nn0", "the drones do not hurt", "Evil AliExpress Box", "Police Divo <3 XD", "pls Im friendly :)", "ldldl", "Like dat", "ytwjeit6tty", "UrBoringTbhLikeWhatsUrPt", "B(sian)", "bandit", "UnKnOwN", "TechnoBlade", "alien", "1934", "YoXieO", "why maze", "/donotello/", "Corrupt and dead.", "MAUS THE LEGEND", "WHYANDWHY     Y_N_Y", "GET MORE PEOPLE", "Bong Bong won't help you", "Pock", "CROSSIANT", "piece treaty with newbie", "too fast dident even get", "D A N I E L  bad...", " ryh'lrfh", "LEOPARD 1 WILD", "ya nos cargo la chingada", "Rainbow", "sssssssssssssssssssola", "lol darth vader noob", "AL| JustICE- sry luna", "Social Experiment Part 1", "Mercy", "take your time", "HI GONIALS", "i see who you are", "Cz Player", "Jap", "yeah yeah yeah yeah yeah", "Red Just Bled", "pounder", "eagle T", "Pet :D", "here to make friends :D", "Derniere Danse", "(Huggy wuggy) im nice", "PT5 | 03-04", "A Cat", "Skull", "PANZER VIII MAUS", "super perfect hexagon", "Rice", "protect perfert heha gon", "erf", "cable!!!", "PT5 | Tezerr", "Hi ._.", "WAAAAAAAAAAAAAAAAAAAAAA!", "xtrem", "eben", "1354", "far", "SOOOOKA", "alcatras", "mini boss spawner", "Arena Closer", "Eauletemps", "Aik", "BLITZ", "sinbadzx :)))))", "press n", "boom", "le tank", "dc yok bend", "Shay", "Solo :>", "Thunder", "best sentry", "dumdum", "Patterns", "R M", "FGDERTY", ":>PTM...''", "melee is better", "tmi 88>:?", "oooooooooo", "ffhfghu", "uuuu", "Acheron", "llol", "(vn)", "Zombie", "jellybEab", "4TDM", "pet", "ae vn", "Green Defender", "COME TO PLAY FLORR", "kr", "da", "dai", "USS Vella Gulf", "No One", "hus", "Let's work together!  N", "UNKNOW", "w r e c k", "Pobbrose", "belal abbasi", "Charles 18th", "Sir Theodore", "Arena Closer", "Hey What Happened?", "Mr.sod", "Graziani", "Ricsae", "'/;", "Anti celestial tank", "quandle dingle", "Eren noob you", "have fun crying eren hah", "MaiLotVNN", "A  l X back!!!!!", "np", "eeeeeeeee", "KHOA", "(:cai chua:)", "yulzzang", "boop", "Crazy", "MEGA MSC", "lyxn", "KarmaToken", "youssef", "LazerLOL", "HI  Five", "vvva", "GoGe", "Skawich", "Pixeljumper", "GALAXY", "Ppp", "crasher", "Min ye", "Arena Closer", "zen keon", "nzhtl1477777777", "Be Sidewinder press khh", "Indo Kok gk pro", "_blank_", "7151", "just", "tjplayz", "halo", "e5 y5gcv", "ds", "sdasdsssssssssssssssssss", "super tank", "BJ", "||H|E|L|L|O||", "swwsH", "||P|L|A|S|M|A||", "Blob", "Destructor92A", "catch me", "Coke cola espuma", "t. this green is glitch", "nhatbun", "You saw nothin", "cool dude", "Mr King", "THE PHONG", "Peace Dog", "DARRREN1407", ";D", "trust me", "2345678", "Apfel Saft", "new up :D", "Minerva", "12iiw", "Just aj", "UBER_TANK", "patata", "Minecraft", "Master of dying", "mommy long legsq", "Eauletemps why?=(", "sfdgfsgsfg", "U.A", "ze", "Eauletemps 4V1=noobs", "Qwerty", "doublade better", "sunkee", "MINI ON A LAPTOP", "snorp", "TOGESH", "GWiz", "sinx7", "Mon A", "Kartoffel", "t. green is glitch", "Nxoh", "Michael Jordan", "technically octo tank", "thick", ":cai chua:)", "Gabe Itches", "you can't see me", "TOXIC", "neph", "honesty Spectator", "Injoro", "E1", "your mum", "everyone sucks", "Charge with me/defender", "try me", "pheo", "uwj", "floofa", "Getnoobed", "test septa", "", "Pizza", "U Only Run To Ur Base?", "seb", "Maddog", "huy vn :D nhu loz", "Arena Closer", "Chicken KenChicken ken", ",l,l,l", "Comet", "Zhynt", "christopher", "The Mandalorian", "TomaToh", "tntman", "Tim", "spayer time", "piffermon", "Spectactor", "yyyyyyyyyyyyn", "left for dead", "iiiiiiiiiiiiiiiiiiiiiiii", "Pog", "BV", "burh", "ralsei with a BLUNT", "PROFIN 1000", "my guy", "Life is good", "pe11", "qqwqe", "0-=", "opp", "Panz3r of the Lake", "train", "furan", "Flawless_", "Oni-chan UwU", "Es3et", "Clorat suotn", "UNKNOWN LEGEND (UL)", "DEFENSE", "Rykav", "TYRONE GONZALEZ", "KarMaN", "urgh", "deffer in tanks", "rick astley", "BERSER", "WHY ARE YOU RUNNING", "booo", "WEST SLAVA UKRAINIA", "yups", "DEMIAN932", "THEBESTPLAYER", "8man", "Use machinegunner to win", "26317125   gff", "Joe Biden", "Nv Proxy", "Ethan david fernandez", "kbshlong", "wren", "(Very) Dangerous Pet", "police", "NEMDT playing shmart", "HEXDECA", "run.", "W", "sad", "try harder", " -_-", "a little bit of fun :)", "kendyl 1", "Ar-15", "Ha Ha Boo", "zay", "Rrennitten", "Monsia", "agus", "you dumb", "dino run", "Blood // Water", "Paradisal", ":O", "gulbos gulbos gulbos", "Dernier Danse", "La Espada", "Into the Light", "Planetoid", "...    ????", "swimsuit", "HEYYYYYYYYYYYYYYYYYYYYYY", "Q_us", "nom", "sentry strats", "josh how play?", "TheMadLad", "TheMadLad dylan strats", "THE LEADER GOES OUTSIDE?", "Eauletemps spin=screen", "Out of the Dark", "Lotus", "defender V2", "mmmmmmmmmmmmmmm", "TImmy", "ICBM", "animal", "Tezer", "Zver", "sindBax", "U2882JHS", "781", "Zorroooo", "I'm not bad", "IM WITH STUPID =>", "Miggy?", "sophia :)", "ImNew", "YoXieO_YX", "a pet", "TBB", "AICIAGOGH", "YANLUI", "facts", "XL", "DragonGOD64", "eys", "To Bee Keep", "VENOM", "pvto si lo lees", "grace.", "Speed", "289j", "A player", "cocomelon :P", "build wall :)", "Deino", "9902774653772", "Timmy, do your homework!", "elite basic lvl. 45", "MSI", "Make circle with Tri twi", "Message: Friendly uwu", "M4a1", "heist3", "Big Beep", "i like cheese", "Im weakest tank", "utifi", "jsohi", "cheese the best", "DOG", "cope", "F  A  M  I", "Little one <3", "Zoro", "DarthBader", "Mr.W", "Darth Vader's Slave", "Chroma", "demon xd:alone in life:(", "Luffy", "DOOR nr.1", "pancake", "TTroll_NEW MOUSE", "ubad", "NO MERCY", "peaceful farmer", "kokun", "This is the tale of:", "Best", "Square generator", "Corrupt Z", "angry?", "Aaaaa revenge", "DEFENDER AL FRIENDS", "partially illiterate", "Napoleon", "i destroy destroyers", "not pro", "Mr.Chaos", "~~ima try to protect U~~", "god is good", "Homing_Pigeon", "MazeDominator", "PM4037", "hehe car go vroom vroom", "gg partially you loser!", "'~Darkfiren~'", "La CFE me quito la luz", "nub7155 (Mobile)", "Chalicocerate - hu", "pew pew Gun", "yuma che3", "THOMAS crowded saturado", "TvT{ Thanh }TvT", "pentagon clean-up", "Go to Church", "Emi 10 ra ge hatag", "Im a landmine pls nohurt", "weird", "sorry Cheese", "dumpdump", "Rust", "Godzilla", "MEGAPIX", "demon:solo protejomihijo", "Your Bad :(", "a sweaty no lifer", "protecter crocty", "Caballo - horse", "my fists...", "playing from month", "trfhgyjhuiju8765t", "!emergencia!-!emergency!", "SIREN HEAD", "Yang", "pacific islander", "lucky", "MARK", "ALAN PAP", "nnnnnn", "dn", "Speedrun", "tre", "rocket", "B1 battle droid", "0,01%", "B2 super battle droid", "Your mum", "Goubekson", "Meti", "Wasap Papa", "tatut h", "LEADER = BANNED PLAYER", "shield", "afk ~30mins - stalker", "UHS23", "AlexDav", "!Hi!", "LOL ONYXD", "manager is just better", "Flying", "- - - - - - - - - - - -", "Roy", "Dank", "CrownPrincennnnn", "Gudmman", "CHAARGE", "GO TO DA TARGET STOEEE", "migel  papi", "Se", "PineapplEJuice", "lorain", "delta", "Jonk", "Endoy", "yeffri1", "luis daniel el pro", "Qpling", "An Endless Rise", "nerf", "8w329h", "Newb", "thicc", "just duo", "hahaa u noob", ";o", "xddd", "OSJJSJ", "Prime Chalicocerate - hu", "ilikemen", "IvanGG", "Ruwen", "moises", "jordan(:", "igoty", "vn exe", "TOGESH TOGESH", "Aprendo.en casa", "i only spectate", "DI", "deez", "Devourer Of Gods", "murt", "cocomelon- r u AA", "Polyhex", "KING OF DRONES", "POUNDER UPGRADER", "z54", "trees", "You show the lights", "Kirbo", "Turbo Bros", "stop me turn to stone", "Senseless", "You show the lights that", "T U R R E T", "uma delicia", "dohownik", "DESTINY PRO", "jory", "LITTLE GUY", "THE TERMINATOR", "hub", "GRAY STILL PLAYS", "Supsup", "Tedd", "Sup", "JUIDNDI", "ewres", "turu", "ffffffffffffffffffffffff", "soy susanaoria", "happy!", "Avarice", "im a cat", "protect me for 1m maby", "KEMUEL667", "Flowey723", "The shadow of none", "mebic", "Wsai12", "ALO", "oooo", "Hurricane", "i suck at bosses", "cv v", "ch.m", "Ovalsun", "rays", "naydanang bale!!!!!!! 1m", "poo face", "Akira bck!!!", "Arena Closer", "i believe in jesus", "SOFIA", "Yyfk", "Gigachad", "BANZAI", ">:v", "SUPRISE", "G l i t c h e d", "el mujahideen", "Soundwave", "torry", "AscendedCataBath", "The King", "Zac is best", "WBL", "Wait What?", "allmyfriend.aretoxic", "FNF Thorns", "L4r9", "Zzz Zzz Zzz:-)", "No Disturbing", "go away", "db", "P-Nice", "Duo", "nova", "hey vn;d", "DANCE", ":D hi", "dr.ninja", "Susana Oria", "arg", "7131", "Arena Closer", "SkuTsu\t", "Oh no Pathetic", "xeno", "y=ax+b", "Robleis", "Info?", "%t is the worst tank", "i hate %t", "%t sucks", "fallen %t", "Fallen %t", "%t", "%t is OP", "%t moment", "buff %t", "buff %t please", "nerf %t", "nerf %t please", "pet %t", "i looove %t", "green sunfish", "noew", "Dogatorix", "Charlemagne", "Drako Hyena", "long nameeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"];
+            const names = ["That Guyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy", "SOMEONE", "꧁༺𝓘𝓷𝓼𝓪𝓷𝓲𝓽𝔂༻꧂", "🅸 🅰🅼 🅶🅾🅳", "I", "jaffa calling", "Ill Tear your eyes out..", "Me-arac", "Aniketos", "🌌Miñe🌌", "ℭ𝔬𝔣𝔣𝔢𝔢", "Akilina", "Mythical", "exc", "=", "o o o o o o o o", "!!!", "Lixeiro do mal", "Thanks M8", "Frost? Mobile", "Dream", "We Do A Little Trolling", "earth", "NightFire", "Free to insult", "dino", "AMOGUS??????????????", "bruh", "No Surviors", "<[AXS]> RASHOT", "Pizza Bread", "[lag]Armando", "Gay Overlord", "willim", "Everything RAM Mobile", "General", "H̵͊̕ė̵̮l̷͎̈́l̵̅͛ơ̸͊", "{WOF} Nightwing", "footeloka", "[⚔️wiki]₵₳V₳ⱠłɆⱤ", "Jes;/;ter", "Team Boom", "🖤ISAAC🖤", "naruto", "занято42/Busybody42", "A+", "Raul39", "Lety <3 :)", "team protect", "i will troll :D", "heroy_105", "[FBI]Σvi₺ℭℏἏ❀₴#1628", "BigBadBoom", "nope", "glurip", "ffk the desrtroy", "Spin=Team", "comrade", "Alkali", "Impact of TY-77", "😈Stormys Domain😈", "YOUR BAD = YOUR DEAD!!!", "pushmetothe sancuary", "Im not a tank", "Snow", "Hm", "DanceTillYou'reDead", "gmonster", "Die!!!", "developer", "noob", "zX-TwinChilla-Xz", "[BK] [XC] PAKISTAN", "Bryson", "Musa♗ - The Shipwrecker", "bob", "Mothership Drone", "t-rex vs raptor", "mai", "Arisu", "gamer.io", "RİKKET FAN", "FOLLOW ME OCTO TANKS", "XP_Toxic_CJS", "TV", "constructor", "among us", "jkl", "XP_Toxic_CST", "d", "I love nahu", "Spade", "XxNicolas GamerxX", "xAd_rian", "FabianTu", "Eminx", "max", "OOOOOOOOFfffffffffffffff", "WalleeE", " KA2", "MIKE", "pedro :(", "BEDROCK", "Frostbite#6915", "koishi", "eu tenho a melhor mae^-^", "asdfghjkl;:]@ouytrewq", "😎👿david988😎👿", "Zaphkiel", "tryhard mode on !!!!!!!", "⚰️🔥👻WITNESS ME👻🔥⚰️", "[Σϰ][Ωϰ] ...", "That Guy", "Aniketos", "Play wommy-arras.io", "ARMADA", "// jAX", "🔱Ƒιяєωσяк🚫", "DEATH TO TEAMERS", "Milan", "your worst lightmare", "XxshadowxX Ilove u", "Alkaios", " 🥧π🥧", "🔱 𝓽𝓲𝓶𝓮𝓽𝓸𝓭𝓲𝓮 🚫", "Can u see me? :D", "Apollon", "ok", "Crazyattacker9YT", "XtremeJoan", "cz sk", "give me your butt dude", "[🌀]Brain𝐼nHalf", "Hexagon Temple", "-_-", "You", "CACA", "Athena", "Artemis", "DOEBLE TOP!", "the only one", "hi (original)", "SOMEONE", "can you beat me smashey", "s7ㅋㅋㅋ", "pika :P", "Fallen", "Big Papa", "m̸̐̽ᵃ𝔭ʟₑ౪🌸🎀🌺🌷🩰🧁", "GONIALS", "прівіт", "lnwZa007", "🐸🐌【HapPy】", "Daluns the one?", "CAMALEON", "factory not op :(", "/BIG BOYRockety", "circus of the dead", "𝒮𝔭00𝔡𝔢𝔯𝔪𝔞𝔫", "hackercool", "🔱⨊ $؋₲₥₳🚫", "Go Away", "Protector Of Worlds", "me", "vn", "RAHAN", "........................", "Soviet Union", "Flash", "❰𝞑𝞡𝞣❱ 𝝙𝝼𝝴𝝶𝘂𝝴", "🌌Miñe🌌", "King Pikachu", "EzzeKiel", "h", "Homeless man", "Asdfghjkjjhgfdsdfghjhgfd", "Felchas", "starwarrior", "Spin=Team", "TERA BAAP✿AYA★💓Bhagwanmr noob", "Dream", "DIEGO", "Lagmat YT = 🎷 channel", "be dum like me", "lagg", "APplayer113", "tiky", "🇧🇷HUE🇧🇷", "am low, I Need Backup!", "Thunder(Tapenty)", "Beeg Yoshi Squad", "reeeeeeee", ";]", "Arena Closer", "abd lhalim", "Badaracco", "emir", "Türk  polisi", "Paladin", "stop plz", "d", "glenn <3 rachel", "[AI] Kidell", "dan", "I am milk", "Türk'ün Gücü Adına🌸 OwO", "҉s҉h҉u҉n҉a҉", "Teuge", "Dave", "abbi_alin", "im a joke", "huy vn :D", "🌊🦈🌊", "scortt reach 1m friend", "ET", "vlasta", "𝒰𝒞ℋİℋ𝒜", "Nyroca", "German", "[ɨƙ]ɳøʘɗɫɚ", "I'm so lag(sinbadx)", "🇸🇦", "asdf", "X℘ExͥplͣoͫຮᎥveﾂ✔", "Apollon", "^^", "I", "natasha", "no me mates amigos", "dáwsda", "FEWWW....", "lol", "A team with 💚 is doomed", "Raul39", "Noob AC", "ddqdqwdqw", "[MG] GLITCH TR", "LemonTea", "Party_CZE", "Diep_daodan", "What?", "kuro", "cute pet", "demon", "ALEXANDER👑💎", "Cursed", "copy The tank", "", "dsa.", "Vinh HD", "Mago", "hi UwU", "avn", "d", "naruto", "ARRASMONSTER KILLYOUha5x", "MICAH", "Jotaro", "king vn", "𝕰𝖓𝖊𝖒𝖞_𝕯𝖔𝖌", "Raoof", "Leviathan", "SUN", "❬☬❭  ⚜️Ð𝐙𝕐 ッ 〜 🌷", "FALLEN SWORD", "🇧🇷HUE🇧🇷", "BoyFriend [FnF]", "motherhip", "𝓼𝓮𝓻𝓲𝓸𝓾𝓼𝓵𝔂", "lolera", "Dark Devil", "press F", "Detective Conan", "Pet", "MAICROFT", "Holy", "IXGAMËSS", "h", "umm,dab?", "Ihavelocty", "ewqasd2021vinicius", "[🇻🇳] Hùng", "I Love you", "Healer", "hacker lololololol", "boooster.io", "dscem", "bibi", "TEAM POLICE", "", "jj", "SHARK", "arena closer", "•长ąϮëąℓ⁀ᶜᵘᵗᵉ╰ ‿ ╯ ☂", "Weяw𝕖𝐑ώ€я𝓺q2️⃣prankeo", "nani?", "OTTOMAN EMPİRE", "------------------------", "kr9ssy", "not P", "winnner", "friendly", "genocide BBB", "HI", "I'm poor:(fortnine duo", "JSABJSAB", "jmanplays", "starwarrior", "were", "PLAYER", "mothership protrector 1", "Gamer🎮", "6109", "PRO", "enr", "_____P___E___N___E______", "annialator", "kaio", "(UwU)", "Arras.io", "...", "Denied", "Paladin", "Zaphkiel", "Pikachu ^~^", "ah~", "Steve", "{<:Void", "AƓ Aηgєℓ#Use AƓ  Tag", "Amyntas", "⁄•⁄ω⁄•⁄卡比獸🖤", "poui", "PH - r҉a҉i҉n҉", "A M O U G U S", "idk bro", "Artemis", "Hey team", "b T規RㄩIes矩W ˋ*ˊd", "한국 Lime Lemon", "phong fan vn!", "me fan valt shu lui free", "Mobile no work", "Hi 香港😘> pls don't kill ", "[/G]/O1D SL/Y3R", "mil leches", "Major Meowzer YT", "Providence", "Lore", "ОХОТНИК", "vordt", "Linghtning McQueen", "Pentagon Nest Miner", "꧁☬☬😈꧁꧂ ☠HARSH ☠꧁꧂😈 ☬☬꧂", "vovotthh", "Nope :))", "||||||||||||||||||||||||", " ꧁ℤ𝕖𝔱𝔥𝔢𝔯𝔫𝕚𝕒꧂", "CTRL+W=godmode(viet nam)", "🔱LordΛภ𝓰𝖑Ɇ🚫", "1 + 1 = 3", "XYZ", "[PFF][|| ı'ɱ ცąცყ||]", "Boop", "RAPTURE", "o", "/.//.[]", "", "Roskarya", "no. 9", "Lost MvP#7777", "Jon", "🔱Saint LilY⚜🚫", "Green.grey.purple.blue.", ":P", "C - 4 Spank Spank", "VN", "Snapwingfriendstriker007", "overlord is:):)", " pluss亗", "[Repsaj]ĎąŗĸMãştɛɾ", "Phoenix_Gamer", "Relatively Harmless Tonk", "Array.io", "Spin=Team", "I am your shield :)", "j", "1", "TheBasil", "【The L1litle One】", "X.Clamator .YT", "ENDERMÉN", "CC", "BEST", "Among Us", "lobo", "asky", "Opan Come Go Note Yeah", "Bowler", "ad", "haha bowler no 1M", "Tin", "[GZ]GESETA", "woomy arras.io", "Remuru Tempest", "PvPok", "Scarlet Rage(mobile)", "nam", "STRIKER007", "[VN] MeltedGirl", "100000000000000000000000", "eee", "Q", "mắm tôm", "REVENGE✨", "Achi", "AC Perú", "bvnfgh", "hi", "Pet :3", "little bitch", "khang", "lets be freinds guys!!!!", "sans pro", "phantanduy", "[AC] VGamerZ", "StevenUniverseFan", "azen", "Waffles", "jesian", "Ⱬł₭Ɽł₮₳Ӿ", "Gay Overlord", "pikachuboi124", "mundo x bomb", "ducky", "🌀DESTROYER🌀", "Stupid Overlord", "++", "phantantri", "VoteOutRacists", "Denied", "floof", "Bowler", "Sinbadx", "🎈IT🎈 APOCOLYPSE", "ExpectMe2BeDeadCuzOfLag", "Damage", "Aniketos", "⨝∑₮ξ₹ͶΛL⨝", "Artemis", "_", "Archimedes", "♪KING♫♕-dev#3917", "no", "Doofus", "MINI defender", "꧁✯[🕋]MÂRSHMÆLLØW 𖣘✯꧂", "Alkaios", "(・ω・＼)i am(/・ω・)/pinch!", "Việt Cường 2A5", "I Love you", "fdsmn", "!", "R", "you shall not pass!!", "harmless shower", "lol", "Mythical", "oath sign", "finland", "bob", "hetman666", "lio", "VN~I LoVe You Chu Ca Mo", "Your mom", "Friendly", "the protector", "leave me alone pls", "Grill my flippen butt", "n o i c e", "bo", "onsen", "._.", "Frostbite#6915", "💞", "CTRL+W=godmode", "noob", "ad", "Soviet Union", "be freind", "   HCM MUÔN NĂM", ":P", "FALLEN SWORD", "anh tuấn anh nè tôm", "fnf is a poop", "Zp r oZ", "꧁҈$ꫀꪖ  ,҉ℭն𝚌մꪑ𝜷ꫀ᥅ ༻", "VN:P", "margaret thatcha", "[VN]Ảo Vãi Lồn🤔", "ㅋㅋㄹㅃㅃ", "pin h 3", "Vỹ đẹp zai", "Snapwingfriendstriker007", "everybodybecomespike", "a", "1", "vyde", "Mothership Drone", "op", "click 'F'", "Noob", "🐰chiro🐰", "PJfd13", "CELESTIAL", "Team", "Pet :3", "FeZTiVAL", "anime", "t", "C - 4 Spank Spank", "Rockety", "Valley", "Im New,dont kill me pls", "Friends?", "하이루", "KILL ME I DARE YOU", "pet basic -(======>", "pet", "♕ ❤VIỆT NAM ❤♕", "team ?", "꧁༒☬✞😈VîLLãñ😈✞☬༒ ꧂", "Công", "Opan Come Go Note Yeah", "1 + 1 = 3", "Elite Knigh*", "vn{CHP}", "Dasher8162", "Xlo-250", "under_gamer092", "VN", "Mtp tv tiktoker", "Denied", "Paladin", "『YT』Just𝕸𝖟𝖆𝖍ヅ", "shame", "Corrupt Y", "spin= team", "Please no more Y team", "Syringe", "Pickerel Frog", "Bitter Dill", "Your Triggering Me 🤬", "117", "FleRex", "Archimedes", "Neonlights", "🌌Miñe🌌", "〖-9999〗-҉R҉e҉X҉x҉X҉x҉X҉", "FEWWW....", "bob", "0800 fighter¯_(ツ)_/¯", "◯ . ◯⃨̅", "𝕁𝕖𝕤𝕥𝕖𝕣", "Apollon", "Ɓṏṙḕd Ṗläÿệŕ {✨}", "i never bin 1 mill", "残念な人", "KillerTMSJ", "Дракон", "[VN]Ảo Vãi Lồn🤔", "😎", "warrion", "ARMADA", "asd", "alr-ight", "AAAAAAAAAAAAAAAAAAAAAAAA", "♣☆  ⓂⒶ𝓻s𝐇Ⓜ𝔼𝕝ᒪσω  ☯♚", "FREJEA CELESTIAL 1.48MXyn", "poker 567", "C", "4tomiX", "meliodas", "Việt Cường 2A5", "(ZV) foricor", "", "Marxtu", "me?? 😢", "m̸̐̽ᵃ𝔭ʟₑ౪🌸🎀🌺🌷🩰🧁", "PeaceKeeper", "Eeeeeeva", "diện", "[MM]  Ⓕ𝓸𝓻𝓫𝓲𝓭𝓭𝓮𝓷", "Doofus", "TS/RRRR", "Nothing.", "🐶(X)~pit¥🐺te matare jajaja", "⌿⏃⋏⎅⏃", "go", "[PFF][|| ı'ɱ ცąცყ||]", "hola", "polyagon", "Galactic slush", "9999999999999999999999dx", "zaphkiel celestial", "noob", "$$$%$la plaga$%$$$", "Sorry broh", "Roberto", "EHSY BAAA", "Nnmnnnmmmnmmmm", "use fighter plsss :)", "Mini", "spitandsteelfriend", ";)", "lol", "Mobile player", "the ultimate multitool", "i vow to protect", "oofania", "hi", "why am i here", "H̵͊̕ė̵̮l̷͎̈́l̵̅͛ơ̸͊", "A.L.", "Hi", "ONE SHOT", "luis", "saitan", "Felchas", "Im gonna knock you out", "Aquiles TEAM LOVE", "qwertyuiop", ":3", "diep.io", "invisible drones", "team plz:(", "DIONAX", "again and again", "100000000000000000000000", "nicolas123", "JESUS E AMOR", "Alice", "Bob", "Carmen", "David", "Edith", "Freddy", "Gustav", "Helga", "Janet", "Lorenzo", "Mary", "Nora", "Olivia", "Peter", "Queen", "Roger", "Suzanne", "Tommy", "Ursula", "Vincent", "Wilhelm", "Xerxes", "Yvonne", "Zachary", "Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Hotel", "India", "Juliet", "Kilo", "Lima", "Mike", "November", "Oscar", "Papa", "Quebec", "Romeo", "Sierra", "Tango", "Uniform", "Victor", "Whiskey", "X-Ray", "Yankee", "Zulu", "The Bron Jame", "[MG] Team", "team??!", "trump", "facu++", "TEST", "Jake", "PEST_YT", "GOKU", "big me!", "arras > diep", "k", "[MG] PRO TEAM", "Solomon", "novice", "noob", "Angel", "😈", "max", "Allah Is King", "Hug Me", "dont touch me", "leonardo", "colombia", "", "Friends ? ", "✈", "Kim Jong-Un", "1", "An unnamed player", "agar.io", "road to 1m", "FEED ME", "DOGE", "GABE", "boi", "[GZ] team", "buff arena closer", ".", "Ramen", "SPICY RAMEN", "Jera", "[insert creative name]", "Rake", "arras.io", "KOA", "die", "king of diep", "Hagalaz", "Ehwaz", "Dagaz", "Berkanan", "Algiz", "Blank", "Mango", "TOUCAN", "Bee", "Honey Bee", "oof", "Toast", "Captian", "Alexis", "FeZTiVAl", "kitten", "Derp", "Gabogc", "U S A", "name", "[IX] clan", "LOL", "ur mom", "llego el pro!", "Impeach Trump", "luka modric", "bob", "MATRIX", "no", "e", "kek", "read and u gay", "Decagon?", "take this L", "mm", "Aleph Null", "summoner", "T-REX", "buff basic", "stink", "jumla", "no team Kill", "pet", "V", "Broccoli", "toon", "Sinx", "JTG", "Hammer", " ", "Basic", "Discord", "NO WITCH-HUNTING", "salty", "CJ", "angel", "a salty discord kid", "satan", "NoCopyrightSounds", "Am I Sinbadx?", "AHHHHHH!", "rush", "squirt", "AMIGOS", "Windows 98", "FeZTivAL", "illuminati", "Fallen Bot", "Anonymous", "koala", "iXPLODE", ":D", "BrOBer The Prod", "OwO", "O_O", "UwU", "Alpha", "TheFatRat", "kokak", "D:", "YouRIP", "WOOT", "𝕯𝖆𝖙 𝕺𝖓𝖊 𝕭𝖔𝖎", "hell", "Y", "why", "Lucas", "LOCO", "FeZTi Fan", "0", "AK-47", "Friend pls", "cool", "NO U", "hmst", "Sub 2 Pewdiepie", "T-Gay", "t-series succs", "Balloon", "CX Fan", "The Nameless", "What?", "Our World of Tanks", "Real AI", "Totally Not A Bot", "...", "Fallen AI", "green square", "Dagaz 2.0", "Internet Explorer", "teamplz", "Paradox", "Fallen Nothing", "developer", "ruler of tanks", "IRS", "king slayer", "sael savage", "Zplit", "CUCK", "Popo", "¡AY PAPI!", "Vogelaj", "Ruthless", "BOMBS AWAY", "im new", "best", ".-.", "dont feed me", "rIsKy", "Brian", "Angel", "Knoz", "Caesar", "Baller", "¿Equipo?", "¡Vamos!", "Road To 10m", "Real Hellcat", "Real Kitty!", "Canada > USA", "A named player", "Tyson", "Slayer", "666", "Nooblet", "M8", "Trans Rights", "Bar Milk", "Jambi", "Elmo is gone", "The Grudge", "Rosetta Stoned", "Lateralus", "Fourty-Six & 2", "Vicarious", "Judith", "Give Me Wings", "The Pot", "look behind you", "Bruh Momentum", "Sucko mode", "ArenaC", "!foO", "Lateralus", "Disposition", "Reflection", "Triad", "Mantra", "The Patient", "Real CreepyDaPolyplanet", "Real Despacit.io", "Mew", "Magikarp", "Real Dark Knight", "ok boomer", "PP Tank", "COPPA Sucks", "meme", "Womp Womp", "W = Team", "Real CX", "Neo", "crasher", "Minecrafter", "King of Pros", "Vanze", "Have mercy...", "Im scary", "cookie", "Liberty Prime", "bruh moment", "Rubrub", "Banarama", "poyo", "Nova", "Creeper, Aw Man", "Theory of Everything", "DJVI", "jotaro kujo", "Faaip de Oiad", "MrBeast", "ForeverBound", "Are you okay?", "BUSTER WOLF", "MJK", "F-777", "Dex Arson", "alpharad", "ORA ORA ORA", "Waterflame", "DJ-Nate", "penguinz0", "#teamtrees", "Electrodynamix", "brogle", "im beef", "Salsa Verde", "The Audacity of this tank", "Joe Mamma", "Red Hot Chili Pepper", "Halal Certified Tank", "Coronavirus", "The Common Cold", "The Flu", "Ight Bro", "Little Red Rocket", "Bruh Monument", "Bruh Monumentum", "Spree", "KING CRIMSON!", "THE WORLD!", "ZA WARUDO!", "taal volcano", "Synth", "Brotherhood of Steel", "Railroad", "A Settlement Needs Your Help", "final destination, fox only", "food", "fezti fan", "FeZtiVaL", "CATS", "Careenervirus", "Dumb", "[AI]", "Insanity", "Steven Universe", "MrBeast Rules", "Oswald Veblen", "how to get testbed?", "Mahlo Cardinal?", "mf=r", "dragons go mlem", "丹†eÐiuϻbee††ℓy†", "TωorᴍaͥHoͣrͫnet", "NoͥteͣwͫoℝthyCสtHeสt", "ᴴᵃⁿʸᵐᵖᶜᵘᵗᵉᴾᵃⁿᵗˢ", "Oᶠectบสlsereedl", "CℓeDⱥiryVⱥiͥήtͣeͫℓ✨", "EyeCⱥnᖙyᖘunᖙeseg", "Witψภclคi", "⫷PนℝeMiͥℝeͣyͫ⫸", "𝓕𝓸𝓵𝓿𝓮𝓞𝓵𝓭𝓳𝓸𝓴𝓮⚔", "⦃φօʂìէìѵҽԱʂէìէմąɾ⦄", "🎻Hiקle𝔶lutקuᖙiѕh", "✐ЯΣΛ爪ΛПΣЦЯΣ", "∉Eᴍiภeภ†Miภa多iho∌", "[M๏ℝec𝔥Muy𝔊๏rᖙØ]", "やlachaҜ𝔢d๖ۣ•҉", "FicบℝneCบʝo", "Jame∂iͥPaͣtͫtψMeℓt", "PℝoͥfuͣsͫeOftsΐ", "Hiภⱥls†MiAlmⱥ", "Cสneͥຮeͣfͫight", "Ŧฬeͥirͣoͫ͢͢͢Tฬin🅺les😎", "VenomoบຮNorτnear", "🎲๖ۣۜƤⱥranAsian𐌁øyz", "StͥedͣiͫรDilrubⱥ", "ᖘiͥŇgͣeͫsτri", "Ac𐍉͢͢͢ᵐᵐSiรcuᵐMum🌼", "⫷EᴍiήentOffec☢ne⫸", "Evalingђteᖙseᖙi", "FoบຮervͥᎥdͣeͫ", "⪓Offigeร℘er⪔", "Vuͥldͣrͫatediesio", "⁅🆂🅴🅽🆂🅸🅱🅻🅴🅰🅽🆃🅴🅽🆂🅸🅾⁆", "Houℝgͥΐcͣaͫr︾", "Doe£🆄lMψSo🆄l😬", "Ǥrel𐍉resit", "𐄡𝒫𝑜𝓉𝑒𝓃𝓉𝒯𝒾𝑒𝓃𐄪", "୨𝔄𝔟𝔫𝔬𝔯𝔪𝔞𝔩𝔄𝔫𝔫𝔞𝔩𝔤𝔞𝔱⪑", "ElfuภΐBΐBαr͢͢͢rel", "Liͥveͣrͫiภgบi", "𝕆𝕗𝕗𝕠𝕦𝕝𝕕𝕠𝕨𝕚𝕥𝕚𝕝⚡", "Na†eℝaŇiŇgs⚠", "𝓗𝓪𝓭𝓭𝓚𝓱𝓪𝓷𝔃𝓲𝓻", "Partℽ𝓌𝔥ᎥꜱᎥภ∂บc", "Aήสℓroseℓ♛", "Aຮiaτinga", "⑉Elͥegͣeͫήτreα⑉", "Inͥ∂eͣlͫψຮtr", "CoϻpePregy", "〖Grͥetͣyͫdrest〗", "⑉S☢mp☢รpͥGuͣmͫp⑉", "丹pสτheτᎥcṨømpⱥthⱥ", "⁣𓆩NօthΣurΣeŇtment", "Ofͥ†eͣnͫcheye", "「FℓuͥttͣeͫriήgItingenv」", "😻SƤ𝔯iήgy🅼orkingɭ", "〖ṨoftOftwTนft〗", "GℝegⱥℝiouຮMeⱥℝee☂", "🏄", "😌CømiภgPoթcorn", "MossfนlthapeᖙyŇ☘", "๖ۣۜ山☢uͥsiͣaͫℓℓeﾂ", "A𝖙hedi🆁on", "✰QนestaΐŇgl✰", "Wⱥsͥ†iͣoͫnfℝou", "｟VoℓคtᎥℓeAtentᎥⱥt｠", "Arninℓץie", "★彡[๖ۣۜƊreคᖙ͢͢͢๖ۣۜƊeωᖙrop]彡★", "JบicץJบnᖙen", "Öµł†µÐï†ê§", "「Ate∂iͥDiͣlͫly๖ۣۜßØo」", "〖Aήthent฿ⱥdbreⱥth〗", "🎹ͲօցìօղժƓմղժ", "᚛VerรeᖙTurรeᖙΐe᚜", "Sקityℝicђe", "❅Camedΐℝ๖ۣۜƊℝedd❅", "IŇeττivie♛", "﹄𝔇𝔬𝔫𝔨𝔢𝔶𝔒𝔠𝔨𝔢𝔡𝔲﹃", "Dousermⱥi∂ﾂ", "彡ΛЯᄂƧΣᄃΛ彡", "⁣𓆩🅰🅳🅼͢͢͢🅸🅽🅴🆆🅴🆁🅴🅽🆃", "AŇergeNeesคnค", "💤Fสή†สຮ†icͥAfͣfͫic", "⌁NaτemacτᎥ⌁", "LΐvͥesͣeͫsChΐℓΐ", "íɑʍOภຮgrⱥigน", "𝓟𝓻𝓸𝓰𝓷𝓲𝔁𝓽𝓾𝓻", "😶ＧｕｔｔｕｒａｌＰｕｔｈｅｒｉｐ", "Ϛageร𐍉HϚ𐍉ℓ☢😇", "𝕹͢͢͢𐍉τempℓeᴀɾ😠", "🚣AՇitℽสrDสrͥinͣgͫ", "༺Hⱥrm๏ni๏us๖ۣۜ山ermisty༻", "CoͥŇeͣrͫŇizαr⚔", "Tormaภτmerΐcaภg", "⦇ƑⱥℓiKi𝖒多๏Ṩℓice⦈", "⚡Uppontork⚡", "C𝓪ge¥W𝓪gencie︾", "彡Ri๏ภt͢͢͢αhαbigiv彡", "😐🅲🆄🆁🅽🅰🅽🅱🅾🅽🅰🅵🅸🅳🅴", "ShⱥŇdΐDΐŇyͥerͣoͫ❥", "EήthHⱥlfPint", "𝕴ภc☢meMสch☢mคn🏀", "๖ۣۜ山Øozץ๖ۣۜ山ome♛", "J𐍉viαℓC𐍉vi𐍉", "Exͥamͣiͫckร☢ή", "🌰🆂🅴🅽🅸🅽🅶🅻🆂🅸🆁🅴🅽🅸🆃🅰", "⑉Officђ𐍉uττi⑉", "❅Ju͢͢͢diciøusᖘheสdjur❅", "Ｗｅｄｉｓｐｉｃｈａｖｉｔ▒", "▥Jeสncies†i?", "JohŇiteƤⱥ", "𐐚ewil∂ere∂Ne∂iภ", "ñê§łê§þê🐨", "Rᴇsp☢ήsΐvᴇC☢ήsi", "〖Is†rͥสlͣlͫץpe〗", "L𐍉veCaภdψMaͥภdͣeͫra✨", "F๏นghτsere", "𝕃𝕠𝕘͢͢͢𝕖𝕕𝕦𝕒𝕝𝕚𝕒", "☁Ofเrethe☢", "Aᖙeth☢☢LØυᖙmØυth💌", "CyͥniͣcͫalIntudynt", "CoภsนdBeสภs", "TheͥℝvͣeͫᖙS†aℝveᖙ", "Iτedeຮeded", "♐OfficebᵒℽOffee", "︽CӨ🅽𝔞ℓsoᴍe𝔱tee", "🐯ᎠⱥrlΐภgArҜs🅱ⱥt", "Heͥstͣsͫookerinec", "TaleήtedEήtiรa⚔", "S๏ñcͥifͣeͫ͢͢͢Mนñchie🎤", "JeͥcrͣeͫสCleʝerrℽ", "❅ᴛᴏᴀꜱᴛʏᴀꜱɪᴏɴᴅꜱᴛ❅", "թг๏Ɔoupsoɹʇɥ", "HeaຮΉ𐍉ducҜᴸᴵᶠᴱ", "⁅๖ۣۜƤoeτicViτhic⁆", "S𝒽ⁱlⁱŇgบre", "IfΐeรeŇUŇΐverรe", "Offᖙ🅰𝔶botᴳᵒ", "𝓟𝓸𝓻𝓮𝓽𝔂𝓷𝓽𝓼𝔰𝔲𝔭𝔢𝔯", "𝓗𝓮𝔂𝓸𝓗𝓸𝓷𝓮𝔂𝓬𝓪𝓴𝓮🎨", "ƤlคץรChⱥή∂☢ese", "Awes๏meStanψt๏m", "FαcͥτoͣrͫyInτorτ", "≪Nummiຮ๖ۣۜ山his𝔱l͢͢͢er≫", "IssℓαtSℓoͥppͣyͫ", "PђeαlαHitcђeภ", "ⱮօղѵҠօմҟӀąʍօմ", "🎮丹թթєɐli𝓃gQuɐli𝓃gє", "「Grǝacklψeτ」", "IήesนrͥŇeͣmͫ", "≋Beήτic͢͢͢ediή≋", "Meͥภeͣqͫuสles♦️", "😦UnwielᖙℽNexק", "WateᖙeToℝ℘eᖙo", "Veℝ∂สntͥSiͣmͫสntสc", "「ƤสrigͥCoͣrͫriᖙor」", "Anͥkeͣnͫtscru", "⪨Äภioภ§Jสภeman⪩", "ᴵᴬᴹDaͥzzͣlͫᎥŇgWᎥlieรτi", "Naΐgͥΐcͣaͫℓℓef", "『WสψstℝWสt🅲hfส🅲e』", "🐅Exקreαrfer", "OfͥfeͣcͫKΐck𐍉ff", "☽乃ץՇ๏קץՇђ๏ภ☾", "ṨuήnyAuserสny", "Meℝaͥ∂lͣyͫקen⚠", "ͲąղէìçմҍӀ", "Se∂iสCสucสsiสŇ", "OfͥfeͣcͫelŦec†𐍉", "He∂uαlrigive", "⧼Deͥpsͣeͫᄂfarg⧽", "AήixecemØcultiή", "Ŧollicuรectior", "W๏rͥteͣsͫSᴍartie", "丹ภefFคภgs", "Ot☢☢sℓคwคℓtede", "❅WђizคJคckWђi†e❅", "Heɭɭ฿☢ᴿåbo", "「Abi∂iŇgDicaŇℽ」", "Isͥheͣrͫΐτaℓes", "᚛Θficຮoภeຮ᚜", "๖ۣۜᖘⱥuͥncͣhͫyCⱥustiᴍ", "🚊Ӌeสτenͥτrͣiͫ͢͢͢n", "𝔗ec†iga†eechersҜ♐", "⚡U†eͥreͣvͫe∂a⚡", "𐄡ɢlaήsaรailØrM͢͢͢aή𐄪", "ⲘสysτᎥnⲘᎥnou😌", "°”Ṩi𝓭ityethicl”°", "J๏ѵiaℓP𝓇iaℓ", "๖ۣۜℜevⱥsนpSⱥssⱥfrⱥs", "M☢tivͥαtͣiͫngB☢nαtiff", "༺Thøuɾnᵃnꜱt༻", "I๓թe𝒸cąbℓeMusper☘", "✰Aאָiͥcaͣpͫђeℓ✰", "ᶠ͢͢͢ᵉⁱᵍⁿᵉᵈᴸᵉˢˢᵃᵐᵉᵈ", "𝒞𐍉nl𝖞r𐍉𝖇s", "Grαcΐ๏uຮCaͥ๏uͣnͫc", "Mสmm☢τhT☢τh☢ldi", "𓊈卄ανσ͢͢͢ℓ丂αναє𓊉", "✰W☢☢ℓutte∂espect✰", "⁣𓆩ⱮմʂʂҽąⱮմʂէąçհҽ", "Ofͥerͣsͫやr𐍉fess𐍉r", "๖ۣۜ฿uͥ†sͣiͫ多Mu††er", "SⱥτBigPØτⱥτØ✪", "Inf𝔞M𐍉nFr𝔞ΐรe", "〖IŇviŇci多leAdeŇƤual〗", "🐯Hคndy͢͢͢Hคtiɭity", "ˢᵐᵒᵘᵗᵉᵐᵃᶜᴳᵒᵈ", "Ofͥteͣdͫΐe฿edbeⱥuty", "⦃ExtegสExtℝ𝒶H☢t⦄", "Orͥ∂sͣmͫนcessน⚔", "Y𐍉utђr𐍉uภ", "✰Tђℝ☢titsc✰", "íɑʍ≋AℓtŁiℓŦ𝓇Øℓl≋", "FiήgtFiggץ⚔", "ScieήtificPสti", "GrͥesͣsͫB𐍉sslคdψ", "Mⱥภumbℝip", "T๏iͥndͣeͫLⱥcewing", "★Shͥouͣlͫ∂en∂ieve★", "Suallizatiᴍe", "♐P͢͢͢herstst☢", "I†iͥonͣgͫingeℝna⚠", "Ofͥfeͣdͫg๖ۣۜßαllØfFαt❥", "๖ۣۜℜaͥnsͣtͫredu", "MØcipParรήip", "Se∂iͥรhͣiͫmส∂", "𝔚𝔥𝔞𝔫𝔡𝔢𝔱𝔉𝔞𝔫𝔞𝔱𝔦𝔠⇜", "๖ۣۜOffeℝtBαffy", "AttentiveFornate", "Faͥveͣrͫnext", "UnusuⱥʟFrøungdø", "Geຮຮionͥຮtͣaͫ", "୨丹𝓃d𝓼e๖ۣۜƤⱥ𝓃cⱥce𝓼⪑", "ร๏ɭɭร๏ภɭץ", "S℘iяiᵗe∂Pie🅽t💦", "L𐍉𐍉ภψSi𐍉ภaͥlsͣeͫ❥", "🎮𝕊ecτolαrץຮτ", "◤NorNoRegαrᖙ◢", "DeͥℓiͣgͫhτfuℓAnᖙeg", "Rec†scess", "✫Itͥคlͣlͫsømme", "⧼ᴀภqͥ𝕦eͣsͫτeds⧽", "๖ۣۜ山angຮᎥRagຮ", "HeͥᴍaͣdͫeDelᎥ𝖗Ꭵum😇", "⫷M🆄ɔtsΐ𝕓lest⫸", "Iภge†eͥℝeͣdͫu", "🐥IภêℝtAshtaℝt", "Pieceℓᴮøøkie🌺", "Ƒrͥedͣeͫτw☢u", "Imק𝔯essi𝕧eや𝔯iτs", "Reͥivͣiͫ๖ۣۜᗯeiner", "ReήsecoEnglishRose", "᚛UήisliήBigHuήk᚜", "TΐrelessToήdessΐ", "Sµccessfµ͢͢͢𝖑Toccesse", "HⱥŇceIcepicҜ❥", "Trͥitͣeͫ丹ภtຮeภtr", "AlสrᴍingSђerᴍ", "୨Fei𝓈tyLexte∂i𝓈⪑", "⚡H☢sH☢neͥℽbͣuͫn⚡", "🍃𝕲rคᎥŇคÈlคᎥs", "CℝectͥℓiͣgͫŇe", "Sollℽstriongst", "⦇¢aphօℓօSnappy⦈", "◤𝓟𝓲𝓰𝓰𝔂𝓒𝓸𝓾𝓰𝓰𝓵𝓲𝓼୧", "⚡Abͥ☢nͣdͫynᎠynสm☢⚡", "∉Gℽmͥnaͣsͫт🅸𝖈丹terΐamn∌", "▥ƆouƆouʌıɔʇıou¿", "𐐚ץƬuƬtepØω", "OffeรeรSugαrͥᖘuͣfͫf♛", "【Çðñêð₥͢͢͢å¢ïł】", "Aгti𝒸ulateUภtalaภ", "🆆🅷🅴🆂🅿🅸🆂🅷🅰🅳🅾🌗", "★AbͥreͣcͫuℓCuթieDoℓℓ★", "∉𝕾nappʸ𝓝alꜱ๏∌", "Fℓน††eriή𝓰T๏ήce͢͢͢∂in", "PeℝfectIteήeℝ⚔", "😋𐌁𝔯αήgsτ𐌁ruddah", "🌳H𐍉Ňe͢͢͢st𝓘Ňew", "ℓเττℓєA𝕤𝒾𝕤͢͢͢ul🅰natedes", "Agͥreͣeͫⱥ多leCⱥ多liรรi☂", "◤AŇdสtMสŇŇeͥℚuͣiͫŇ◢", "CaภdefJefe", "Neττeຮ℘andaττr", "Ofτeᖙบree", "Ƥ𝕣αlØ𝔫scallᴳᵒᵈ", "✰Habi†ualΘn∂ingua✰", "【EaℝŇestͥIsͣtͫaŇdne】", "ArΐsVΐssψ✨", "฿eenGoatees⚔", "Atereatha", "Θffi多ℓoTrou多ℓe", "GraվรⁱRนgraτ🌻", "𝕴ñⱥτ🅸vScrⱥtchy🐆", "AƤeͥndͣiͫMonLaƤຮin", "StͥunͣnͫingAndin", "⩻๖ۣۜᗯorl𝒹ly๖ۣۜᗯonsi𝕥u⩼", "Men†e∂eem", "〖CoℝdsђWaℝdoŇ〗", "🐫PønΛctiαrsenaℓ", "ᴴᵃⁿᶜᵉˢʰᵃⁿᵍᵒ▒", "PℝocͥRoͣbͫotobαmα", "BℝeͥncͣyͫtRสncoℝ", "▓TreήdץTrคm", "𝕻𝖑𝖆𝖙𝖎𝖘𝖊𝖓𝖙𝖙єค๓", "๖ۣۜBloαtyAnat͢͢͢e", "【Cบrruτiv𝖊͢͢͢ภ】", "✰VΐcͥtoͣrͫΐousStor∂eส✰", "✹Shΐll๖ۣۜᗯildfire", "Noωαselli", "Guͥΐlͣtͫless𐐚otlץsΐs", "RⱥyRⱥyDisђirⱥƤ", "𝔚hΐ†eℽWhΐm", "「Ciaℓiͥᖘhͣoͫbia」", "𐐚eeͥᖙgͣeͫήve", "千lu🆃🆃er𝕚𝓃gṨαu🆃e🏂", "᚛BℝαzenBℝeα᚜", "CoήMonƑrสise", "๖ۣۜ山iͥggͣlͫץ๖ۣۜ山ing⇜", "FeͥllͣsͫoϻƤlo", "㍶𝕎𝕠𝕟𝕕𝕖𝕣𝕗𝕦𝕝𝕍𝕖𝕣𝕗𝕠𝕣", "Sτiᵛeʀmin〽️", "Rilαtoℝyᴍ⚔", "₧Anสτ͢͢͢Rสτit☢", "Wสs†eGℽmⲘสs†eℝ", "PlaภtøƤee", "⚾ꜱcrค℘℘yIsτraℓΐf", "DittØήSqͥuaͣtͫty", "⚡O多ʝecτiveDeco⚡", "TสiͥsiͣgͫerƤsץmend☘", "OrryᎥeรᎥ๏", "Ƒuͥℓdͣsͫhinec", "ThaͥŇkͣfͫulChaℝᴍis", "íɑʍIsτʀᴇթ๏sᴇτ", "★Θfferencesթece★", "Ar†h☢uldre🅽diส▤", "ForgivingForn", "N𐍉ᴍbec𐍉ήts✨", "๔เгєςՇгє๔เς🐵", "〖Oภvest𐍉pΐ〗", "⫷Ofteภ𐍉Gift⫸", "🚣ᴅʀɪᴠᴇɴᴇᴠᴇʀʀ", "RⱥsƤberrψ๖ۣۜ山heriesi", "Affeuredi", "MⱥiήτFunͥτoͣnͫ", "ΘffireKhⱥήzir", "Meͥdeͣmͫeήdiήgeή", "★I†uℝFuͥℝmͣuͫzzℓe★", "⫷FⱥrϻbØyFⱥϻb⫸", "Itarᖙรcreϻa", "⋉Direllooductຮe⋊", "TreαNeαt𐍉", "SuթerBoℽAvetℽթe", "°”φմէէҽԱէʂվβìէʂվ”°", "Oⁿeรsitedit⚠", "⸔Ṩaΐηg↻haΐ͢͢͢nຮ⸕", "I𝓃gMøn🅰nge", "A∂aptableやapti☢ng", "〖WⱥsτrSτⱥbͥbeͣrͫ〗", "ཌInͥgeͣdͫighØ𝓊ndད", "█▬█ █ ▀█▀Asser†iveSegingin", "Ofteᖙucee︾", "CђⱥrᴍingPⱥcerᴍⱥr♛", "฿eͥirͣoͫᴍeŇclo", "∂яα¢σηιαη卄αη∂яє∂υ", "EthΐcαlͥHoͣdͫyetre⚠", "〖Tiͥสnͣyͫouℓthom〗", "AbrasiveBrivilly", "InceirKissyFace", "Ittelitingly", "SomentsSoul", "Wooksommen", "UnizPizzawife", "FersoPowerpuff", "MelodicDell", "SoftyOffee", "Joidaskin", "WhowerHotsnap", "PassionateLasiste", "ProbseVinDiesel", "ForessiKisses", "DawbufBunrose", "JudensPendulum", "DayeSaySay", "Watertitur", "AntilkMilkman", "Magaltyea", "Houstsibl", "IngheoAngon", "Byribibeg", "Gingentray", "Hichicapho", "ResoluteAntardso", "Andivedyngstims", "BeautifulToldif", "HostilityBustay", "IngiShinyGaze", "Anytimple", "NowSnookie", "WereituAtum", "Gortaitic", "ImposingVelsical", "Witionsips", "WhiteyWhati", "Grabourch", "ToastyImpaspen", "SensibleAlsem", "Enendscandspip", "Itycomplandshor", "VictoriousWousi", "OfteOfficeboy", "Phoodyeang", "BeneficentTocen", "ItisBityarani", "Hourabony", "Autooligue", "IngenScrooge", "YoulloDulhaniya", "CoolguySkinqu", "Itiattive", "CambessCupcakes", "Oferbelogr", "Ofewposicu", "JockyAckn", "HumptyImpelic", "ComptsBaldyDom", "Whaviatte", "SoftOffel", "Werediand", "RegralPlegasus", "ReacPokerface", "OffingeCoffy", "Beedaltyo", "ConsistentOffortsi", "AstoundingEst", "Onquentabliate", "AwesomeTomostur", "DullDozyLemodu", "EsionlyGillygum", "OptimisticPtinknew", "VoluntaryRary", "SublimeItsubi", "ModestEctoormo", "AnglysSilly", "AmetionMinion", "MentMedusa", "Rompleseral", "AxiomaticMantr", "Arsecritom", "WarleffBuffalo", "YieldingForier", "Maternize", "PerfectWeregife", "Beganiateds", "EvesevStSteve", "InsibilWinkyDink", "OndoingDomino", "ProgetcBucket", "SairaciElais", "RectProject", "ObservantLarbsedi", "EthicalPriametr", "Nowerstope", "OutitiTooti", "BeautifulFoutes", "MilwaspChiliPepper", "FessoPissant", "SedoFirebred", "WasedlaTiddles", "AliveKelichap", "PuringiTinyBoo", "LincystColestah", "CentoodDoobie", "ScratchyScra", "Ityretuddynt", "Offeckert", "GymGuyMgbil", "FireBerryBethindi", "CrankyBanc", "Shitislonesp", "Whowediff", "WervidVivitar", "CarthaHatred", "EminentKinteeni", "Phystudeat", "Aneumenctr", "DiplomaticBerat", "ItyansSugarBuns", "ZealousMovereat", "MelodicOloodpor", "Fookeyedep", "BooBooKittyRettlyst", "BeirstHairBall", "IngmerRhino", "Gelsouldi", "Ingdpoici", "Ingledible", "PrettyProessi", "WherviKicker", "DalikTikku", "IninFeint", "Aestudireastal", "LumpyNemples", "SmokeyMorsiall", "Founititag", "FrownyTownswe", "AntionFunTime", "Keestingko", "AltruisticFaric", "MyonlyDestrion", "Herrionati", "Adyintred", "DevoutItlereve", "IngshiDingo", "Wormserld", "OfficeboyFillan", "PositiveNovermal", "UldfuBaldman", "Diedinsto", "CosseaPoppyseed", "Meashichem", "EtionSeatides", "KissableDontrisd", "WaysidKidSister", "AborTurboMan", "Encipansoncla", "BlueJayJaimingi", "Hissiodustomer", "Eponesibadedge", "SincereAnce", "Forightse", "Peraddiesphic", "MookyPorPooh", "Paideliti", "UnpunUnoShoten", "Elegirionvedr", "InguDerange", "Offermang", "TorClaymore", "VengefulPentse", "PrincenHitchen", "Medeconlyme", "『sʜʀᴋ』•ᴮᴬᴰʙᴏʏツ", "꧁༺₦Ї₦ℑ₳༻꧂", "༄ᶦᶰᵈ᭄✿Gᴀᴍᴇʀ࿐", "×͜×", "Sᴋ᭄Sᴀʙɪʀᴮᴼˢˢ", "亗", "꧁༒☬sunny☬༒꧂", "𝓑𝓻𝓸𝓴𝓮𝓷 𝓗𝓮𝓪𝓻𝓽♡", "༄ᶦᶰᵈ᭄✿Gᴀᴍᴇʀ࿐", "×͜×ㅤ𝙰𝙻𝙾𝙽𝙴ㅤ𝙱𝙾𝚈", "꧁▪ ＲคᎥនтαʀ ࿐", "꧁༒☬ᤂℌ໔ℜ؏ৡ☬༒꧂", "Ⓥ", "メ", "꧁༺J꙰O꙰K꙰E꙰R꙰༻꧂", "░B░O░S░S░", "Sᴋ᭄Sᴀʙɪʀᴮᴼˢˢ", "꧁༺ ₦Ї₦ℑ₳ ƤℜɆĐ₳₮Øℜ ༻꧂", "✿ • Q U E E N✿ᴳᴵᴿᴸ࿐", "🅑🅛🅐🅒🅚🅟🅐🅝🅣🅗🅔🅡", "༺Leͥgeͣnͫd༻ᴳᵒᵈ", "🌻ｓｕｎｆｌｏｗｅｒ🌻", "꧁ঔৣ☬✞𝓓𝖔𝖓✞☬ঔৣ꧂", "꧁☬⋆ТᎻᎬ༒ᏦᎥᏁᏳ⋆☬꧂", "ᴹᴿメY a h M a t i ☂️", "꧁༒Ǥ₳₦ǤֆƬᏋЯ༒꧂", "ϟ", "༄ᶦᶰᵈ᭄✿Gᴀᴍᴇʀ࿐", "ꨄ", "𝕯𝖆𝖗𝖐 𝕬𝖓𝖌𝖊𝖑", "꧁⁣༒𓆩₦ł₦ℑ₳𓆪༒꧂", "Sᴋ᭄Sᴀʙɪʀᴮᴼˢˢ", "꧁༒☬ᤂℌ໔ℜ؏ৡ☬༒꧂", "Dɪᴏ፝֟sᴀღ᭄", "⸙", "ＦＺㅤＯＦＩＣＩＡＬ亗", "Aɴᴋᴜsʜ ᶠᶠ", "Lixツ", "♔〘Ł€Ꮆ€ŇĐ〙♔", "꧁H҉A҉C҉K҉E҉R҉꧂", "OPㅤㅤVICENZO√", "𖣘ᴰᵃʳᴋ᭄ꮯꮎᏼꭱꭺ🐲࿐", "『sᴛʀᴋ』ᴷᴺᴵᴳᴴᵀ༒࿐", "ꔪ", "『ƬƘ』 ƬƦΘレ乇メ", "Ꭺɴᴋᴜꜱʜㅤᶠᶠ", "꧁☯ℙ么ℕⅅ么☯꧂\ufeff", "Ꭵ°᭄ᶫᵒᵛᵉᵧₒᵤ࿐♥", "•`🍓Valerie xavier axelelyn🍥", "αиgєℓ _ℓιfє ❤️🥀", "ㅤㅤㅤㅤㅤ", "ᴛᴜʀᴜ ᴅᴇκ友", "━━╬٨ـﮩﮩ❤٨ـﮩﮩـ╬━❤️❥❥═══👑ľøvē👑 ═", "×͜×ㅤ𝙰𝙻𝙾𝙽𝙴ㅤ𝙱𝙾𝚈", "ᴛᴜʀᴜ ᴅᴇκ友", "『sʜʀᴋ』•ᴮᴬᴰʙᴏʏツ", "ᴶᴬᴳᴼᴬᴺ・𝙀𝙢𝙖𝙠友", "BSK・L E G E N Dᵀᵒᴾ", "亗", "꧁ঔৣ☬✞𝓓𝖔𝖓✞☬ঔৣ꧂", "BSK・L i e e Eᵀᵒᴾ", "BSK • ＫＩＬＬＥＲ亗", "ᴶᴬᴳᴼᴬᴺ 𝚃𝚞𝚛𝚞友", "🍎", "꧁༺༒〖°ⓅⓇⓄ°〗༒༻꧂", "꧁༺₦Ї₦ℑ₳༻꧂", "ᴶᴬᴳᴼᴬᴺ・Bocil 友", "꧁☆☬κɪɴɢ☬☆꧂", "꧁༺nickname༻꧂", "★彡[ᴅᴇᴀᴅ ᴋɪʟʟᴇʀ]彡★", "『Ѕʜʀ』• ℑℴƙℯℛᴾᴿᴼシ", "☯︎Ꭱ Ｏ Ƴ Ꭺ Ꮮ 亗 ×͜×", "", "matao", "kkkkkkkkkkkkkkkkkkkk", "Hiiiiiiiiiiiiiiiiiiii", "Emmett", "spencer", "copy my tank", "all i know 2x", "RATATATATATATATATATATA", "Thisislie", "jungleman", "austinz", "Austinz", "ur nub", "why yall so bad", "mi(mobile)", "awesome soccer(pog)", "2377285 auto triangle", "THE NEW BOSS", "hawaii", "M.", "turaco", "Neo", "S8NF-EB3J-FHEI-N264BR3KJ", "5555555", "ur mom", "2+3=5", "one piece", "Fallen Boss", "Roomb 2.0", "earth = sphere", "Roomba 2.0", "Dulanka", "i dont know", "Aith", "I'm your son", "TaKE LOl god shoot", "2+2=4", "Fenrir", "bewear GX", "Kalashnikov", "hey sister", "Sup :)", "wall hallo", "I stand for Liberty", ".", "OliwierQ Chojnacki", "MetatronXY", "Arcturus", "OP", "teste", "ink sans", "ropell", "PLL", "Solaris", ":v", "OBL", "teach me", "-_____________-", "rwegwerg", "n to level up", "thiago", "FAST", "This is far", "jojo", "Anak why u solo", "Lunatic", "sin", "nate", "popa peg", "Sssssssssssss", "Meepet", "hose man", "Beast", "angel", "}{eonyao", "minty fresh", "Evil }{eonyao", "Tango", "pet :3", "knbg", "underverse delta sans", "fallen booster", "COMMAND.Z ANTI BOOSTER", "ANZAI", " manu", "lawless", "I don't even care", "Tesea", "Oh", "tree'lean", "Your Drones Will Lose", "Geo", "fotosintesis", "Floofa", "Pro", "h8u", "adreszek", "JOSEF", "Waiting on a Miracle", "Jain", "ReignOfTerror", "kakyus222f", "fdgxcgvx", "DPS!!", "Sentry :3", "oh im noob", "Math you", "twilight", "Soccer", "ikandoit", "RopeSteel", "no-one", "omni", "kkk", "putre", "value1", "Fart", "REEEEEEE", "{AI} Bot", "xdnha", "Ni", "sheild", "CrAsH", "play", "Shadow closer", "Fire", "Actual Pro", "ATK_X", "Unravel", "PSYCHO", "Yrneh!", "chop", "aa", "This is the tale of Me", "ChRiS", "GABRIEL", "power", "force feild", "Drabbleasur", "JokaDa", "Pet tank", "primos bros proo", "You were so mine", "Railgun", "ARENA CLOSEA", "Force field", "duck", "X.ALEXANDER.X", "Wolfgang", "baited!?!", "PERU", "force field", "Aespa", "oni-chan~?", "copy my tank pls", "ns", "64M3R_999", "Fartington", "Yimo", "Stand For Ukraine", "hi.", "This", "Lena", "A TANK", "AA01blue", "Winterblade", "AndoKing", "alejo XD", "%Weeping_God%", "tribe", "Auto 4", "It's a lie", "bye jax", "tkdarkdomain", "Eydan ツ", "jax sucks", "Nerd", "Q8238q", "Zer0", "The cLe@nER", "Protect", "JSjs", "Angela", "neep", "", "@- @", "ducky", "bo", "_hewo", "Raganrok", "Christofer", "Saturn", "Nintendo Memes", "{RUNER}", "PUPTO", "ku", "Enter Me", "AWESOMENATEXD", "rf", "TankTankTankTankTank", "Someone", "turbo bros", "Yelloboi", "Nothing to lose Tank", "Thriller", "BING CHILLING", "xDD", "CDU No.30", "lenin12", "junhu", ",,", "super stinker", "Base", "pro", "oreo", "ggking", "GiGa LEN", "PH|Player!", "Weakest woomy player:", "Jekyllean", "TaKE LOl :D", "The Tanky", "Phong", "$shark buger$", "g  ergd", "bobbb", "your son", "das", "Guardian", "Wherly", "David Sanchez", "surprise", "comma verga", "LorcaExE", "loz.", "Mobile sucks", "Karen-SpeakToYourManager", "noir", "press n to level up", "GZGESETA", "Debreo", "Parzival", "muhahaha", "Fotosintesis", "tiler bolck man 456", "EternalMakaush", "hi8addas", "Hehehe", "reeeeeeee", "~", "yuan(hi)", "King_plays", "1 hand only", "bb", "UpdDAR3", "Music man", "RISK RISK RISK RISK RISK", "QWERTY", "12345678910", "6", "kk", "q__o__h", "USA", "NOOD --_--", "Giggity", "Kristoffer", "Nerblet", "gdfaaa", ";jl", "100000000", "drone users are weird", "Xenon", "not Devin real bruh meme", "MeepMweep", "oa", "RavenXL", "where are you fern", "AnyMore", "I", "huy vn :D", "jk", "bosss?", "Loop", "farmer's tan", "Until next time", "KK", "Ultra", "?????", "Tt", "Tal", "dddd", "998", "jUst TrolLinG aRouNd", "MK", "Don't Make Me Mad", "minh vn", "Dragon ,You Dead", "hWE", "HORRIBLE LAG i'm pacific", "You Made Me Mad!", "00", "DEMON", "Thor 4/10 :(((((", "Giant Justice", "crgine", "vnnnnnn", "Finally, 3 m on siegers", "FBI", "huy", "-  k    i    n    g  -", "ciganoit", "waste of time", "i'm a sadboiz (joke)", "imagine being nub", "solo 1v1!!!!!", "leonardo YT", "nobodynoticedyouweregone", "jack.vn", "Evan", "(:", "Astral Java", "Me n You", " hihihihuhihihihhiihhihi", "hara", "B", "Nooby", "EZ", "MrYoungSir", "manne", "Ragnarok", "Truchenco", "m", "LEGEND", "SINBADX", "let me farm alone", "Friendly /j", "bye error i gtg", "Pollo", "7/11/22", "jimmy", "Guilherme", "meb", "victor", "I use handphone", "PEGA(SUS)", "owo", "Mort", "the j", "yang", "go", "Very dangerous", "I'm harmless! -Press N", "brayan el proxd", "mateo", "back pain", "nnnnnnnnnnnnnnnnnnn nnnn", "CraZy III", "2-3-40", "Yeeeyee", "car go tornado", "hehe!", "taco", "@@@", ".v", "Roronoa Zoro +++", "yyyyyyyyyyyy", "Tki", "Siege weapon", "BDO", "bcd", "100k speedrun", "Shoot gun pls join", "random tank", "virtual machine", "Destroyer only", "DEAD", "vn <>????", "Ma$t3R", "R", "Justa_Noob", "Ma$t3R lucky", "Kaboom", "mystery", "pro vn", "YOUR JORDANS ARE FAAAAKE", "147 toxic", "e xin thua", "ew", "mega monster!", "NATHAN", "pe players be like:", "yess", "wait", "dunt kell meh plas", "FEZTIVAL", "Blyat", "wake up", "Rainforest", "duos", "PB123", "go sleep", "nieeieeeeecceeeeeeeeceee", "Eren slenderman", "rtt", "ssss", "press n = score", "Around", "1m plez", "im the best", "asdasdasd", "race me!!!!!!!!!!!!!!!!!", "lp lithium", "queue", "ttjjl", "heyy!!", "Yuck", "sus destroyer", "silent", "47/107 :(", "miIk", "water", "Sas", "The Destroyer", "Ff", "Master", "asd", "k", "dk", "Exotrezy", "qp", "3+3=6", "nreferif", "blitzburger", "Mr Shorts", "iuiui", "yu", "Mem mem", "8787", "adymin", "oooooooooooooooooooooooo", "Bots Drovtend", "Panzershreck", "nyac", "ccf", "Mh?", "joshs", "beep", "hsg is sb", "404 Not Found", "Michael", "thinh", "ABC", "ggwz", "Indo", "uwu", "THE King", "Nagi", "Pato Lime", "aaeaeae", "BUGEN", "Area closer", "Unbalanced Build", "//", "nnw'", "Door", "Matias", "ky", ";", "Gavin", "Lucy", "Kitzuneko", "This is the tale ofn", "Hank", "hiiiiiii", "^---------^", "screw", "LSV-005", "Hiary", "jonh real", "Nothing overlord", "Portaun", "20240123", "ggs you are good drone", "NoU", "mcbeef", "sg ez", "Chase", "it's a lie it's a lie", "qwertyqwerty", "LEGENDARY (VN)", "NATH", "backrooms", "Daffa", "MATHUEL", "vn luffy", "HAHAHAHAHAHA", "Oofed", "Hung dayy", "noob vn", "Sensor", "Marco the great", "Ghgft", "unscientific", "EnemyTracker (LookAtMap)", "yeey", "oh, dear", "Anderson", ":> hi", "redhood", "Volderet", "Harry Styles", "WINNER", "r u dangewus", "odo", "maksim", "Im uwu", "eryweufhw8r46yq3782edtqf", "Katya", "Unlucky", "Maga", "BASE MAKER", "td", "sure sure sure", "Zarma", "octavo", "evan", "U  N  K  N  O  W  N", "jbc", "exc (real)", "sonick12", "exc (fake)", "~A~", "shadow", "Yoriichi Tsugikuni", "p1", "Hanumanumani", "bob the builder", "BLITZKRIEG STRAT", "sus", "India", "Oof", "kiyo", "Toopy&Binoo", "I'm Innocent", "GujiGuji", "SANS", "LoSTcar", "UNGA BUNGA", "add me", "Meeps", "afafafafafaffalafel", "........................", "Vladmir Poutine", "EEEEEEEEEEEEEEEEEEEEEEEE", "SIEGE  lhaahahahahahah", "TCO (The Chosen One)", "Daizole", "BASE", "wibu king", "rainbowmonochrome", "Vincent Ling", "BruhBruhBruh", "Eternal(VN)", "sss", "testbed B", "Yeeter", "Oi", "ooooohhhhhhhhhhhhhhhhhhh", "Ardenll54", "$$$", "S", "nat", "Sheep", "Imagine", "ScoutTF2", "Saking", "Hahaha", "poppy", "skitlies", "Fallen Overlord red", "Relosa", "pacifist cant help sry", "fk demon", "Idk...", "D=EMON$ do u know?", "sinx (fk demon)", "Fruits", "Hehe", "Fallen Overlord", "Faster", "BulutMobile", "Awzcdr", "mega", "Giang~Mweo", "General", "Winner", "=)))))", "..............", "DEFEND", "Hiary4", "Eye", "Merdka!", "Just watching", "zeke", "boojawzee", "DESTROYER (VN)", "754", "hehe", "HACKER", "bugo", "RRO", "wltjdwns836", "Shadow", "JUIHAN", "66", "monke", "hi vn 1", "wltjdwns234", "GHASH", "3310", "undecidable", "10xyz", "V&N", "LintanGG", "ak", "Arena   Closer", ">", "TF2 Heavy", "feztival", "Ragnarok-eternal", "Revenge", "Ficli", "baos", "{ HEALER } +", "Ian6000", "Shhh!", "loxc", "Banned from seige?", "1457", "666", "deezs", "nn", "Use me as a shield", "Yocto To Yotta", "Dorcelessness.", "3+4=6", "superium.", "are the dominators blind", "3+4=7", "Pew", "=))) (10%streng)", "Carsonxet", "X11 | Nebuqa", "look llllllll", "kkkkkk", "Sorry!", "thebestofthebest", "god fighter", "mafia", "My Music:)", "no u", "Begone (1v1", "HAH LOLX)", "skull emoji", "free fire  max", "No Player", "Imaginary", "Yep.", "| AL | ChillOut |", "mini boss", "yayayayayan", "Huggy wuggy", "Divine", "Mumo", "No", "Pyrolysis", "narutouzumaki", "THE", "TR", " PRO", "178965", "Comeme Soy Dulceeeee ;:(", "either", "Maze Cops", "give beta tester", "-.......", "i need score", " pimp <3", "nm00{", "you are my father", "DDDDDD", "6666666666666666666666", "AUTO 555", "me best", "Crozo", "longest run", "blood for the blood god", "i m a protector", "q", ":(eu tou triste", "Sheeps", "i asia so 300ms", "not an easy target", "MyLittlePony", "little one", "oo", "cool kid", " BUB", "TTroll", "Onyx, The Fall of Hero's", "ツ", "ba", "Josh", "revenge:(", "La meilleure", "The leader", "n level up", "}{ello", " vikas", "Alpha Fart", "Matt", "fisch", "guy", "Cozy.", "Preku", "stuff", "friend to all", "Inverse", "no ;)", "Souper?", "):)                  ???", "Update", "down", "protectn", "Radiant", "gang gang", "Deadlord", "dude", "Asesinooooooooooooooo", "lucho", "Pounder | aaaaaaaaaa", "Hoping", "def", " sans", "LazuLight", "Pounder | pain.", "WHERED MY RELOAD GO", "eh", "RP", "wat?", "ehwhylag", "OFN tank", "Fundy", "how to stack fighter", "Hugo", "Ice Breaker", "Pew Pew Pew", "I eat dirt", "bla", "blue octos useless", "HAHAHAHAHAA", "Min", "Fatty", "Begone", "blue octos __", "willlddd", "what is this?", "Aleph", "Demon", "Error 505", "Horizon", "The Tale Of Tanks", "1+1=3", "sdddd", "ven", "Yujin_05", "99999999", "dead", "Flight", "ma ta", "anime", "cyan", "wreck", "senti <3", "Uh what", "Nya~", "APE", "Through the Rain", "no pew and paw here", "idol askib", "2...00++++", "jjjjj", "firework", "Jacob gomez _ Jadenian", "I'M CHILLIN", "yoavmal", "eternal.exe", "Bye :)", "no plz", "REVEnGE__+=!!!!!!!!!!!!!", "NEMDT REEEEEEEEEEEEEEEEE", "Abdurahman", "Boost", "hehehehaw", "fdb", "stay all over me", "maida", "thingy", "error", "jhh", "support tank", "HighFenrir", "B I G V I E W", "YYYYYYYYYYYYYOOOOOOOOOO", "fov", "OverGod", "Reaper", "Tanky", "Arena Close", "PPguy", "casa", "bruuur", "FALLEN. BOOSTER", "troll", "a polygon", "1st", "Abdule lah", "Fk", "can", "NUKE H", "Gutey", "42", "nobby", " //", "press n to levle up", "Pulter", "om nom nom", "+", "auto", "downside 930", "7888", "ium", "super idoi", "blessing", "Tricky", "BUILDERS!!", "Barry", "sandbox", "Y U NO?", "Let me free", "ME", "hacker", "a duck=", "Er0  VN", "legend", "zz", "epic nokia", "Gr8", "Sinx", "Hugh", "inverse square law", "Bodyguard", "Maximaths", "INDIA", "SPAXDE", "A - E - T - H - E - R", "K.I.L.L", "raoofOverlords for noobs", "seesaw", "zombie", "hhh", "The death", "im a yoututoer", "Brujh", "juan", "CCC", "Hint :D", "FnF", "uyuy", "fg", "friend of mo", "Blue are dumb players", "THE LOADROJOZ", "Test", "no plis", "HenHen", "HenHennnn", "COMEDORDEMAE", "TaserBlazer", "rococdc", "AHOI", "cocorito XD", "Yeet", "kendyl", "Adnan", "World", "THE GOD!++", "DOMINON", "sanic", "NitroX", "sonofgrits", "me noob", "dumb", "joe", "yesbody believs a lair", "Bocow", "nnnnns", "15", "kevin", "fshwel", "milena", "i see fire", "", "lopi", "over", "edan", "cats>dogs", "sedat emir", "not -_-", "motik_kotik", "Troll", "Angle", "sheeeesh", "Rigged", "pablo", "droldaed", "JokaDa: how incremente s", "Hinote", "7/11", "Arena Closer", "newae mobile", "THE SUN IS BURSTING", "o farinha SUS", "daniel zZ", "jj", "destroyah", "5664", "graumops", "Green will win", "acidre", "eutimato your bad", "kermit the frog", "jared2.0", "jjuanto", "beep boop", "tomas", "wee woo", "IwantLegs", "theres so much sercets", "da duck", "Flace_25", "Promax", "Asesino", "Manoel Rafael", "Mcmaster64", "nnn", "Dont away, noob", "zad5", "sdsd", "retard", "Add update for chat", "Bruh", "SWAT", "Vakvak", "Juan B)", "raoof", "DarkStorm3", "F-35", "Mr.Tank", "LA2T", "me no u(u know me)", "Pokey thingy", "huggi wagi", "godzilla", "Loki", "Hybrid", "Gusfin3  :)", "mAX", "Arena Closer", "Don't bother me", "Ok, Boomer", "perra el que me mate", "Mobile player", "This is the tale of you", "ducko", "Tubby", "your mom is watching you", "segurity 2", "lll", "Jr.Greeen", "Dddd", "rid", "aaaaargh", "stegosaurus", "Free Points? Nuh-Uh!", "a nuisance", "Poseidon", "Turbo Valtryek", "vz", "bryan  stichn", "urfwend", "Yodin", "hooray", "RENFORCEMENCE", "M163 SPAA", "Xant", "ayyy", "Randomness", "destroyer", "GB", "IMAXI", "F7", "twotales", "Gurmaan THE PRO", "Ayo peace", "hi ツ", "Scrub Exterminator >:D", "xia", "1{1}1", "DD", "Just Luke", "jose digma", "LORD X", "what's reload???", "AL|Air", "non't", "TryMe: DodgeBot2.0", "HexaDecagon(I grind)", "TryMe:360NoScope", "Error 404", "EDP445", "rsn.", "GEESER", "help me", "rotten punk", "solo vs 3", "all monsters", "ari", "Lore", "&__.._._:-:-:-.&", "Kalijia", "Rusty", "GUGUn", "hi :)", "truper", "goofy ah single", "ServentOfDeath", "J.L", "THUGGER", "ARKE:D", "The beep  duo", ">>>", "im bad", "Qscxz5", "CSDulce  Legend stop ._.", "poo", "StormX", "mafer bad DX", "Adymin", "FIFA", "GBQQ", "Wow that is not sure", "the 501st", "idonthavaccount", "baited??!", "Orn20", "theCityCR", "healersruseless", "Sin (watch my videos).", "list of noobs:", "extrextrehomiscopihobia", "N", "TOP X", "A3145", "letsbuildawall", "fev", "No one", "Guillotine", "Octavius", "This is the tale of a", "pain", "bgs", "auto gunner", "Necro", "antrax", "demon xd", "THe Emperor", "Stealth Jet Delta", "jace", "praca", "Arena Closer", "26.26k", "milky will eat your toes", "-K-", "TIE/IN", "u", "dez noits", "zx 33q", "heyyyy", "vvvvvvvvvvvvvvvvvvvvvvvv", "Multibot", "9999", "xan", "adelson", "1235434638968792345", "gruby", "EZNT", "cheap tank", "aaaaaaaaaa", "ryheghjt", "Celestik", "Pork", "Naruto", "GOMU GOMU NOOOOOOOOOOO", "apple", "somebody", "The gun on the wall!!!", "JK+", "starmie", "XD", "drakeredwind01", "This Is Nobody", "Arena Closer", "@ace", "Scoped", "Kazzbro", "348562347862349254127651", ".....", "NO MORE OVERLORDS!!!!!!!", "no c-", "Buzzy", "mom", "Chekks", "HAHA HEHE HUHU MOBILE", "bert", "leader Slayer", "na", "ZACHARY", " Iv", "Dogs On Mars", "Aquiner_ouo", "Thinh", "gas", "lautaro", "I also helping blue", "pet(XD)", "wow", "hj", "CraZy II", "laranon br", "XDDDDDDDDDdDDDDDDDDDDDDD", "eaeaeaeaeaeaeaeaeaeaeaea", "You", "zero to hero", ":3", "Lux", "magic_cheese", "good morning", "HAHA HEHE HUHU", "Red is best", "JK", "not onyxd", "help", "But you keep on breaking", "huttutu", "jjj", "hansith", "mds", "goofytank", "Korone Chan", "el pendejo", "razenezyou", "voltic", "qoh", "nya~~", "KL", " jeje", "asdfjkl", "Daisy", "zarity", "NobleSkele", "shhhhhhhhhhhhhhheeeeeesh", "kevynz", "Pewpew", "Star Ender", "Copy my tank ok pls", "JOIN THE PENTA PARTY", "bob AT", "basic", "jesus proooooooooooooooo", "um", "q00000", "adljsaknckjas", "OOOOOOOOOOOOOOOOOOOOOOOF", "TallStop", "Ops...", "underated tank?", "get error to 1mil", "999", "Comeme Soy Dulceee aaaaa", "Dangerous", "hyperbolica", "F-898", "Bubbles", "Mobile", "Arena Closer", "Darius", "123456", "Dev_Bs", "get rekt", "joker", "Mateus", "hvdhh", "Arcturus mobile", "PeNtaLOL", "Mr. Porridge", "go jax!", "E?", "Pew!", "BLAST", "level", "Vunda = Mythical", "Hi Levi!", "Hi Travis!", "Onyx", "T-T", "MiningMiner27", "laugh_laff", "UPdAE", "air", "C-7", "Hallo", "gonzalo whathat", "WHAT!", "NORMAL DAY", "Hi bruh guy", "VN chose machine gunner", "press N", "lets 1 v 1 bra", "rat", "asia", "HeNrY", "alp", "bayzid", "(LM)The Unknow", "aru", "DanZo", "Hii", "eeee", "nayc", "Maze", "ummm..... ok", "~Real_K~", "phong", "Support", "<1.5 is not enough", "=Z~", "Ban she", "comm ander", "Sei", "vcl", "Dapa", "T.Khang", "maikesito", "hihihi", "Dyaranhi", "W a t e r", "Fluffy", "223", "!ARNA LOSER !", "leave me alone!", "i use hacks", "EEEEEEEEE", "Always not alway kid", "GX .ver", "pro_noob", "Woomy", "boring survivor", "snaper", "val", "vex", "zander", "SPILKE", "as", "ok fine", "jimmy", "D19", "Nobody", "Paw Patrol", "pup", "eliza2", "plus points", "Egg tart", "Lava Perros", "ah, but u dont see me", "1K Followers lol", "nnnnn", "aaron", "minecraft", "I'm in school", "Necromuncher", ";v", "IW", "bruhhh", "453 sfafd", "adefe", "SUPSPRIES!!!", "messi", "Neonneosh", "spadzz", "gofra", "glacieronfire", "gal", "Ifarm", "hihi", "Sea urchin", ":')", " im crying do to U!", "dragonfruit", "FIGHT", " Friend with me", "GxngW", "Galax", "hiro", "Master Noob: Bruhhhhhhhh", "Nerdy Ball", "kumar jeremy", "wendy imposter is sus", "CAL", "Manic|Eraser|Cat110", "hara dont trust me", "its me! the", "sinx", "Dr.Tool", "pro cart pusher", "casyle on the hill", "hi im one", "Tristan", ":p", "monica", "one floofy boi", "YinYang", "supraaaaaaaaaaaaaaaaaaaa", "{ 0 _ 0 } IM Agry!!!!!!", "lena<3", "Jolo", "antontrygubO_o", "Leo hacker", "lakalaka", "1nFerN0 - 1 mil?", "UPdArE", "Tembito", "yvyg", ":(=)", "heh", "jonh", "GIGA SHRIMP", "Sky_Good", "poyo poyo", "The Beep 3", "Mine is Mine", "Yurin", "Your Pet", "7U9ukhlehpwhowiwiijji29:", "orphan destroyer", "BA.2.75 Omicron", "Astagfirulla", "Fallen Spiddy", "lee77", "ghg", "PretendToBeANoob", "zuesa", "The Void", "rdagonfruit icy", "time too tryhard", "democrats SUCK", "erro 1mil im so bad:(", " {}?{}{}{}{}{}{}{}{}{}{}", "get error to 1m", "why is anni overrated", "kakyus222", "Have you seen me", "Arena Closer", "hiiiiiiiiiiiiii", "im noob", "Tattletale", " GoodLuck", "bazooka", "FFOx", "wellerman", "dont trust anyone", "eng pa", "Summoner boss", "kostas friends ? greece", "V:", "CorruptedSpectro", "hohohoimsanta", "1M ????", "BOOSTER AIRSTRIKE ORELSE", "nashe", "Algi", "(vn) go with me pls", "FPT", "2020 im new", "Player", "jkhhgg", "Cody", "Eiffel Tower", "BEST", "EVERYONE BE DESTROYER", "Pray for Ukrainian ppl", "prb", "Attacker", "RACE", "Yael", "Q Checked These Names", "(W!) Solo w!", "111111111111111111111", "GiantJustice-", "Nate", "Can pls be your friend", "Cxrrupted", "yourself", "you(VN)", "khoa fake:)))", "1VS2?", "IDK", "plplpl", "minh7cvn", "hehe boi vn", "Sinbadx", "One.", "Q is Awesome.", "laco", "RPs", "meris", "Harder Demon", "Florentino", "Well", "jerry", "Hut", "Pet bird (eat triangles)", "mustfarm", "I bet you never", "FeZTivAL", "Kid", "ABC", "PH", "Starlight", "MOONLIGHT", "STARLIGHT", "drift", "vilad", "MURIQI 03", "The Light", "cat", "DRUNK DRIFTER", "WHy", "mmm", "arR", "FINz'D", "aaaaaaaaaaaaaaaaaaaaaaaa", "biba338", ".chao", "HNY", "$$$$", "cat o' nine tails", "Block Craft 3D", "BRUH", "-vn-", "Azra", "bin huhu", "00123", "CN Tower", "t143", "Te", "Gun", "Sans", "Fggf8ytr ftrfbtruf7rtfru", "Ryuu", "overlord king x", "emir", "empire", "Player 1", "NAtZac1424", "BOT-342465", "Hdujdb", "We_peace_farm", "tuan", "A1D2J3", "323f", "MYJ", "bbebebebe", "T", "peace_farm", "hoang118", "lol2", "lol1", "gtegnugnbdbdtui", "the guy", "sang", "/SUP Maths", "_-zErO_-", " Gaurdian", "5C", "DJT", "silvally 1v1 me pls", "Arena Closer", ">:))", "valer", "G,bdx m", "|A", "No Ski||s", "Etz", "The Comeback of 0800", "sinbadx", "QWEr", "I need 3 1m more", "Njayy", "NOBDY w", "Sh |             _", "xs", "Jet(pet)", "INDIAN", "The Immune System", "TATICAL NUKE INCOMING!!!", "bigmac", "jjjj", "woi", "protecter_of_free", "bye", "WZ_120", "let me protect u my lord", "IMAGINE DRONE IN TDM", "wewewe", "Max", "Nothin", "uh", "Ancient", "NNNNNNNNNNNNNNNNNNNNNNNN", "MAXICHIBROS", "Belowaver", "trboo", "T^2", "Carpyular", "e04", "turbo", "Sei GF:3", "trbo trbo trbo", "Hymness", "red sun in the sky", "maze goblin", "Wojak R FuNNy", "Cloudless", "Hey!", "stacked", "sudu", "Launchers no buff no gg", "Sh | cc_", "Xentnya~", "Xjso", "Void", "nobody", "Pop", ":) cavite", "ja", "THEIA CELESTIAL RULE 34", "2 0 2 2", "i Saw LimeinSoccer penta", "WatchMeDestroyYou", "the new era", "osuer", "NOOB VN", "aleph", "cjccsqb", "lusy", "uudsibfhb", "ssdd", "trying out factory", "bo ckick R", ":b", "DarkHeart", "sd", "Bi", "ax", "23", "Ht", "rest area", "korne", "Around Calm", "duo octo", "Know", "Bruh player", "huh", "LintanR", "all my friends are cool", "lth", "Ilikefarming", "mie", "yo racingboi", "Kylaura", "HI!", "Leonard", "None", "ya", "Evaden K", "AZU", "Eating Fighter ^Silvy^", "Jeff", "elecgance", "667ifjfjijfo", "Necromancer Pet", "Vakst", "Forgor", "The Sliding Door Com", "Nest Keeper", "ka boom", "niitrooooooooooooooooooo", "mada fking", "Inside Out!", "healer", "Average DPS enjoyer", "i'm friendly", "Pablo", "Necromancer", "saffy", "Manager", "nmnmn", "Leon", "(vn)TTT", "NucelAR", "benni", "-1", "proo..", "chicken wing", "Zasriel", "Ground", "Fairy", "='))", "KSA", "DOMINATOR", "packy", "rrrrrrr", "xyz", "Gianan", "=", "VEISEL", "space", "bibi a", ":3 s", "600k is how far ive got", "u POO", "dfhdhgsdgf", "pighati", "BT_O", "3w3f9", "@@@@@@@@@@@@@@@@@@@@@@@@", "rain and fezti", "Arena Closer", "Sara", "b b/", "MG Post", "Rock", "The Truth Untold", "FireStorm", "chew 5 gum", "EreN0", "", "AI", "netherlands", "la couronne", "stone", "bello", "SUS", " OVERLORD HEROBRINE", "Chaini", "nhi015042012", "meo & sup", "tomnguha123", "uoivhhfgrryttyhj", "tyty", "taem?", "Nividimmka", "I use underrated tanks", "u stupid", "ferrari", "", "thearch.hmmmm it lurks", "i won't let it end", "college sucks", "color", "l7er max", "Duy Lee", "ugok", "Booster race :D", "im a joke", "ms tang", "ssssssssusssssssssssssss", "Elson", "BILL WIN", "Root", "el pogero momento", "I'm Friendly", "huggy wuggy 2", "wibu", "Griffy", "solo1 -1", "Like crashers", "wispy", "nice", "BUB", "X-BOX", "Gregoryelproo", "NEYONSTANK", "Closeyoureyes", "Utilisateur", "1% Power...", "SillyPantalones", "over 'GOD'", "First Time Play", "Arena Closer", "BoW", "Data Expunged", "Sped demon", "JOKER", "SIRENHEADYTs lost pet", "ggs", "hfski", "Taklao", "hack", "hi!", "karol43", "Aaa", "My struggle", "Italok", "Ghi", "Phycron", "fkdla", "dinogis", "HxD", "Battle Tank", "rt", "kral kaan", "leo!", "ndn", "222222222222222222222222", "leo! hel", "lumity", "kha", "552", "V VAG", "Windows 8.1", "'>'", "888", "mwr_csqb", "ANTI OCTO TANK", "mwrtql", "2022 SUPORT UKRANIE(2)", "thomas tank engine meme", "johnrobin", "Lostvayne", "ck to la roseanne", "Guard", "Bartek", "ww3", "doomsday bunker", "Hydra", "REVIVAL:", "Gggg", "Rick Astley", " HEROBRINE", "AFK", "BaLu...", "fux", "yes", "Raul39", " Sinbadx", "SAENG", "LittleBana<3", "TAIWAN protector", "bird said the n word", "me(duh)", "19$ fortnite card", "use this tank with me", "got 3m og save cant use", "sheesh", "Override", "Xiggy", "Saika", "jeb", "sant the sant the sant t", "uYu", "Panzer", "steeg", "Arena Closer", "i go UP and DOWN", "i like walls:3", "azuris lol", "HMMMMMMMMMMM you are L", "Murdock", "Optimus Prime", "Sleak Override", "ridah", "ballistic 2.0 fnf", "pulp", "u really like to hide", "ltbc", "when the", "Gangsters_Paradise", "Cochon", "Just Having Fun", "kavin", "Good Job Chicken", "0____0", "25m", "im poppin' off", "koral", "peace :D", "Medium tank", "dark:)", "kiet", "The One", "tilvlad", "Superchad factory", "meids", "the ruler of eveything", "GetRekt", "Nothing", "h1h4", "FOLLOW ME TO VICTORY!", "ciken", "this is the tale of", "Lera", "-heix-", "insta: 'brn.o.z'", "lena", "Ur4ny4n", "Byakugan!", "Lx1000000000000000000000", "turtle", "what tis going on here??", "Comeme Soy Dulceeeee xd", "Arena Closer ", "uirouri", "bruno", "Kaiju spacegodzilla", "haiw", "Heandy", "78d", "S. Liza Yt", "I don't need a Partner.", "CS Dulce oh ok -_-", "ninja", "CS Dulce i some tired-_-", "| AL | ChillOut | WWS++", "dragonfruit icy 1212 X4", "CS Dulce u no are friend", "i like cheese too", "Don't touch me", "look llllllll kkkkkkkkkk", "Dogs On Mars | no N", "box", "super", "CSDulce  .      _      .", "hope i dont dc", "A A A", "im your pet", "venom", "Hlp my ky r brokn", "ok la :)", "ffdf", "soccer", "(-)", "Mikasa Ackerman", "peasant", "get better bozo", "CARELESS(I care less)", "xz", "MARY", "DVS|| BuiltKIDD", "|AL|ChillOut|", "jajajaj", "Yimo (Friendly forces)", "HECool", "Just Spinning", "KermitHasAGlock", "AL| JustICE-theresaclone", "Sean", "ezzzezezezezezeze", "-Corrupt3d-", "Greg the Hunter", "hypertone", "eRAnnnnnnnnnnnnnnnnnnnnn", "mafer im sad 3<", "Nageron", "Eric.  The. Unstoppable", "Earth is Super Cool", "annoying tank", "ovMasted", "Turt Talks to Much.", "tanvik", "Here Were Dragons", "Cheese and Perfect RNG", "Mega :)", "Betelguese is Super", "error error error error", "Boomer Humor", "Violin is Interesting.", "Elite Celestial", "PROFIN try's 1m scores", "Big Poppa", "BUGEN+", "Saika/Na2/500ms+", "devil", "JACKSON", "Masher", "shuna no 6m", "YOU NAAASTY", "yahhhh", "Zephr is Mod???", "$1,000,000", "Rk", "1010", "idrk", "Calob", "It's all okay.", "fr0z3n", "TRASH", "Abrar", "c@rt3r", "pwease?", "thearchy", "Zort", "pwease lemme get 1m :D", "shush cat", "Mr lord have mercy on me", "xDer", "tennis", "ZEN", "multibxersin2tdm", "Bisax", "hhhhhhhhhhhhhhhhhhhhhhhh", "Arena Opener", "This is a Laser tank", "GOTTA SWEEP SWEEP SWEEP", "167", "Rusher", "bcj8721yt", "awa", "Ron_scratch", "Ahmad", "highh", "(O.<)b", "Op", "Tenzo", "Xlemargg", "hghg", "Legend", "PewPew", "Auto factory 19187944889", "Taha and Sardar", "Cc", "Wheaple the great", "VT", "LEGENDARY BEST", "Rd h", "GX", "maxi", "Doanh: basic win vn :)??", "bb8", "breaden", "1 cannon only chall", "Kino", "quang", "FRIENDS TO ENEMY", "NB", "hoang", "Inevitable X", "say cheese", "Anken", "gun boll", "soy sauce", "PUNSIHMENT", "Domain YT mobile player", "badog", "longvn racing boiz", "nicola", "race", "RJ", "eloxus", "kjiegu835946793", "Level  fun", "Purple2", "Hmm", "vicrouss", "GIGA CHAD", "Auto factory 37448936323", "NO ONE", "cai chua", "Spring Bonnie", "ALPHA CHAD OF CHADISTAN", "ajajajjaja", "dustnine22", "let's begin....", "DuckBatmann", "125   mn", "giraia", "Shoot double", "Spawner > Factory", "Fade", "Pat", "Kol", "max", "njs", "1+1+1+1=4 OK!!!!!", "POU 2", "morbius", "Sven.", "Prm", "Arena Closer", "no teem", "forest", "Im friendri your order", "(Tank) snowy! (Tank)", "Ur momma's", "rowan", "boknoy", "Shide", "redrealm", "lor", "-CN-", "yup", "Ahmet", "-CN- ", "JUMP ROPE 10 TIME IN ROW", "YOTTA CHAD", ".ium expanDeR!", "elecgance4", "fix performanz, devz plz", "UrBadLOL", "suffer", "Destroyer", "ZZZ", "IM AWESOME", "tHE great king", "Nafi", "micsodaaaaaaaaaaa", "Raid", "W1lleZz", "saibou", "That_Thing", "hexagonal", "Panda <3 FFA", "Koala", "NEVER GONNA GIVE YOU UP", "simba", "Crush Limit", "No pp for u", "Arthur", "kiriloid", "AZERBAYCAN  TURK", "Arena Closer", "thien5011", "Raymond bince", "not  tifo", "THE FAT RAT", "greedy", "lightz squad", "64t", "Tri Angel-Booster", "sanesytp", "wasd", "Ryland", "Fallen", "PUSH ME", "dgfdgr", "Booster join", "Dorcelessness", "obed", "soy noob :,(", "Triangle Gang", "Dont pee on the floor", "Good!", "Andy", "ccc", "Gee, thanks", "WHATS UP BOI", "aronnax", "Person", "Annie", "Mellow", "TU VIEJA", "ace", "WoW", "friendn", "kirilloid", "meme", "sacapak", "Ethad", "Da boss", "XLF", "abominacja", "doge", "I'm Real", "sprotto", "Polandbanner oo", "brazen", "QUESO Y TORTILLA", "EDI", "A tank", "bvaietd?!?!", "eda", "I don't know", "badda", "threuagnduirx 1234567890", "gabi", "pastry king", "Ball", "gab", "Catalyst", "sssssssssssssuuuuuussss", "Healer", "put Factory", "Funky Fresh", "XRECS", "mlk", "3-D Julie Cat", "Elite Crasher", "Nina", "One Floofy Boi", "Tailred", "raindog", "SPEEEEEEEED", "unikit", "adrik", "Fallen Factory", "OWO", "Caca", "orange", "Cj", "carlitos pro", "ghostly_zsh", "poly :/", "imagine spinning", "kom", "austo asa", "0 helpful blues lol", "Sandwich", "The Influence", "F for Froot Loops", "Machine Gun", "Director", "ChEeSe", "Mud Muppet", "RSN", "5th base = best base", "A Poisonous Egg", "'CADO ON THE 'BOARD", "blue suck XD", "lumos - kms", "blue suck so bad XD", "Lifeless..", "igh", "<<< Saved by Grace >>>", "agdgdgdr", "youencounterHIM!yourDEAD", "dinmor", "Jess", "La-BareTTA", "Aim(^-^)Bot", "78d pounder op", "Update me", "Comeme Soy Dulce wateer", "mafer  <3<3<3<3<3<3<3<3", "Ainnim Loof", ":)           (:", "Windows8.1 Pro Build9600", "a spinner", "FAIRY", "Better Than U", "Eesti", "sssss", "Friendly Elite Crasher", "MAICK", "EIDOLON", "cx", "YO what? bro im out...", "Rest", "TheHero383", "Swohmee", "Swohmee: HowDidIDoThat!?", "pet brick", "houses", "SIUUUUUUUUUUUUUU", "S45vn steel op", "Astrageldon", "ijklmnop", "afk leave me alone", "Anti-Hax", "protec me pls", "Gonials > Bird", "Jachris", "Aj is dumb", "code master", "MONTER", "kase", "JaredUwU", "devon", "kase is good", "spider .,,.", "lily the pad", "Arena Closer", "Gorilla gang", "Alejandro 22", "botanical torture", "Egg Spawner", "ghhhhhhhhhhhtoast", "Chungus B.", "Maksim", "Enderian Overlord", "eef freefzz", "Little Timmy", "Flashbacks", "dread", "ffa till 1m!!!", "wuzz buzz chuzz", "percy", "Space", "kraken", "BR PARADO", "Sry m8", "Chobblesome", "yee", "gtrr56e4e5eerer", "ELITE", "Krystal110607", "Survivalist", "Kalijia GG", "Kalijia Let's Peace", "eeeeeeeeeeeeeeeeeeeeeehh", "coriander", "Mat (Bocow)", "SIUUU", "bro doesnt have a life", "your tail", "eeeeeee", "<call me", "Numb The Pain", "hi ;)", "pierre", "the quiet kid", "nom nomnomonm", "ggggg", "Adventure", "notable", "777 ////. ./. /./-.---77", "PowerPoint", "FALLEN BOOSTER", "Ecxel", "ye", "LIBE", "bukaka", "notlazar", "errora", "ManiaC", "NobodyIsReaching500K>:(", "pescah", "fvha", "pesca", "Innkeeper Worm", "Blarg", "=ZZZ Bannanas Are Yuky =", "GRRR", "Try Thalasin Today!", "Thalasin OH GOD HELP NO", "SILIKA", "Fallen Auto-Tank", "SYSTEM", "is op on siege mode", "G vytvyv", "guardian", "ya mom", "Lorain", "A br stranded", "matew", "matatoe", "dante", "Maize", "Arena Closer", "Ouake", "khe", "i only farm", "DESTRUYE SQUADS", "let's go!", "no pressure", "Manoso G", "Indeed", "Lets be frands", "Bunzo", "vyn", "ok so...", "haha", "cooooooooool", "Ye boi", "Quest", "GOAT", "kool", "8hu", "bryan", "Aadhy", "Basic", "Eleanor", "OXZ", "speed", "az", "ura bot", "78d 714k bruh", "Partisan", "eli", "fwen -w-", "Death", "Hewwo :3", "Stalk Is Actual Pain", "fdfdf", "extreme hapiness noise", "begone", "Apex", "Wynder", "oof", "im watching you", "chill", "p", "-heix-", "Savage xD discord?", "crocty gets 1M first", "iv vs 3", "im bored", "ERROR windows xp", "(B) Wehrmacht", "FRNDL", "Lonely :/", "The N2R", "qqqqqqqqqqqqqqqqqqqqqqqq", "sven", "phi", "Uwu", "P", "Mushroom", "1MiL", "stinky/ gg jax!", "bay sorry.", "ツSpazeツ", "Mine craft", "nob", "/:", "Legendary", "vinh", "Moragull is JOHN CENA", "A-K 8000", "CorruptedPenguin", "C@t has C@p", "Stealth Tank Delta (STD)", "I WANT A HIGH SCORE", "tim", "UltraOmega", "PPPIIIGGG", "shark bait", "nek minet", "g'day mate :)", ":_:mx", ">=<", "run", "fire exe", "The Best Player", "susicoi", "Nerdy Ball :)", "cor", "Defender", "SlowKnife", "1+1=11", "my", "HUNG", "Deep", "Emilnines", "lol:):):):)", "Orca", "the legend hero", "/donotello/raider/", "YT=GLITCHER TM", "Jagdtiger", "On mobile", "The General Lee 01", "TeSt", "The Palidin Tank", "DaRk", "0jgojettreedew089", "ghost", "213", "twan", "Spectator:)", "uywu", "{}{}ALEX{}{}", "daniel", "Sol Blaze", "poly gone :D", "im 100 years old", "Re Fachero", "Blumin", "jhonny", "supreme", "D0M1NAT1NG++", "SAS", "Nailguns HELP!!!!!!!!!!!", "Arena Closer", "darwin", "djbd65", "JustLurkin", "im sorry", "race with me!", "on de xd", "Paladin-Celestial", "russia", "CHN fed", "sj", "13isaluckynumber", "i suck", "ah, but u cant see me", "a mongoose", "rae", "Z", "323f54", "lev", "Ultimate Dominator", "WWZZX", "Goku drill", "laffy taffy", "good luck", "EpsiCron", "Eye Of The Sahara = City", "Shields and Guns", "Tester BT", "outrun my gun", "invincible man", "Necromonkey", "HENRY      ANOS7", "TailQZ", "PPANG", "Tester", "a sentilen", "Jhon the nub", "arrowz", "Annihilhator bravo 1m po", "just boone", "hybrid", "gg gmzin", "we do i little trolling", "Jorge", "NgocAnVNA", "Sh l", "DUO MONETER", "Coapc", "timi po", "Why Buff Factory?It's OP", "Storm King", "Enter to the Dungeon", "frrrrrr????", "shutgun", "debris", "NOE BODY", "Dr pizza eyes", "Protect me", "How to get you", "sit", "Caracal", "trashmxnn", "Cat", "Angel", "baLu is kinda cool", "Tanky's 30th 1mil?", "i need a pee", "josh", "ggs (1m!)", "fed", "(Ai) bot", "hijo de su putisima madr", "slowpoke", "NO IDEA", ">_>O_O<_<3456", "hi saya", "ryuuddddddd", "Random Guy", "vn nha", "Just a Spectre", "manoso", "joshkidkid", "sg", "TON | 618", "mogerath", "vc landmine", "worst impact", "Ma$t3R=No Ski||s", "aajlrtgtrtty", "korea no academy", "Behemoth", "VN TOXIC", "dh_hniV", "no vn", "bruhhh (vn)", "1M=100M", "frrrrrrr???", "ggh", "lakf", "imscared", "Wow", "(<(:)>)", "STOP", "Tale", "Leo", "!^_^D0M1N4T1NG^_^!", "vortex", "blue", "Sr. GT", "eat my bullet", "fudgg", "RATA INSANA :3", "Find Me", "PHRENTINO", "bro follow me", "Xyx Wdtcfgzezgk", "fencer add me on disc", "super shock", "GGui", "Rafael", "moblie 1.37m siege woo!", "Surprise Surprise", "king pug", "Emily", "Hm", "Marchin Through Georgia", "Aha!", "huff", "jummer", "bixent boo", "Bao", "AAAAAAAA2A22222222222222", "uhyi", "press u", "HI Yoou", "aaaaaaa1", "LMGshooter", "1922", "-KONZ-", "Waloh", ":(((((((((((((((((((((((", "obyness", "BaLu", "Zod", "spin=friend", "Ashes", "the UNTIMATE DESTROYERb", "MYLEFTBALLHURTS", "Xh", "ravi", "sorry sorry", "ZasrielDreemurr", ": )", ":?", "TaKE LOl EPIC auto 4", "Shankerith", "Hunker down", "!!!", "being afk", "TienBach", "fun.", "Zzz", "Annoying", "Juna", "new player", "Xander", "duda", "ppoppoppo", "One of your pets", "kolibri", "panzershreck", "EwE", "Deus ex Machina", "Pilav", "berd", "NO your mom", "1e+999", "Cristay", "nuiw", "UHF", "OwO", "PandaNa", "nnnnnnn", "Energized", "Cirrus5707", "Ferge", "not boster", "shuna wakuwaku", "Rongomatane", "press n to level up", "bubble shooter", "Turret", "super pro prot 4 you", "45453", "Despair", "Ho Ho Ho", "Y.S", "Arena Closer", "john", "96", "Auto's power", "2 Booster = Fun :D", "Press C+E: Octotank", "you were so mad", "Sky", "need protector", "Great Bydgoszcz Reich", "superman", "ridge", "hahaha!!!", "HELO GUYS", "vyey", "Vinaphone", "hiiii", "ZERO", "el epepep", "T   W   I   N", "5252525", "121", "iar", "avex", "Taboo", "since 1986", "meow", "AUUUUUUGH!", "xtrw", "On Mobile", "PRO123123123123123123123", "Kira", "gray", "eeeeeeeeeeeeeeeeeeeeeeee", "StUfFy_ChEeZe", "????????", "4th Form", ": ) ha ha", "OL Impossible On Mobile", "1v1", "BBoRRaBBiDDo", "hu", "pp", "slow but friendly", "vn", "loler", "Atumkj.", "fast boi", "MYRIGHTBALLHURTS", "1111WW", "odszdc", "Withering", "eafscx", "eeeee", "Sudu", " sub to", "T-Chan 13", "|^Robo-Birb^|^Silvy^|", "Korea :D", "Sidewinder-firebolt", "asdasd", "Agent Sauce", "vinud", "1 + 1 =1", "Xqaris", "WatchMeDestroyYou ol 1v1", "builder", "nnnnncaptiann", "Gawr Gura", "WatsonKong", "yx", "aewrsd", "Mmmm", "...VN", "REVENGE", "Mwoon", "turbo bro", "Hiu VN", "FF9JesT", "Fallen E", "hgdgt", "Fallen Hybrid", "SORRY..I'M..(vn)im so :(", "yaaaaaaaaaaaaaaaaaaaaaa", "supperlenny123", "The Underspeeder", "Anime", "AntsAreCool", "king of ...", "ghgh", "arslan", "I see", "chicken", "dkd", "777", "Engineering", "Push me for barrier", "oop zeros", "Mini moving safe zone", "goku", "fgg", "Jagdpanzer IV", "()UTi6", "zaq", "USSR(Russian)", "Stocxk_", "the things we do to surv", "asd fake", "HHH", "Swooper", "ayo", "hara ...", "ya YYYYYYEEEEEEEETTTTT", "Kyrie o.O", "Updog. Dying Breath. 2", "WHYANDWHY     Y_N_Y", "hara )))=", "I'm Q", "-Monster-", "Anak", "Mine says hi fake anak", "the sky", "Master Noobpet", "Viva", "maze", "oompa loompa", "Egg'in", "f(x)=k", "go to 10 mil record", "Trying to be peaceful", "Tunnel Wanderer", "Boop skdoo bep", "The Beep MAD>:(", "Speeedrun 200k plss", "The Boop", "Kaiju you", "dragon sleep no brakezzz", "kracc bacc", "24686872678", ":", "OnovonO", "Arena Defender", "Arena Closer", "naga", "asdfasdfasdfasdfasdfasdf", "Ace", "Pkao", "insta 'brn.o.z'", "aswon", "sodbazar", "The Hybrid", "aswon(ur bad)", "Troller", " nothing", "IKEA Box", "Vaskrano", "Si", "A+", "the beep !!!", "A+ Yeah spin", "Dr J.I.D eyer", "xijinping", "shheshhh", "pRo LiFe", "AZERBAYCAN  TURKIYE", "Just Existing", "3.14, 1.61, 1.41", "Ozymandias", "ok i pull up", "funnylemon", "TURK", "1212", "Learn with pibby", "LUKI", "happy mafer <3<3<3<3<3<3", "Seer", "mkZZZ", "niwa niwa", "nhan", "1223332111111111112321", "Arahana", "The Robot Kid", "vokki8skand", "Turret LV 1", "AQEEL", "AnA", "yahya", "ninjin", "Soulless", "EMO", "1010971", "pokemon", "VN 3", "alright buddy", "FR|Fajro", "Walorried-TR", "abuk", "Dead server", "Arena Closer", "zae", "zeraora", "imnew", "elecgance404", "heck", "Tomi", "SPAS-12", "tran duc hieu", "GGuisa", "viwpo", "BERD", "Blocker", "bcr", "come with me guys", "ehehe", "rule.txt", "big chungus", "t. food bc why", "lk;k", "SERIES 113 JAPAN", "sir bobybop", "G1019_t", "grendel", "andria", "VousyX", "LAINofLAIN", "ferge", "vilad pro!!!!!! :)", "Ali", "xzxz", "This is the tale of FFA", "MIKKEL ", "knjbfhiu", "Raknar", "free fire", "The Unknown", "Motar2K", "drifting", "OrangeCat", "Ddddd", "hi long tri", "some random oreo", "WEEEEEEEEEEEEEE", "speedrun", "DatBoi", "Michel", "71", "jacquie", "Exendern", "Jack Daniel", "Bob le bricoleur", "=W=W==", "ft. Karmatoken", "Arena Closer", "stfutduy", "vaboski", "HAAAAAAAAAAAAAAAAAAAAAAA", "alsterercrak", "The Big One", "Sorry", "JzF", "ZZZ ZZZ ZZZ!", "hey moskau!! moskau !!", "EL TRUENO PRO", "<3 Doreen~", "tokar6", "nho", "Dusk Defender", "ooooooooooooiygf,fss';", "Wa Sans ashinenguna!", "aeaea", "nothing's", "the  best PEOPLE IN THE", "4/4/6/6/6/6/5/4/1/0", "Kazakhstan", "starlight!thunder!", "Mr D", "protected", "Uncle Iroh", "><II  gg", "dssfb sk", "Roly poly player", "jonyy0814", "KOREA", "1 min", "Winter", "zaid x", "Will join me?", " lucas", "MATI", "xDer MY FiRST 1M", "Seig", "oopsie", "nhat", "DAN GYUL", "Claire", "567", "stalker", "kotetsu", "124", "DraXsaurus", "My 10th life", "bhosdike", "sjw", "Karthik", "hhhh53535", "ciao", "sumoga", "brrrrrrrrrrrrrrrrrrrrruh", "jony0814", "rubyslime", "Yuvyyuy vyu", "Sppooky", "THIS IS INSANE!", "Bozo", "hex", "EJIT", "+S", "RENGAR!!!", "Nelly", "sadf", "UNKNOWN LEGEND(UL)", "hi im friendly :)", "llllllm", "Jekyll Why", "AL | 2 Week No Play", "Protector", "{o} Liza <3", "toothpaste", "sasukeuchiha", "ricegrain", "Deed", "vikitor", "fIrEbOt", "Machine gunOP", "mini", "Nice~", "quant2345677", "Oxylit", "totie", "hhhhh", "scx", "Ayrton", "LETS GOO", "Izumi-san (VN)", "Panther", "meckazAN", "men treibe", "never gonna give u up", "never gonna let you down", "never gonna turn around", "Arena Closer", "never gonna let u down", "yeahs", "Ruan=_= ", "Panzerfaust", "emp", "Tiny", "THE BIG ONE", "The Ranger", "DuckBatman", "Hatsune Miku", "ara ara...", "Basic Enjoyers", "hhfggddfdf", "The Mind Flayer", "Dance", "Ar 15", "XSET", "Milton Friedman", "Mr KaRbS", "Duong 20712", "playeur", "<======Lasi======>", "Mardi 1", "Ethan", "fellen 0", "Venom", "-_-Aigle Royal 72-_-", "Alt+f4", "swrmur op", "Bean Man", "atomic", "Annoying drones", "Colors all around me", "okey", "GIANNIS ANTETOKUMPP", "it's a lie", "hy", "pc", "mustard the rohirrim!", "Kingdom Hearts", "Mebh", "Dr. Eggman", "Choose otto we stronger", "protectsage", "pov:u need 5 prot for 1m", "TR Angela", "MadCroc", "sage", "robo cop", " weirdo", "Shiny Triangle!?!?!?!?!?", "Gem!?!?!?!?!?!?!?!?!?!?!", "blon td siix", ":: Saved by Grace ::", "maze runner", "MadCroc 1.21mToday", "be free", "Carry", "I JUST SUCK", "gemgemgemgemgemgemgemgem", "ur all bAAAAAAAAD", "Spin = Free Protector", "HELPE ME FOR HELP YOU", "Rosenrotteneggs", "Mr. Lord", "PFC|| KEVYNZ", "Hybalixa", "hows your day", "b I protected u before", "awootube", "there", "Julia", "seve", "Arena Closer", "hguyuthg", "hop", "i go high", "the return of chewy pie", "Jerry", "mf yeezys", "King Hans", "sven drop", "I Voyage Around Map", "biggest noob", "dog", "IM SUPER RETARDED!!!!!!!", "The End!", "Engineer Army", "lolnub", "Salt", "MOAR OCTO TANKS!", "KN-23", "nothing", "sonic", "Nirviar", "asw", "dom is easz", "sghhgsfhgsfghsffhshg", "Jerry - LOL", "server", "D4C", "BigBrain Time", "player 8483", "Turkey", "Deve", "LintanG", "STPSPMMNGSNPR 64M3R_999", "PaX|A1ma|YT", "kaan", "afes", "ly", "ulan", "Purple", "Hahahahahahahahaha", "fahrradsattel", ":('", "he", "NoSpeak", " lu", "Fugitivo BR", "Crossboi", "Noob", "Gabriel8", "pinkie pie", "Wowkoks", "Zweilous", "oui oui", "asian kid", "top mozis xd", "Kofolka", "AcidRain", "a shield", "glitch tale", "Crong crong crong", "!!!!!!really happy!!!!?", "(vn) :p", "udhe7f", "phil", "Mort (pc)", "askib", "jygghhjj", "Last remote", "tttttttttttttttttttttttt", "asddasda", "LIGHTNING DRAGON X 96", "Minimal", "jelly", "Your Mom", "Peaceful", "respect women", "Darius_575Pro", "csabi", "7859", "tenk", "rayyan", "Fei", "Pango", "eeebot", "giranha", "spirit of the forest", "dark", "pro player", "Yeat", " %<AzEr<%", "notPickle", "Reflex", "Me", "Stalker Army", "Qin", "Predator Army", "NYADRA'ZATHA", "Roaster and Toaster", "CSDulce im boring :=", "Szymon", "es ta la vida que toca", "@RAFAEI  PR0", "$:$gc", "Suomi", "spankthemonkey", "KANG OF WAKANDA", "Ark", "tiny ones my friends", "op xd", "fence", "III", "GPA", "Bonaventure", "witherrrr", "mahiru shiina??", "(B) THE RISE OF THE FALL", "mahiru", "May I Fuq You?", "ID", "trying for world record", "75882310770", "PressNToLevelUp", "Dont TaLk 2 mE", "Do Not Disturb (oops)", "Wyd_Josh", "Pentagon protector", "tri-angle is paccific", "Good", "Do Not Touch Im AFK", "WiFi-Kun", "Bullet Bill", "pentagon protector", "%<AzEr<%", "PROOO", "ice tea for free", "Waiting", "busco pareja7w7", "agabaga", "SOLO AGO MI TRABAJO", "necro pet", "Kael", "Trash Anni", "Sev", "wypk", "G.A.P(MG)", "nokia", "Twin-Twin", "bronzzy", "Guy", "Ytt", "Ayman", "Zyiad", "Ahmed", "the general lee", "a littl' bad", "Bonk?", "SEBASTIAN.", "aIIan y sonic", "bigchad", "N05O7G", "Tengen Uzui", "Prees N", "tree", "SPILL THE BEANS BRO", "Escort Carrier", "HEEHEE", "X_DROP", "XboxUser", "55564", "porscheHUB", "Tenth Circle", "Spectator (dont attack)", "summoner2", "sentry", "The Covenant", "Storm", "itachi", "Only 1 Factory Can Stand", "TOBI MARCH", "Come Back Here!", "Spider cochon", "Crash And Burn-Dayseeker", "Clearing shapes...", "BOONE!!!", "tr ndxd", "lurker", "SONIC GO FAST!!!!!!!!!!!", "Covid 19", "tar tar teha tar sal-t", "Ray of doom!!!!!!!!!!!!!", "lautayo", "Herobrine", "let u know", "Peace and Unity", "kelly", "wingarr", "aIIan", "SEBASTIAN", "Sonic.EXE", "fghjijb", "the all seeing eye", "blitzburger is pro", "trust me do this", "Beans", "qwerty", "lucas", "Domb", "Kronos - Eternal", "45a,i", "unavaliable", "happe", "Racing?", "Buyandeho", "Mobile Not As GOod", "Arena Closer", "Ok Ur Done.", "alex", "Siren", "Defenders of The south.", "Ok Ur Done. Again", "ssad", "SAGAGH", "dwada", "Says Overlord in Green", "Wolf272", "Sry had to go afk", "WerestLuck", "press t", "corner base trust me", "nah i", "FIGHTONTHEHIGHTS", "jaxon", "Dark Pheonix", "porfavor venganxcadddddd", "Toxic", "iurgitues", "lolstar", "harnesto", "koby", "Shiny Beta Pentagon!?!?!", "Everyone Go MachGunner", ":3 hi", "GREEN Barricade", "oo i m friend", "ASKED", "Xtrem", "NopeTurtle", "porfavor vengan", "Chompy610", "Drones are gae", "Penta takeover", "one of the players", "Avenger!", "Sleeping Quadrilith", "dewfew", "king bob", "one of the newbies", "Spectator", "Fistandantilus 39 AC", "BIG POPPA", "diana <pleayr>", "Really:D", "Kenobi!!!!", "arias", "Arkaic", "i have sponks :)", "jor", "Arena CloserSinx :)", "ALL GO BENT", "Evades 2", "freee", "76...", "rigeeS", "Arena Closer", "ZEB", "koten-", "green", "little one :D", "Factory Takeover", "PRODIGGY", "Scratch", "1% Power", "Thank you", "OTD", "pet lvl 30", "world's best anni", " DONCRAK", "gnghfiukfhfj", "MASTER", "mi(moblie)", "let be friend", "defenders", "father landmine", "overlord takeover", "Bloop", "ayy", "Fighter", "W.A.R", "robococ", "TEQUILA!", "As lc", "ezz", "xQD", "AGUST-D", "USS Enterprise", "Visitor", "Wolfy_11_BR", "jonas", "Takeover", "Fall Guys", "momo", "ChickyNuggyCat", "today is christmas", "NotThebest", "NO ONE", "secks", "Overdrive", "Seb", "Machine Gunner =best", "Yevery1BetrayME:(", "Nathan_1", "Tickflung", "323f54", "boone", "ALAN PAPI", "Jikang", "lenin pro", "hydro", "Toxic sugar", "M.D", "gart", "wall", "Arena Closer", "grandmas ashes", "Eat my Doritos!", "No no!", "mr.cola", "Tundra cat", "AR", "david", "nnnnnnnnnnn", "study yo orgo (chem)", "Death Is inevitable", "Stuck", "dragon", "droplet", "HI  you mom is here", "Zeezees", "necro", "luchi", "rp - on mobile", "bored rn", "Pandrian.", "master", "Lightning", "CLEAN", "arisen", "raaaaaaaaaaaaaaaaaaaaa", "3k", "qusimocho", "Trolling Me :(", "weak tank", "HunggVn", "Touriat", "use adblock please", "Q", "Arena Closer", "I'm_Chris", "fvdr5", "bman", "skrill", "royce", "Star", "QQQ", "MONDAY", "armtumroom", "Ssunseer", "duji", "ryy", "sanggggggg", "hai", "oty", "148 toxic", "no mouse", "232523", "h..hi :S", "vvn", "sire soral", "frost", "btw", "lqkf", "Senator Armstrong", "Vn hi", "Fake.Fake.Fake", "molkin", "lEFF", "notsudon", "korean", "Henrystickcmans", "crongemaster", " dyllan", "A Goat", "TaKE LOl EPIC factory", "TaKE LOl EPIC machinegun", "Tiny Celestel", "asdfasdf", "BF An", "cooper", "Unwelcome School", "EtRNInja", "supernintendo meme", "15 fps player", "Day, day, da-da-da-da-", "i will download osu", "asdfasdfasdf", ".jpg", "Arena Closer", "kkj", "pet XD", "matias", "MAY BE HAPPEN", "heeeeeeelo", "BIG BRAIN TIME", "Koronoe Chan", "BOOOOOOOOOOOOOOOOOMM", "not the guy you just saw", "shark", "The Ghost", "get in wall", "o.o", "hara vi", " ElguerreroHastaElfinal", "literally the changelog", "top", "Minul", "Trutch", "Eternal Guardian", "JOSHUA", "End", "TANK", "531714", "senbonzakura kageyoshi", "minhhihi", "LUMBRE", "HEy Im frendly ;)", "just joe", "BonaventureVT", " i look into ur soul", "Teddybear", "Overload King", "alone", "peter", "Russo-Baltique Vodka", "Don't Let's Start", "nice one", "I Will Give U My Points", "toeless_monkey", "GANG", "0=IQ", "super booster", "seperate", "Prograde", "what does reload do", "Kevin Heckart", "CAVE- CE", "happy day", "Void Fighter", "race me?=Support <3 Bop!", "I'm protecting you! Sort", "hara- XDDDD", "Peacekeeper", "stares into ur soul", "Can I help you today?", "fdf", "Friend", "AYOOO", "odin <:)20", "Arena Closer", "Respect", "DontJudgeABookByItsCover", "OAO", "3vs2Ol", "Trinity", "yuan(A PENTAGON DDDDD:<)", "NO TIMMING", "wait in doing some work", "New", "Spin=peace", "retnuH", "Wall Protecter", "MUSTAFA/TR", "the deep", "CAN", "definitely not mq", "imbad", "Huy ;-;", "Gosu General", "Klair", "Ugly Beautifulness", "Dexter playz", "All Dead", "run  {ANGRY}", "VN.HM", "555 }{", "foon", "WHERE ARE THE DOORS", "toilet destroyer jordan", "No doors no fun", "Rico", "Giann", "SSS", "floppa", "Dominador", "ttttaaa", "ltester2000", "roberto", "Directors are Overused", "OverBrain", "Celestial", "HUH?", "Deepr", "Steve", "mathias", "1410065404", "ShinyG", "miguel", "yoyo", "subin", "Pega(SUS)", "cracked", "Arena Closer", "NO BAD WORDS", "PORT", "tale", "triangle drones = nolife", "TargetLocked", "Directors Are Overused", "(GG)", "qwe", "DUMB", "crocty poo", "creeper", "i just want shiny shapes", "Tommy Gun", "Your Mom is overused", "Overused Vibes", " jeje.2", "SONIC.EXE", "Planet", "-.-Razoix+?>", "Happe", "exc", "seensan", "cronge", "overused is overused", "Give Me Underused Vibes", "Extreme Speed", "j bert", "PARA", "Alan", "Friends?", "git gud", "Giant Justice YT", "yOU HAD YOUR CHANCE", "Jacob gomez_Jadenian", "mega monster", "Giant Justice YT - GG", "schrodinger = loser", "reaper of souls", "111111111111111111111111", "hostile", "ryuudddddddddwdw", "nononononononononononono", "Rocket shooter", "TTCBernard", "you deserve this", "raku", "why me???", "Rose", "top 1", "-KhangWasBroken-", "Uouuuuaju", "Fighter tank", "Solar Fighter", "sqrt_-1", "(<(?)>)", "du hund", "Ben", "A polygon", "AVIRA", "A.T. Beerful", "QER", ".exe", "GHHGR'986452|", "ck to la roseannenn.", "Orxan487", "zzx", "Clink", "popoi", "reicardo avocasde", "Doraemon", "Bandu", "oofoomode", "Sneaky annileatter", "Lofi", "Cancel Those Directors", "LeaderboardAllDirectors.", "1M + StormMachinegunner", "DR. BEEEEEEEESSSS!!!!!!!", "BH_FireFreezer", "frjhjhvt", "The Beast", "S u p e r", "Nice:))", "kdk", "Legacy", "jz", "ded", "yuco", "like", "rei", "atleast spare me till 1m", "Arena Closer", "Burning eye ;(", "Petsalt VN :)", "~|{boss fight}|~", "Reb", "mahluktakkasatmata", "EEEEEEEEEEE", "LowKey", "Praying for Winter", "tinh vn", "Phat", "AditGA", "cats nya nya ;)", "On the day you left me", "into my head", "CThanhYT", "NgontoL", "spin = friends", "Expand: 8(5y+88)", "Baroydroyd", "fewillos", "poper", "149 toxic", "The _________", "rsg23", "mwmwmwmwmwmwmwmwmmwmwmwm", "msalqm", "thx ", "150 toxic", "crescent", "dark karma link:wc2100", "NobleCrafter3219", "O K A Y ( ^ 3 ^ )", "egvda", "dark karma link:wc2118", "Gemma", "link ...", "DANGG", "This is the tale off", "Heeh", "The Fire Club", "c.ew.11.1.11.1.11.1.1.11", "pro is nood", "Random Tank", ":P", "Super Sonic", "Thai dark", "dfdfdf", "syron!!!", "strong tank", "main menu", "oblitereight 1000 ms", "its me pekola", "plungebob", ":(:(:(:(:(:(:(:(:((:(:(:", "ssd", ";kooo", "Kozuki Momonosuke", "SDASD", "Ha...Get Rekt", "be", "Wew", "321", "}{ex", "via", "Save The J'S", "ms. cold person", "FwgKing", "AnythonJS", "Theo", "BOB", "Mustafa", "dm", "Cgfsd", "Help", "{CHICK}", ",mnji", "<op>1", "SharkBuger$", "ATM", "Nining", "NEO ROY NEYEAH NAH", "Haunted", "Fireworks!?!?!?!?!?!?!?!", "Minhaaal", "Bobro", "YUU", "bob xllnnnnn", "Ailoki", "exu boi", "XYZ", "sus.", "star kirby", "Machine Gunners, unite!", "5min+5 overdrive", "Newsletter", "Meletiscool/", "allmyfriend.aretoxic VN", "Pet", "ivoree", "Twin Pro 3/3/4/7/7/7/7/4", "ka yawa", "SIUUUUUUUUUUUUUUUUUUUUUU", "ClosePro 2/2/4/7/8/7/6/6", "Snap ( Peace)", "???(vn)", "noob123", "Militant", "Banana", "fffffftt", "Hoi", "Ready For Another?", "Bossy", "ewltjdwns3673", "sa", "Don't worry I'm harmless", "freakshow :)", "aeaeae", "falc", "king4a", "ddt", "bangladesh", "Exterminate", "vIVIVgREYdOVE", "105050", "HI Youvn", "how? what? why?", "sdasda", "PYTHON", "lo hoc hanh", "who want race", "Arena Closer", "Xiao-Ling", "top 1000s", "A_C_L", "A flower tank", "Jash", "KRYZ", "Speed Build", "Tia", "Ha!Get Rekt", "hiboiXD", "Pro of ............", "vvv", "Rare", "draco", "Disaew", "Let's work together!", "iar chary", "Aqua", "Tgvy", "Ihv2010", "ASDUA", "Arena Closer", "chase him", "Nothing here", "Schwerer Gustav", "Dedeeeee", "Firnas", "yolo", "Psychic", "PLSSSSS FA", "mercy pls", "ur Being Fed", "FedEx Box", " not anak", "spinnnn", "proo...", "nn0", "the drones do not hurt", "Evil AliExpress Box", "Police Divo <3 XD", "pls Im friendly :)", "ldldl", "Like dat", "ytwjeit6tty", "UrBoringTbhLikeWhatsUrPt", "B(sian)", "bandit", "UnKnOwN", "TechnoBlade", "alien", "1934", "YoXieO", "why maze", "/donotello/", "Corrupt and dead.", "MAUS THE LEGEND", "WHYANDWHY     Y_N_Y", "GET MORE PEOPLE", "Bong Bong won't help you", "Pock", "CROSSIANT", "piece treaty with newbie", "too fast dident even get", "D A N I E L  bad...", " ryh'lrfh", "LEOPARD 1 WILD", "ya nos cargo la chingada", "Rainbow", "sssssssssssssssssssola", "lol darth vader noob", "AL| JustICE- sry luna", "Social Experiment Part 1", "Mercy", "take your time", "HI GONIALS", "i see who you are", "Cz Player", "Jap", "yeah yeah yeah yeah yeah", "Red Just Bled", "pounder", "eagle T", "Pet :D", "here to make friends :D", "Derniere Danse", "(Huggy wuggy) im nice", "PT5 | 03-04", "A Cat", "Skull", "PANZER VIII MAUS", "super perfect hexagon", "Rice", "protect perfert heha gon", "erf", "cable!!!", "PT5 | Tezerr", "Hi ._.", "WAAAAAAAAAAAAAAAAAAAAAA!", "xtrem", "eben", "1354", "far", "SOOOOKA", "alcatras", "mini boss spawner", "Arena Closer", "Eauletemps", "Aik", "BLITZ", "sinbadzx :)))))", "press n", "boom", "le tank", "dc yok bend", "Shay", "Solo :>", "Thunder", "best sentry", "dumdum", "Patterns", "R M", "FGDERTY", ":>PTM...''", "melee is better", "tmi 88>:?", "oooooooooo", "ffhfghu", "uuuu", "Acheron", "llol", "(vn)", "Zombie", "jellybEab", "4TDM", "pet", "ae vn", "Green Defender", "COME TO PLAY FLORR", "kr", "da", "dai", "USS Vella Gulf", "No One", "hus", "Let's work together!  N", "UNKNOW", "w r e c k", "Pobbrose", "belal abbasi", "Charles 18th", "Sir Theodore", "Arena Closer", "Hey What Happened?", "Mr.sod", "Graziani", "Ricsae", "'/;", "Anti celestial tank", "quandle dingle", "Eren noob you", "have fun crying eren hah", "MaiLotVNN", "A  l X back!!!!!", "np", "eeeeeeeee", "KHOA", "(:cai chua:)", "yulzzang", "boop", "Crazy", "MEGA MSC", "lyxn", "KarmaToken", "youssef", "LazerLOL", "HI  Five", "vvva", "GoGe", "Skawich", "Pixeljumper", "GALAXY", "Ppp", "crasher", "Min ye", "Arena Closer", "zen keon", "nzhtl1477777777", "Be Sidewinder press khh", "Indo Kok gk pro", "_blank_", "7151", "just", "tjplayz", "halo", "e5 y5gcv", "ds", "sdasdsssssssssssssssssss", "super tank", "BJ", "||H|E|L|L|O||", "swwsH", "||P|L|A|S|M|A||", "Blob", "Destructor92A", "catch me", "Coke cola espuma", "t. this green is glitch", "nhatbun", "You saw nothin", "cool dude", "Mr King", "THE PHONG", "Peace Dog", "DARRREN1407", ";D", "trust me", "2345678", "Apfel Saft", "new up :D", "Minerva", "12iiw", "Just aj", "UBER_TANK", "patata", "Minecraft", "Master of dying", "mommy long legsq", "Eauletemps why?=(", "sfdgfsgsfg", "U.A", "ze", "Eauletemps 4V1=noobs", "Qwerty", "doublade better", "sunkee", "MINI ON A LAPTOP", "snorp", "TOGESH", "GWiz", "sinx7", "Mon A", "Kartoffel", "t. green is glitch", "Nxoh", "Michael Jordan", "technically octo tank", "thick", ":cai chua:)", "Gabe Itches", "you can't see me", "TOXIC", "neph", "honesty Spectator", "Injoro", "E1", "your mum", "everyone sucks", "Charge with me/defender", "try me", "pheo", "uwj", "floofa", "Getnoobed", "test septa", "", "Pizza", "U Only Run To Ur Base?", "seb", "Maddog", "huy vn :D nhu loz", "Arena Closer", "Chicken KenChicken ken", ",l,l,l", "Comet", "Zhynt", "christopher", "The Mandalorian", "TomaToh", "tntman", "Tim", "spayer time", "piffermon", "Spectactor", "yyyyyyyyyyyyn", "left for dead", "iiiiiiiiiiiiiiiiiiiiiiii", "Pog", "BV", "burh", "ralsei with a BLUNT", "PROFIN 1000", "my guy", "Life is good", "pe11", "qqwqe", "0-=", "opp", "Panz3r of the Lake", "train", "furan", "Flawless_", "Oni-chan UwU", "Es3et", "Clorat suotn", "UNKNOWN LEGEND (UL)", "DEFENSE", "Rykav", "TYRONE GONZALEZ", "KarMaN", "urgh", "deffer in tanks", "rick astley", "BERSER", "WHY ARE YOU RUNNING", "booo", "WEST SLAVA UKRAINIA", "yups", "DEMIAN932", "THEBESTPLAYER", "8man", "Use machinegunner to win", "26317125   gff", "Joe Biden", "Nv Proxy", "Ethan david fernandez", "kbshlong", "wren", "(Very) Dangerous Pet", "police", "NEMDT playing shmart", "HEXDECA", "run.", "W", "sad", "try harder", " -_-", "a little bit of fun :)", "kendyl 1", "Ar-15", "Ha Ha Boo", "zay", "Rrennitten", "Monsia", "agus", "you dumb", "dino run", "Blood // Water", "Paradisal", ":O", "gulbos gulbos gulbos", "Dernier Danse", "La Espada", "Into the Light", "Planetoid", "...    ????", "swimsuit", "HEYYYYYYYYYYYYYYYYYYYYYY", "Q_us", "nom", "sentry strats", "josh how play?", "TheMadLad", "TheMadLad dylan strats", "THE LEADER GOES OUTSIDE?", "Eauletemps spin=screen", "Out of the Dark", "Lotus", "defender V2", "mmmmmmmmmmmmmmm", "TImmy", "ICBM", "animal", "Tezer", "Zver", "sindBax", "U2882JHS", "781", "Zorroooo", "I'm not bad", "IM WITH STUPID =>", "Miggy?", "sophia :)", "ImNew", "YoXieO_YX", "a pet", "TBB", "AICIAGOGH", "YANLUI", "facts", "XL", "DragonGOD64", "eys", "To Bee Keep", "VENOM", "pvto si lo lees", "grace.", "Speed", "289j", "A player", "cocomelon :P", "build wall :)", "Deino", "9902774653772", "Timmy, do your homework!", "elite basic lvl. 45", "MSI", "Make circle with Tri twi", "Message: Friendly uwu", "M4a1", "heist3", "Big Beep", "i like cheese", "Im weakest tank", "utifi", "jsohi", "cheese the best", "DOG", "cope", "F  A  M  I", "Little one <3", "Zoro", "DarthBader", "Mr.W", "Darth Vader's Slave", "Chroma", "demon xd:alone in life:(", "Luffy", "DOOR nr.1", "pancake", "TTroll_NEW MOUSE", "ubad", "NO MERCY", "peaceful farmer", "kokun", "This is the tale of:", "Best", "Square generator", "Corrupt Z", "angry?", "Aaaaa revenge", "DEFENDER AL FRIENDS", "partially illiterate", "Napoleon", "i destroy destroyers", "not pro", "Mr.Chaos", "~~ima try to protect U~~", "god is good", "Homing_Pigeon", "MazeDominator", "PM4037", "hehe car go vroom vroom", "gg partially you loser!", "'~Darkfiren~'", "La CFE me quito la luz", "nub7155 (Mobile)", "Chalicocerate - hu", "pew pew Gun", "yuma che3", "THOMAS crowded saturado", "TvT{ Thanh }TvT", "pentagon clean-up", "Go to Church", "Emi 10 ra ge hatag", "Im a landmine pls nohurt", "weird", "sorry Cheese", "dumpdump", "Rust", "Godzilla", "MEGAPIX", "demon:solo protejomihijo", "Your Bad :(", "a sweaty no lifer", "protecter crocty", "Caballo - horse", "my fists...", "playing from month", "trfhgyjhuiju8765t", "!emergencia!-!emergency!", "SIREN HEAD", "Yang", "pacific islander", "lucky", "MARK", "ALAN PAP", "nnnnnn", "dn", "Speedrun", "tre", "rocket", "B1 battle droid", "0,01%", "B2 super battle droid", "Your mum", "Goubekson", "Meti", "Wasap Papa", "tatut h", "LEADER = BANNED PLAYER", "shield", "afk ~30mins - stalker", "UHS23", "AlexDav", "!Hi!", "LOL ONYXD", "manager is just better", "Flying", "- - - - - - - - - - - -", "Roy", "Dank", "CrownPrincennnnn", "Gudmman", "CHAARGE", "GO TO DA TARGET STOEEE", "migel  papi", "Se", "PineapplEJuice", "lorain", "delta", "Jonk", "Endoy", "yeffri1", "luis daniel el pro", "Qpling", "An Endless Rise", "nerf", "8w329h", "Newb", "thicc", "just duo", "hahaa u noob", ";o", "xddd", "OSJJSJ", "Prime Chalicocerate - hu", "ilikemen", "IvanGG", "Ruwen", "moises", "jordan(:", "igoty", "vn exe", "TOGESH TOGESH", "Aprendo.en casa", "i only spectate", "DI", "deez", "Devourer Of Gods", "murt", "cocomelon- r u AA", "Polyhex", "KING OF DRONES", "POUNDER UPGRADER", "z54", "trees", "You show the lights", "Kirbo", "Turbo Bros", "stop me turn to stone", "Senseless", "You show the lights that", "T U R R E T", "uma delicia", "dohownik", "DESTINY PRO", "jory", "LITTLE GUY", "THE TERMINATOR", "hub", "GRAY STILL PLAYS", "Supsup", "Tedd", "Sup", "JUIDNDI", "ewres", "turu", "ffffffffffffffffffffffff", "soy susanaoria", "happy!", "Avarice", "im a cat", "protect me for 1m maby", "KEMUEL667", "Flowey723", "The shadow of none", "mebic", "Wsai12", "ALO", "oooo", "Hurricane", "i suck at bosses", "cv v", "ch.m", "Ovalsun", "rays", "naydanang bale!!!!!!! 1m", "poo face", "Akira bck!!!", "Arena Closer", "i believe in jesus", "SOFIA", "Yyfk", "Gigachad", "BANZAI", ">:v", "SUPRISE", "G l i t c h e d", "el mujahideen", "Soundwave", "torry", "AscendedCataBath", "The King", "Zac is best", "WBL", "Wait What?", "allmyfriend.aretoxic", "FNF Thorns", "L4r9", "Zzz Zzz Zzz:-)", "No Disturbing", "go away", "db", "P-Nice", "Duo", "nova", "hey vn;d", "DANCE", ":D hi", "dr.ninja", "Susana Oria", "arg", "7131", "Arena Closer", "SkuTsu\t", "Oh no Pathetic", "xeno", "y=ax+b", "Robleis", "Info?", "%t is the worst tank", "i hate %t", "%t sucks", "fallen %t", "Fallen %t", "%t", "%t is OP", "%t moment", "buff %t", "buff %t please", "nerf %t", "nerf %t please", "pet %t", "i looove %t", "green sunfish", "noew", "Dogatorix", "Charlemagne", "Drako Hyena", "long nameeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"];
             const randomRange = (min, max) => {
                 return Math.random() * (max - min) + min;
             }
@@ -480,7 +491,7 @@ global.require = function (thing) {
 
                 chooseChance: (...arg) => {
                     let totalProb = 0;
-                    arg.forEach(function (value) { totalProb += value; });
+                    arg.forEach(function(value) { totalProb += value; });
                     let answer = random(totalProb);
                     for (let i = 0; i < arg.length; i++) {
                         if (answer < arg[i]) return i;
@@ -490,7 +501,7 @@ global.require = function (thing) {
 
                 fy: fy,
 
-                chooseBotName: (function () {
+                chooseBotName: (function() {
                     let q = [];
                     return () => {
                         if (!q.length) {
@@ -634,7 +645,7 @@ global.require = function (thing) {
                     }
                 },
 
-                randomLore: function () {
+                randomLore: function() {
                     return choose([
                         "3 + 9 = 4 * 3 = 12",
                         "You are inside of a time loop.",
@@ -653,7 +664,7 @@ global.require = function (thing) {
                 f32 = new Float32Array(u32.buffer),
                 u16 = new Uint16Array(1),
                 c16 = new Uint8Array(u16.buffer);
-            let encode = function (message) {
+            let encode = function(message) {
                 let headers = [],
                     headerCodes = [],
                     contentSize = 0,
@@ -712,7 +723,6 @@ global.require = function (thing) {
                     } else {
                         console.error("Unencodable data type!", block);
                         console.log(JSON.stringify(message), message.indexOf(block))
-                        throw new Error("Unencodable data type!");
                     }
                     headers.push(typeCode);
                     if (typeCode === lastTypeCode) repeatTypeCount++;
@@ -809,7 +819,7 @@ global.require = function (thing) {
                 }
                 return output;
             };
-            let decode = function (packet) {
+            let decode = function(packet) {
                 let data = new Uint8Array(packet);
                 if (data[0] >> 4 !== 0b1111) return null;
                 let headers = [],
@@ -928,8 +938,8 @@ global.require = function (thing) {
 
 // THE SERVER //
 
-async function startServer(configSuffix, defExports, displyNameOverride, displayDescOverride, maxPlayersOverride, botAmountOverride) {
-	configSuffix = configSuffix || "4tdm.json"
+async function startServer(configSuffix, defExports, displyNameOverride, displayDescOverride, maxPlayersOverride, botAmountOverride, roomHostToken) {
+    configSuffix = configSuffix || "4tdm.json"
     //configSuffix = "blackout4tdm.json" 
     /*jslint node: true */
     /*jshint -W061 */
@@ -961,7 +971,7 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
     }
 
     // Modify "Map" to improve it for our needs.
-    Map.prototype.filter = function (callback) {
+    Map.prototype.filter = function(callback) {
         let output = [];
         this.forEach((object, index) => {
             if (callback(object, index)) {
@@ -971,7 +981,7 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
         return output;
     }
 
-    Map.prototype.find = function (callback) {
+    Map.prototype.find = function(callback) {
         let output;
         for (let [key, value] of this) {
             if (callback(value, key)) {
@@ -1014,7 +1024,7 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
             }
         }
 
-        getCell(x, y){
+        getCell(x, y) {
             const key = ((x >> this.cellShift) << 16) | ((y >> this.cellShift) & 0xFFFF);
             return this.grid.get(key);
         }
@@ -1108,7 +1118,7 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
 
     let tokendata = {};
 
-    const webhooks = (function () {
+    const webhooks = (function() {
         const https = require("https");
         let private_ = {
             keys: {
@@ -1205,141 +1215,141 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
  *
  * This is for workloads where performance is the only priority and order is irrelevant.
  */
-function Chainf() {
-    this._entries = []; // Dense array of [key, value] pairs for fast iteration
-    this._keyToIndex = new Map(); // The index: key -> array index
-}
-
-Object.defineProperty(Chainf.prototype, 'length', {
-    get: function() { return this._entries.length; },
-    enumerable: true,
-    configurable: true
-});
-
-Chainf.prototype.set = function (key, value) {
-    const index = this._keyToIndex.get(key);
-    if (index !== undefined) {
-        // Key already exists, just update the value. O(1)
-        this._entries[index][1] = value;
-    } else {
-        // New key. Add to the end. O(1)
-        const newIndex = this._entries.length;
-        this._entries.push([key, value]);
-        this._keyToIndex.set(key, newIndex);
-    }
-    return this;
-}
-
-Chainf.prototype.get = function (key) {
-    const index = this._keyToIndex.get(key);
-    if (index !== undefined) {
-        return this._entries[index][1];
-    }
-    return undefined;
-}
-
-Chainf.prototype.has = function (key) {
-    return this._keyToIndex.has(key);
-}
-
-// THE CROWN JEWEL: O(1) DELETION
-Chainf.prototype.delete = function (key) {
-    const indexToDelete = this._keyToIndex.get(key);
-
-    // Key not found, nothing to do.
-    if (indexToDelete === undefined) {
-        return false;
+    function Chainf() {
+        this._entries = []; // Dense array of [key, value] pairs for fast iteration
+        this._keyToIndex = new Map(); // The index: key -> array index
     }
 
-    // 1. Get the last entry in the array.
-    const lastEntry = this._entries[this._entries.length - 1];
-    const lastKey = lastEntry[0];
+    Object.defineProperty(Chainf.prototype, 'length', {
+        get: function() { return this._entries.length; },
+        enumerable: true,
+        configurable: true
+    });
 
-    // 2. Move the last entry into the place of the one being deleted.
-    this._entries[indexToDelete] = lastEntry;
-
-    // 3. Update the index map for the moved entry.
-    this._keyToIndex.set(lastKey, indexToDelete);
-
-    // 4. Remove the key being deleted from the index.
-    this._keyToIndex.delete(key);
-
-    // 5. Pop the last entry (which is now a duplicate). This is O(1).
-    this._entries.pop();
-
-    return true;
-}
-
-Chainf.prototype.clear = function () {
-    this._entries = [];
-    this._keyToIndex.clear();
-    return this;
-}
-
-// Iteration methods now benefit from the dense array structure.
-// They are as fast as they can possibly be.
-
-Chainf.prototype.forEach = function (callback) {
-    const entries = this._entries;
-    for (let i = 0, len = entries.length; i < len; i++) {
-        const entry = entries[i];
-        callback(entry[1], entry[0], i); // callback(value, key, i)
-    }
-    return this;
-}
-
-Chainf.prototype.map = function (callback) {
-    const results = [];
-    const entries = this._entries;
-    for (let i = 0, len = entries.length; i < len; i++) {
-        const entry = entries[i];
-        results.push(callback(entry[1], entry[0], i));
-    }
-    return results;
-}
-
-Chainf.prototype.filterToChain = function (callback) {
-    const entries = this._entries;
-    const keyToIndex = this._keyToIndex;
-    // Iterate backwards when deleting to avoid index-shifting issues
-    for (let i = entries.length - 1; i >= 0; i--) {
-        const entry = entries[i];
-        if (!callback(entry[1], entry[0], i)) {
-            // Since we're iterating backwards, the last element is at `entries.length - 1`.
-            // The "swap and pop" logic simplifies.
-            const lastEntry = entries.pop(); // O(1)
-            const lastKey = lastEntry[0];
-            const currentKey = entry[0];
-
-            // If the element to delete wasn't the last one...
-            if (i < entries.length) {
-                entries[i] = lastEntry; // Move last into current spot
-                keyToIndex.set(lastKey, i); // Update index for moved entry
-            }
-            keyToIndex.delete(currentKey); // Delete the original key
+    Chainf.prototype.set = function(key, value) {
+        const index = this._keyToIndex.get(key);
+        if (index !== undefined) {
+            // Key already exists, just update the value. O(1)
+            this._entries[index][1] = value;
+        } else {
+            // New key. Add to the end. O(1)
+            const newIndex = this._entries.length;
+            this._entries.push([key, value]);
+            this._keyToIndex.set(key, newIndex);
         }
+        return this;
     }
-    return this;
-}
 
-Chainf.prototype[Symbol.iterator] = function () {
-    let index = 0;
-    const entries = this._entries;
-    return {
-        next: function () {
-            if (index < entries.length) {
-                // Return just the value, as is standard for collection iterators
-                return { value: entries[index++][1], done: false };
-            }
-            return { value: undefined, done: true };
+    Chainf.prototype.get = function(key) {
+        const index = this._keyToIndex.get(key);
+        if (index !== undefined) {
+            return this._entries[index][1];
         }
-    };
-}
+        return undefined;
+    }
 
-const Chain = Chainf;
+    Chainf.prototype.has = function(key) {
+        return this._keyToIndex.has(key);
+    }
+
+    // THE CROWN JEWEL: O(1) DELETION
+    Chainf.prototype.delete = function(key) {
+        const indexToDelete = this._keyToIndex.get(key);
+
+        // Key not found, nothing to do.
+        if (indexToDelete === undefined) {
+            return false;
+        }
+
+        // 1. Get the last entry in the array.
+        const lastEntry = this._entries[this._entries.length - 1];
+        const lastKey = lastEntry[0];
+
+        // 2. Move the last entry into the place of the one being deleted.
+        this._entries[indexToDelete] = lastEntry;
+
+        // 3. Update the index map for the moved entry.
+        this._keyToIndex.set(lastKey, indexToDelete);
+
+        // 4. Remove the key being deleted from the index.
+        this._keyToIndex.delete(key);
+
+        // 5. Pop the last entry (which is now a duplicate). This is O(1).
+        this._entries.pop();
+
+        return true;
+    }
+
+    Chainf.prototype.clear = function() {
+        this._entries = [];
+        this._keyToIndex.clear();
+        return this;
+    }
+
+    // Iteration methods now benefit from the dense array structure.
+    // They are as fast as they can possibly be.
+
+    Chainf.prototype.forEach = function(callback) {
+        const entries = this._entries;
+        for (let i = 0, len = entries.length; i < len; i++) {
+            const entry = entries[i];
+            callback(entry[1], entry[0], i); // callback(value, key, i)
+        }
+        return this;
+    }
+
+    Chainf.prototype.map = function(callback) {
+        const results = [];
+        const entries = this._entries;
+        for (let i = 0, len = entries.length; i < len; i++) {
+            const entry = entries[i];
+            results.push(callback(entry[1], entry[0], i));
+        }
+        return results;
+    }
+
+    Chainf.prototype.filterToChain = function(callback) {
+        const entries = this._entries;
+        const keyToIndex = this._keyToIndex;
+        // Iterate backwards when deleting to avoid index-shifting issues
+        for (let i = entries.length - 1; i >= 0; i--) {
+            const entry = entries[i];
+            if (!callback(entry[1], entry[0], i)) {
+                // Since we're iterating backwards, the last element is at `entries.length - 1`.
+                // The "swap and pop" logic simplifies.
+                const lastEntry = entries.pop(); // O(1)
+                const lastKey = lastEntry[0];
+                const currentKey = entry[0];
+
+                // If the element to delete wasn't the last one...
+                if (i < entries.length) {
+                    entries[i] = lastEntry; // Move last into current spot
+                    keyToIndex.set(lastKey, i); // Update index for moved entry
+                }
+                keyToIndex.delete(currentKey); // Delete the original key
+            }
+        }
+        return this;
+    }
+
+    Chainf.prototype[Symbol.iterator] = function() {
+        let index = 0;
+        const entries = this._entries;
+        return {
+            next: function() {
+                if (index < entries.length) {
+                    // Return just the value, as is standard for collection iterators
+                    return { value: entries[index++][1], done: false };
+                }
+                return { value: undefined, done: true };
+            }
+        };
+    }
+
+    const Chain = Chainf;
     for (let key of ["log", "warn", "info", "spawn", "error"]) {
         const _oldUtilLog = util[key];
-        util[key] = function (text, force) {
+        util[key] = function(text, force) {
             webhooks.log(text, force);
             return _oldUtilLog(text);
         }
@@ -1448,7 +1458,7 @@ const Chain = Chainf;
             "HEIGHT": 6500,
             "connectionLimit": 999,
             "MODE": "ffa",
-			"modes": [],
+            "modes": [],
             "serverName": "Free For All",
             "TEAM_AMOUNT": 2,
             "RANDOM_COLORS": false,
@@ -1509,7 +1519,7 @@ const Chain = Chainf;
             "OUTSIDE_ROOM_DAMAGE": 0,
             "MAX_SKILL": 9,
             "SOFT_MAX_SKILL": 0.59,
-            "REGEN_MULTIPLIER": 0.45,
+            "REGEN_MULTIPLIER": 0.65,
             "TIER_1": 15,
             "TIER_2": 30,
             "TIER_3": 45,
@@ -1535,7 +1545,6 @@ const Chain = Chainf;
             "BOTS": 10,
             "GLASS_HEALTH_FACTOR": 1.8,
             "DO_BASE_DAMAGE": true,
-            "ISSIEGE": false,
             "DISABLE_LEADERBOARD": false,
             "BLACKOUT": false,
             "CANNOT_SHOOT_IN_BASE": true,
@@ -1556,25 +1565,25 @@ const Chain = Chainf;
 
         let gamemodeConfig = {};
         let res = undefined;
-		if(!fs){
-			res = await fetch("../configs/config-" + configSuffix)
-        	if (configSuffix.includes(".json")) {
-        	    gamemodeConfig = await res.json()
-       		} else if (configSuffix.includes(".js")) {
-        	    gamemodeConfig = eval(await res.text())
-        	} else {
-        	    console.error("Invalid gamemode file type " + configSuffix)
-        	}
-		}else{
-			res = fs.readFileSync("./configs/config-" + configSuffix, "utf8")
-			if (configSuffix.includes(".json")) {
-        	    gamemodeConfig = JSON.parse(res)
-       		} else if (configSuffix.includes(".js")) {
-        	    gamemodeConfig = eval(res)
-        	} else {
-        	    console.error("Invalid gamemode file type " + configSuffix)
-        	}
-		}
+        if (!fs) {
+            res = await fetch("../configs/config-" + configSuffix)
+            if (configSuffix.includes(".json")) {
+                gamemodeConfig = await res.json()
+            } else if (configSuffix.includes(".js")) {
+                gamemodeConfig = eval(await res.text())
+            } else {
+                console.error("Invalid gamemode file type " + configSuffix)
+            }
+        } else {
+            res = fs.readFileSync("./configs/config-" + configSuffix, "utf8")
+            if (configSuffix.includes(".json")) {
+                gamemodeConfig = JSON.parse(res)
+            } else if (configSuffix.includes(".js")) {
+                gamemodeConfig = eval(res)
+            } else {
+                console.error("Invalid gamemode file type " + configSuffix)
+            }
+        }
         if (gamemodeConfig.selectable === false) {
             worker.postMessage({ type: "serverStartText", text: "This gamemode is not selectable", tip: "Only modded versions of the game can start a Modded server. Please select a different mode." })
             return;
@@ -1597,7 +1606,7 @@ const Chain = Chainf;
                 let maxDefLength = defs.length
                 for (let arr of defs) {
                     arr[1].MAX_CHILDREN = CONFIG.maxChildren
-                    arr[1].ON_TICK = function (me) {
+                    arr[1].ON_TICK = function(me) {
                         let children = 0;
                         if (me.childrenMap.size) {
                             let entries = [...me.childrenMap.entries()].reverse()
@@ -1620,7 +1629,7 @@ const Chain = Chainf;
                     }
                 }
 
-                return function () {
+                return function() {
                     let label = ""
                     let finalTank = defs[Math.random() * defs.length | 0][1]
                     finalTank.GUNS = []
@@ -1738,20 +1747,20 @@ const Chain = Chainf;
                 this.ygridHeight = this.height / this.ygrid;
                 this.lastCycle = undefined;
                 this.cycleSpeed = 1000 / c.gameSpeed / 30;
-				this.lagComp = 1;
+                this.lagComp = 1;
                 this.gameMode = config.MODE;
                 this.testingMode = c.testingMode;
                 this.speed = c.gameSpeed;
                 this.timeUntilRestart = c.restarts.interval;
-                this.maxBots = botAmountOverride ?? c.BOTS;
+                this.maxBots = botAmountOverride //?? c.BOTS; // botAmountOverride is always a number, keeping it here just in case
                 this.maxFood = config.MAX_FOOD;
                 this.maxNestFood = config.MAX_NEST_FOOD;
                 this.maxCrashers = config.MAX_CRASHERS;
                 this.maxSancs = config.MAX_SANCS;
                 this.skillBoost = config.SKILL_BOOST;
                 this.topPlayerID = -1;
-				this.displayName = displyNameOverride||config.displayName||"";
-				this.displayDesc = displayDescOverride||config.displayDesc||"";
+                this.displayName = displyNameOverride || config.displayName || "";
+                this.displayDesc = displayDescOverride || config.displayDesc || "";
                 this.arenaClosed = false;
                 this.teamAmount = c.TEAM_AMOUNT;
                 this.modelMode = c.modelMode;
@@ -2020,55 +2029,62 @@ const Chain = Chainf;
         }
         const room = new Room(c);
 
-		// This class is horrible
-		// Theres been a long standing NaN bug
-		// It naturally spreads
-		// Gameplay would be much worse without these safeguards
-		// The problem runs deeper than the time I have available
         class Vector {
-            constructor(x, y) {
+            constructor(x = 0, y = 0) {
                 this.x = x;
                 this.y = y;
             }
+
             get x() {
                 return this.X;
             }
-            get y() {
-                return this.Y
-            }
+
             set x(value) {
-				if(isNaN(value)||value===Infinity||value===-Infinity){
-					return;
-				}
-                this.X = value||c.MIN_SPEED;;
+                this.X = Number.isFinite(value) ? value : 0;
             }
+
+            get y() {
+                return this.Y;
+            }
+
             set y(value) {
-				if(isNaN(value)||value===Infinity||value===-Infinity){
-					return;
-				}
-                this.Y = value||c.MIN_SPEED;;
+                this.Y = Number.isFinite(value) ? value : 0;
             }
-            null() {
-                this.X = c.MIN_SPEED;
-                this.Y = c.MIN_SPEED;
+
+            null() {//dis resets the vector
+                this.X = 0;
+                this.Y = 0;
             }
-            update() {
-                this.len = this.length;
-                this.dir = this.direction;
-            }
-            isShorterThan(d) {
-                return this.x * this.x + this.y * this.y <= d * d;
-            }
-            unit() {
-                return new Vector(this.x / this.length, this.y / this.length);
-            }
+
             get length() {
-                return Math.sqrt(this.x * this.x + this.y * this.y);
+                return Math.hypot(this.x, this.y);
             }
+
             get direction() {
                 return Math.atan2(this.y, this.x);
             }
+
+            isShorterThan(d) {
+                return this.x * this.x + this.y * this.y <= d * d;
+            }
+
+            update() {//this is an unused class
+                this.len = this.length;
+                this.dir = this.direction;
+            }
+
+
+            unit() {
+                const len = this.length;
+                //we avoid 0/0 here because it creates NaNs
+                if (len === 0) {
+                    return new Vector(0, 0);
+                }
+
+                return new Vector(this.x / len, this.y / len);
+            }
         }
+
 
         function newMockups() {
             // Pre-calculate constants
@@ -2130,7 +2146,7 @@ const Chain = Chainf;
 
             // Helper function to round values and remove near-zero values
             function rounder(val) {
-				if ((typeof val) == "string") {return val}
+                if ((typeof val) == "string") { return val }
                 return Math.abs(val) < 0.001 ? 0 : +val.toPrecision(12);
             }
 
@@ -2216,17 +2232,16 @@ const Chain = Chainf;
                         color: p.color,
                         shape: p.shape,
                         fill: p.fill,
-						stroke: p.stroke,
-						borderless: p.borderless,
+                        stroke: p.stroke,
                         loop: p.loop,
                         isAura: p.isAura,
                         rpm: p.rpm,
                         dip: p.dip,
                         ring: p.ring,
                         arclen: p.arclen,
-						lockRot: p.lockRot,
-						scaleSize: p.scaleSize,
-						tankOrigin: p.tankOrigin
+                        lockRot: p.lockRot,
+                        scaleSize: p.scaleSize,
+                        tankOrigin: p.tankOrigin
                     }))
                 };
 
@@ -2498,7 +2513,7 @@ const Chain = Chainf;
 
             // Return the API
             return {
-                getMockup: function (entityIndex, skipCacheCheck) {
+                getMockup: function(entityIndex, skipCacheCheck) {
                     // Check cache first unless explicitly skipping
                     if (!skipCacheCheck) {
                         const cachedValue = cachedMockups.get(entityIndex);
@@ -2596,7 +2611,7 @@ const Chain = Chainf;
             code.split("defExports.").forEach((v) => {
                 v = v.split("=")
                 v = v[0].trim()
-                if (v.includes("\n") || v === "" || v.match(/^[a-z0-9]+$/i) === null) return;
+                if (v.includes("\n") || v === "" || v.match(/^[a-z0-9_-]+$/i) === null) return;
                 affectedExports.push(v)
             })
             console.log("Updating exports for the following entities:", affectedExports)
@@ -2605,15 +2620,23 @@ const Chain = Chainf;
             let indexs = [];
             let indexI = 0;
             for (let exportName of affectedExports) {
-                indexs.push(Class[exportName].index)
+                if (!Class[exportName]) {
+                    global.addNewClass(exportName, {})
+                } else {
+                    indexs.push(Class[exportName].index)
+                }
             }
 
 
             global.initExportCode(code) // run through defs (replaces their defExport)
 
             for (let exportName of affectedExports) {
-                Class[exportName].index = indexs[indexI++]
-                global.updateClass(exportName, defExports[exportName])
+                if (!Class[exportName]) {
+                    global.addNewClass(exportName, defExports[exportName])
+                } else {
+                    Class[exportName].index = indexs[indexI++]
+                    global.updateClass(exportName, defExports[exportName])
+                }
             }
         }
 
@@ -2682,7 +2705,7 @@ const Chain = Chainf;
             return toSort.length === 0 ? ((Math.random() * room.teamAmount | 0) + 1) : toSort[0][0];
         }
 
-        let botTanks = (function () {
+        let botTanks = (function() {
             let output = [];
             function add(my, skipAdding = false) {
                 if (output.includes(my)) {
@@ -2693,7 +2716,9 @@ const Chain = Chainf;
                 }
                 for (let key in my) {
                     if (key.startsWith("UPGRADES_TIER")) {
-                        my[key].forEach(add);
+                        for (const tank of my[key]) {
+                            add(tank)
+                        }
                     }
                 }
             }
@@ -2703,18 +2728,39 @@ const Chain = Chainf;
         })();
 
         const spawnBot = (loc = null) => {
-            let position = loc,
-                max = 100;
+            // Find a normal spawn for our team if no loc provided
+            let max = 100;
+            let team;
             if (!loc) {
-                do position = room.randomType(c.serverName === "Infiltration" ? "edge" : "norm");
-                while (dirtyCheck(position, 400) && max-- > 0);
+                let i = 10;
+                if (room.gameMode === "tdm") {
+                    team = c.serverName === "Infiltration" ? 20 : room.nextTagBotTeam.shift() || getTeam(0);
+
+                    let spawnSectors = team === 20 ? ["edge"] : ["spn", "bas", "n_b", "bad"].map(r => r + team).filter(sector => room[sector] && room[sector].length);
+                    const sector = ran.choose(spawnSectors);
+                    if (sector && room[sector].length) {
+                        do loc = room.randomType(sector);
+                        while (dirtyCheck(loc, 50) && i--);
+                    } else {
+                        do loc = room.gaussInverse(5);
+                        while (dirtyCheck(loc, 50) && i--);
+                    }
+                } else if (c.PLAYER_SPAWN_TILES) {
+                    i = 10
+                    let tile = ran.choose(c.PLAYER_SPAWN_TILES)
+                    do loc = room.randomType(tile);
+                    while (dirtyCheck(loc, 50) && i--);
+                } else {
+                    do loc = room.randomType(c.serverName === "Infiltration" ? "edge" : "norm");
+                    while (dirtyCheck(loc, 50) && max-- > 0);
+                }
             }
-            let o = new Entity(position);
-            o.color = 12;
+            let o = new Entity(loc);
             if (room.gameMode === "tdm") {
-                let team = c.serverName === "Infiltration" ? 20 : room.nextTagBotTeam.shift() || getTeam(0);
                 o.team = -team;
                 o.color = team === 20 ? 17 : [10, 12, 11, 15, 3, 35, 36, 0][team - 1];
+            } else {
+                o.color = 12;
             }
             // Reload, Pen, Bullet Health, Bullet Damage, Bullet Speed, Capacity, Body Damage, Max Health, Regen, Speed
             let tank = c.serverName === "Infiltration" ? Class[ran.choose(["infiltrator", "infiltratorFortress", "infiltratorTurrates"])] : ran.choose(botTanks),
@@ -2827,7 +2873,7 @@ const Chain = Chainf;
             for (let i = 0; i < 8; i++) {
                 let o = new Entity(positions[i]);
                 o.define(ran.choose(closers));
-				o.roomLayerless = true;
+                o.roomLayerless = true;
                 o.team = -100;
                 o.alwaysActive = true;
                 //o.facing += ran.randomRange(.5 * Math.PI, Math.PI); // Does nothing
@@ -3029,7 +3075,7 @@ const Chain = Chainf;
         let soccer = {
             scoreboard: [0, 0],
             timer: 60,
-            spawnBall: function () {
+            spawnBall: function() {
                 let o = new Entity({
                     x: room.width / 2,
                     y: room.height / 2
@@ -3053,7 +3099,7 @@ const Chain = Chainf;
                     setTimeout(soccer.spawnBall, 1500);
                 }
             },
-            update: function () {
+            update: function() {
                 soccer.timer--;
                 if (soccer.timer <= 0) {
                     if (soccer.scoreboard[0] > soccer.scoreboard[1]) {
@@ -3073,12 +3119,12 @@ const Chain = Chainf;
                 if (soccer.timer % 2 === 0) sockets.broadcast(soccer.timer + " minutes until the match is over!");
                 setTimeout(soccer.update, 60000);
             },
-            init: function () {
+            init: function() {
                 soccer.spawnBall();
                 setTimeout(soccer.update, 60000);
             }
         };
-        const bossRushLoop = (function () {
+        const bossRushLoop = (function() {
             const bosses = [
                 Class.eggQueenTier1AI, Class.eggQueenTier2AI, Class.eggQueenTier3AI, Class.AWP_1AI, Class.AWP_14AI,
                 Class.AWP_24AI, Class.AWP_cos5AI, Class.AWP_psAI, Class.AWP_11AI, Class.AWP_8AI,
@@ -3221,7 +3267,7 @@ const Chain = Chainf;
                 o.modeDead = entityModeDead;
                 bossesAlive++;
             }
-            return function () {
+            return function() {
                 room.bossRushWave++;
                 let amount = c.MAXBOSSES ? (Math.round(Math.random() * (c.MAXBOSSES - c.MINBOSSES) + c.MINBOSSES)) : Math.round(Math.random() * 8 + 4 /*20 + 20*/);
                 switch (room.bossRushWave) {
@@ -3280,7 +3326,7 @@ const Chain = Chainf;
             }
         })();
 
-        const voidwalkers = (function () {
+        const voidwalkers = (function() {
             // MAP SET UP //
             const doors = [];
             let buttons = [];
@@ -3294,7 +3340,7 @@ const Chain = Chainf;
                 door.color = 45;
                 doors.push(door);
                 const doorID = doors.indexOf(door);
-                door.onDead = function () {
+                door.onDead = function() {
                     for (const button of buttons) {
                         if (button.doorID === doorID) {
                             button.ignoreButtonKill = 2;
@@ -3310,7 +3356,7 @@ const Chain = Chainf;
                 button.team = -101;
                 button.doorID = doorID;
                 button.color = (open ? 12 : 11);
-                button.onDead = function () {
+                button.onDead = function() {
                     buttons = buttons.filter(instance => instance.id !== button.id);
                     if (!button.ignoreButtonKill) {
                         const door = doors[button.doorID];
@@ -3954,7 +4000,7 @@ const Chain = Chainf;
             }
             think(input) {
                 this.body.isGuided = true
-				this.body.aiSettings.SKYNET = true;
+                this.body.aiSettings.SKYNET = true;
                 let main = undefined;
                 for (let [key, child] of this.master.childrenMap) {
                     if (!child.isGuided) continue;
@@ -3964,12 +4010,12 @@ const Chain = Chainf;
                 if (!main || !this.master.socket) {
                     return
                 }
-                if(!this.master.altCameraSource){
-					this.master.altCameraSource = [main.x, main.y]
-				}else{
-					this.master.altCameraSource[0] = main.x;
-					this.master.altCameraSource[1] = main.y;
-				}
+                if (!this.master.altCameraSource) {
+                    this.master.altCameraSource = [main.x, main.y]
+                } else {
+                    this.master.altCameraSource[0] = main.x;
+                    this.master.altCameraSource[1] = main.y;
+                }
             }
         }
         ioTypes.boomerang = class extends IO {
@@ -4179,24 +4225,24 @@ const Chain = Chainf;
                 }
             }
         }
-		ioTypes.leashed = class extends IO {
-			constructor(body, range){
-				super(body);
-				this.range = range;
-			}
-			think() {
-				if(!this.body.leash) this.body.leash = {x: 0, y: 0, range: this.range, leasher: this.body.source};
-				if(!this.body.leash.leasher || !this.body.leash.leasher.isAlive()){
-					this.body.leash.leasher = this.body;
-				}
-				this.body.leash.x = this.body.leash.leasher.x;
-				this.body.leash.y = this.body.leash.leasher.y;
-				if(((this.body.source.x-this.body.x)**2+(this.body.source.y-this.body.y)**2)**.5 > this.body.leash.range){
-					this.body.velocity.x += (this.body.leash.leasher.x - this.body.x)/(this.body.leash.range)
-					this.body.velocity.y += (this.body.leash.leasher.y - this.body.y)/(this.body.leash.range)
-				}
-			}
-		}
+        ioTypes.leashed = class extends IO {
+            constructor(body, range) {
+                super(body);
+                this.range = range;
+            }
+            think() {
+                if (!this.body.leash) this.body.leash = { x: 0, y: 0, range: this.range, leasher: this.body.source };
+                if (!this.body.leash.leasher || !this.body.leash.leasher.isAlive()) {
+                    this.body.leash.leasher = this.body;
+                }
+                this.body.leash.x = this.body.leash.leasher.x;
+                this.body.leash.y = this.body.leash.leasher.y;
+                if (((this.body.source.x - this.body.x) ** 2 + (this.body.source.y - this.body.y) ** 2) ** .5 > this.body.leash.range) {
+                    this.body.velocity.x += (this.body.leash.leasher.x - this.body.x) / (this.body.leash.range)
+                    this.body.velocity.y += (this.body.leash.leasher.y - this.body.y) / (this.body.leash.range)
+                }
+            }
+        }
         ioTypes.alwaysFire = class extends IO {
             constructor(body) {
                 super(body);
@@ -4273,172 +4319,172 @@ const Chain = Chainf;
                 }
             }
         }
-		ioTypes.nearestDifferentMaster = class extends IO {
-			constructor(body) {
-				super(body);
-				this.tick = room.cycleSpeed;       // Frame counter for throttling expensive operations.
-				this.lead = 0;       // Calculated lead time for predictive aiming.
-				this.oldHealth = body.health.display();
-				this.targetLock = null;
+        ioTypes.nearestDifferentMaster = class extends IO {
+            constructor(body) {
+                super(body);
+                this.tick = room.cycleSpeed;       // Frame counter for throttling expensive operations.
+                this.lead = 0;       // Calculated lead time for predictive aiming.
+                this.oldHealth = body.health.display();
+                this.targetLock = null;
 
-				// Reusable output to avoid GC pressure in `think()`.
-				this.output = {
-					target: { x: 0, y: 0 },
-					fire: false,
-					main: false,
-				};
-			}
+                // Reusable output to avoid GC pressure in `think()`.
+                this.output = {
+                    target: { x: 0, y: 0 },
+                    fire: false,
+                    main: false,
+                };
+            }
 
-			findTarget(range) {
-				// Hoist properties to local variables for faster access in the hot loop.
-				const body = this.body;
-				const master = body.master.master;
-				const pos = body.aiSettings.SKYNET ? body : master;
-				const myTeam = master.team;
-				const { FARMER, IGNORE_SHAPES, view360, TARGET_EVERYTHING } = body.aiSettings;
-				const { seeInvisible, isArenaCloser, firingArc } = body;
-				const canSeeInvis = seeInvisible || isArenaCloser;
+            findTarget(range) {
+                // Hoist properties to local variables for faster access in the hot loop.
+                const body = this.body;
+                const master = body.master.master;
+                const pos = body.aiSettings.SKYNET ? body : master;
+                const myTeam = master.team;
+                const { FARMER, IGNORE_SHAPES, view360, TARGET_EVERYTHING } = body.aiSettings;
+                const { seeInvisible, isArenaCloser, firingArc } = body;
+                const canSeeInvis = seeInvisible || isArenaCloser;
 
-				// Bounding box for the spatial hashgrid query.
-				const searchAABB = {
-					_AABB: {
-						x1: pos.x - range, y1: pos.y - range,
-						x2: pos.x + range, y2: pos.y + range,
-						currentQuery: -1
-					}
-				};
+                // Bounding box for the spatial hashgrid query.
+                const searchAABB = {
+                    _AABB: {
+                        x1: pos.x - range, y1: pos.y - range,
+                        x2: pos.x + range, y2: pos.y + range,
+                        currentQuery: -1
+                    }
+                };
 
-				let bestTarget = null;
-				let maxValue = -Infinity; 
-				let foundLockedTarget = false;
+                let bestTarget = null;
+                let maxValue = -Infinity;
+                let foundLockedTarget = false;
 
-				// HOT PATH: This callback runs for every potential target.
-				grid.getCollisions(searchAABB, (entity) => {
-					if (foundLockedTarget) return;
+                // HOT PATH: This callback runs for every potential target.
+                grid.getCollisions(searchAABB, (entity) => {
+                    if (foundLockedTarget) return;
 
-					// Filter chain ordered from cheapest to most expensive checks to fail fast.
-					if (entity.master.master.team === myTeam || entity.team === -101) return;
-					if (entity.isDead() || entity.passive || entity.invuln) return;
-					if (!FARMER && entity.dangerValue < 0) return;
-					if (entity.alpha < 0.5 && !canSeeInvis) return;
-					if (c.SANDBOX && entity.sandboxId !== body.sandboxId) return;
+                    // Filter chain ordered from cheapest to most expensive checks to fail fast.
+                    if (entity.master.master.team === myTeam || entity.team === -101) return;
+                    if (entity.isDead() || entity.passive || entity.invuln) return;
+                    if (!FARMER && entity.dangerValue < 0) return;
+                    if (entity.alpha < 0.5 && !canSeeInvis) return;
+                    if (c.SANDBOX && entity.sandboxId !== body.sandboxId) return;
 
-					switch (entity.type) {
-						case "drone": case "minion": case 'tank': case 'miniboss': case 'crasher': break;
-						case 'food': if (IGNORE_SHAPES) return; break;
-						default: if(!TARGET_EVERYTHING) return;
-					}
+                    switch (entity.type) {
+                        case "drone": case "minion": case 'tank': case 'miniboss': case 'crasher': break;
+                        case 'food': if (IGNORE_SHAPES) return; break;
+                        default: if (!TARGET_EVERYTHING) return;
+                    }
 
 
                     if (firingArc && !view360) {
                         const angleToTarget = { x: entity.x - body.x, y: entity.y - body.y };
                         const dot = angleToTarget.x * Math.cos(firingArc[0]) + angleToTarget.y * Math.sin(firingArc[0]);
                         const angleToTargetMag = Math.hypot(angleToTarget.x, angleToTarget.y);
-						if (angleToTargetMag === 0) return;
+                        if (angleToTargetMag === 0) return;
                         const normalized = dot / angleToTargetMag;
                         if (normalized < Math.cos(this.body.firingArc[1])) return;
                     }
 
-					// Our current target is still valid at this point
-					if (this.targetLock === entity) {
-						foundLockedTarget = true;
-						return;
-					}
+                    // Our current target is still valid at this point
+                    if (this.targetLock === entity) {
+                        foundLockedTarget = true;
+                        return;
+                    }
 
-					// Calculate distance between the current body and the potential target entity.
-					const dx = entity.x - body.x;
-					const dy = entity.y - body.y;
-					const distance = Math.sqrt(dx * dx + dy * dy);
+                    // Calculate distance between the current body and the potential target entity.
+                    const dx = entity.x - body.x;
+                    const dy = entity.y - body.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
 
-					const effectiveValue = (entity.dangerValue||1) / distance;
-					if(maxValue <= effectiveValue){
-						bestTarget = entity;
-						maxValue = effectiveValue;
-					}
-				});
+                    const effectiveValue = (entity.dangerValue || 1) / distance;
+                    if (maxValue <= effectiveValue) {
+                        bestTarget = entity;
+                        maxValue = effectiveValue;
+                    }
+                });
 
-				if(foundLockedTarget){
-					this.targetLock = this.targetLock;
-				}else{
-					this.targetLock = bestTarget;
-					this.tick = room.cycleSpeed+1;
-				}
-			}
+                if (foundLockedTarget) {
+                    this.targetLock = this.targetLock;
+                } else {
+                    this.targetLock = bestTarget;
+                    this.tick = room.cycleSpeed + 1;
+                }
+            }
 
-			think(input) {
-				// Cede control to the player by returning an empty object.
-				if (input.main || input.alt ||
-					this.body.master.autoOverride ||
-					this.body.master.master.passive ||
-					this.body.master.master.invuln) {
-					return {};
-				}
+            think(input) {
+                // Cede control to the player by returning an empty object.
+                if (input.main || input.alt ||
+                    this.body.master.autoOverride ||
+                    this.body.master.master.passive ||
+                    this.body.master.master.invuln) {
+                    return {};
+                }
 
-				// Bot-specific logic to retaliate on damage.
-				const damageRef = this.body.bond || this.body;
-				const currentHealth = damageRef.health.display();
-				if (damageRef.collisionArray.length && currentHealth < this.oldHealth) {
-					this.oldHealth = currentHealth;
-					const collider = damageRef.collisionArray[0];
-					this.targetLock = (collider.master.id === -1) ? collider.source : collider.master;
-				}
+                // Bot-specific logic to retaliate on damage.
+                const damageRef = this.body.bond || this.body;
+                const currentHealth = damageRef.health.display();
+                if (damageRef.collisionArray.length && currentHealth < this.oldHealth) {
+                    this.oldHealth = currentHealth;
+                    const collider = damageRef.collisionArray[0];
+                    this.targetLock = collider.master ? (collider.master.id === -1) ? collider.source : collider.master : null;
+                }
 
-				// Throttle expensive target acquisition.
-				if (++this.tick > room.cycleSpeed) {
-					this.tick = 0;
-					let range = this.body.aiSettings.SKYNET ? this.body.fov : this.body.master.fov;
-					range *= this.body.aiSettings.BLIND ? 2/3 : 1
-					// The old calculation used a circle range so we approximate a square with similar coverage
-					// We nerf range slightly because players complain
-					this.findTarget(
-						(range-(range/Math.sqrt(2))/2) * .7
-					);
-				}
+                // Throttle expensive target acquisition.
+                if (++this.tick > room.cycleSpeed) {
+                    this.tick = 0;
+                    let range = this.body.aiSettings.SKYNET ? this.body.fov : this.body.master.fov;
+                    range *= this.body.aiSettings.BLIND ? 2 / 3 : 1
+                    // The old calculation used a circle range so we approximate a square with similar coverage
+                    // We nerf range slightly because players complain
+                    this.findTarget(
+                        (range - (range / Math.sqrt(2)) / 2) * .7
+                    );
+                }
 
-				// Idle if no valid target.
-				if (!this.targetLock || this.targetLock.isDead()) {
-					this.targetLock = null;
-					this.output.main = false;
-					this.output.fire = false;
-					return {};
-				}
+                // Idle if no valid target.
+                if (!this.targetLock || this.targetLock.isDead()) {
+                    this.targetLock = null;
+                    this.output.main = false;
+                    this.output.fire = false;
+                    return {};
+                }
 
-				const target = this.targetLock;
-				const diffX = target.x - this.body.x;
-				const diffY = target.y - this.body.y;
+                const target = this.targetLock;
+                const diffX = target.x - this.body.x;
+                const diffY = target.y - this.body.y;
 
-				const tracking = this.body.topSpeed;
-				this.lead = timeOfImpact({ x: diffX, y: diffY }, target.velocity, tracking);
-				if(this.lead === Infinity) this.lead = 0;
+                const tracking = this.body.topSpeed;
+                this.lead = timeOfImpact({ x: diffX, y: diffY }, target.velocity, tracking);
+                if (this.lead === Infinity) this.lead = 0;
 
-				// Mutate and return the pre-allocated output object.
-				this.output.target.x = diffX + this.lead * target.velocity.x;
-				this.output.target.y = diffY + this.lead * target.velocity.y;
-				this.output.fire = true;
-				this.output.main = true;
+                // Mutate and return the pre-allocated output object.
+                this.output.target.x = diffX + this.lead * target.velocity.x;
+                this.output.target.y = diffY + this.lead * target.velocity.y;
+                this.output.fire = true;
+                this.output.main = true;
 
-				return this.output;
-			}
-		};
+                return this.output;
+            }
+        };
         ioTypes.roamWhenIdle = class extends IO {
             constructor(body) {
                 super(body);
                 this.goal = room.randomType("norm");
-				this.tick = 0;
+                this.tick = 0;
             }
             think(input) {
                 if (input.main || input.alt || this.body.master.autoOverride) {
-					this.tick = 0;
+                    this.tick = 0;
                     return {};
                 }
-				if(++this.tick > room.cycleSpeed){
-		            while (util.getDistance(this.goal, this.body) < this.body.SIZE * 2) {
-                    	this.goal = room.randomType(Math.random() > .8 ? "nest" : "norm");
-                	}
-				}
-               	return {
+                if (++this.tick > room.cycleSpeed) {
+                    while (util.getDistance(this.goal, this.body) < this.body.SIZE * 2) {
+                        this.goal = room.randomType(Math.random() > .8 ? "nest" : "norm");
+                    }
+                }
+                return {
                     goal: this.goal,
-					target: {
+                    target: {
                         x: -(this.body.x - this.goal.x),
                         y: -(this.body.y - this.goal.y)
                     }
@@ -5144,7 +5190,7 @@ const Chain = Chainf;
                     attrib[i] = curve(this.raw[i] / c.MAX_SKILL);
                 }
                 this.rld = Math.pow(0.5, attrib[skcnv.rld]);
-                this.pen = apply(2.5, attrib[skcnv.pen]);
+                this.pen = apply(0.5, attrib[skcnv.pen]);
                 this.str = apply(3, attrib[skcnv.str]);
                 this.dam = apply(3.4, attrib[skcnv.dam]);
                 this.spd = 0.5 + apply(1.5, attrib[skcnv.spd]);
@@ -5253,7 +5299,7 @@ const Chain = Chainf;
                 this.labelOverride = "";
                 this.controllers = [];
                 this.childrenMap = new Map();
-				this.laserMap = new Map();
+                this.laserMap = new Map();
                 this.control = {
                     target: new Vector(0, 0),
                     goal: new Vector(0, 0),
@@ -5331,15 +5377,15 @@ const Chain = Chainf;
                     this.canShoot = false
                 }
             }
-			getEnd(speedVec = {x: 0, y: 0}, lerpComp = 0, length){
-				length = length ?? this.length
-				const gx = this.offset * Math.cos(this.direction + this.angle + this.body.facing) + (length - this.width * this.settings.size / 2) * Math.cos(this.angle + this.body.facing)
-				const gy = this.offset * Math.sin(this.direction + this.angle + this.body.facing) + (length - this.width * this.settings.size / 2) * Math.sin(this.angle + this.body.facing)
-				return {
-					x: this.body.x + this.body.size * gx - (length*speedVec.x) * lerpComp,
-					y: this.body.y + this.body.size * gy - (length*speedVec.y) * lerpComp
-				}
-			}
+            getEnd(speedVec = { x: 0, y: 0 }, lerpComp = 0, length) {
+                length = length ?? this.length
+                const gx = this.offset * Math.cos(this.direction + this.angle + this.body.facing) + (length - this.width * this.settings.size / 2) * Math.cos(this.angle + this.body.facing)
+                const gy = this.offset * Math.sin(this.direction + this.angle + this.body.facing) + (length - this.width * this.settings.size / 2) * Math.sin(this.angle + this.body.facing)
+                return {
+                    x: this.body.x + this.body.size * gx - (length * speedVec.x) * lerpComp,
+                    y: this.body.y + this.body.size * gy - (length * speedVec.y) * lerpComp
+                }
+            }
             newRecoil() {
                 let recoilForce = this.settings.recoil * 2 / room.speed;
                 this.body.accel.x -= recoilForce * Math.cos(this.recoilDir || 0);
@@ -5439,9 +5485,9 @@ const Chain = Chainf;
                         });
                         child.refreshBodyAttributes();
                     })
-					this.laserMap.forEach((laser)=>{
-						laser.refreshStats()
-					})
+                    this.laserMap.forEach((laser) => {
+                        laser.refreshStats()
+                    })
                 }
             }
             fire(sk) {
@@ -5468,16 +5514,16 @@ const Chain = Chainf;
                     }
                 }
 
-                if(this.bulletTypes[0].TYPE === "laser"){
+                if (this.bulletTypes[0].TYPE === "laser") {
                     new Laser(this, this.getEnd(), sd, typeof this.bulletTypes[1] === "object" ? Object.assign({}, this.bulletTypes[0], this.bulletTypes[1]) : this.bulletTypes[0])
-					return;
+                    return;
                 } else {
                     let o = new Entity(this.getEnd(s, .6), this.master.master);
                     // Set velocity first so bulletInit can use it to set proper facing/firing
                     o.velocity = s;
                     this.bulletInit(o);
                     return o;
-				}
+                }
             }
             bulletInit(o) {
                 o.source = this.body;
@@ -5508,7 +5554,7 @@ const Chain = Chainf;
                 // Define size
                 o.SIZE = (this.body.size * this.width * this.settings.size * 0.5) * o.squiggle
                 // Define label
-                o.label = this.master.label +  "'s " + (this.label ?  + this.label : "") + o.label
+                o.label = this.master.label + "'s " + (this.label ? + this.label : "") + o.label
 
                 if (o.type === "food") {
                     o.ACCELERATION = .015 / (o.size * 0.2);
@@ -5542,9 +5588,9 @@ const Chain = Chainf;
                     sk = this.body.skill,
                     out = {
                         SPEED: shoot.maxSpeed * sk.spd,
-                        HEALTH: 0.64 * shoot.health * sk.str,
+                        HEALTH: shoot.health * sk.str,
                         RESIST: shoot.resist + sk.rst,
-                        DAMAGE: 1.65 * shoot.damage * sk.dam,
+                        DAMAGE: shoot.damage * sk.dam,
                         PENETRATION: Math.max(1, shoot.pen * sk.pen),
                         RANGE: shoot.range / Math.sqrt(sk.spd),
                         DENSITY: shoot.density * sk.pen * sk.pen / sizeFactor,
@@ -5558,7 +5604,6 @@ const Chain = Chainf;
                         break;
                     case 8:
                     case "trap":
-                        out.PUSHABILITY = 1 / Math.pow(sk.pen, .5);
                         out.RANGE = shoot.range * .5;
                         break;
                     case 2:
@@ -5584,18 +5629,17 @@ const Chain = Chainf;
                 this.shape = info.SHAPE;
                 this.color = info.COLOR || -1;
                 this.fill = info.FILL != undefined ? info.FILL : true;
-				this.stroke = info.STROKE != undefined ? info.STROKE : true;
-				this.borderless = info.BORDERLESS != undefined ? info.BORDERLESS : false;
+                this.stroke = info.STROKE != undefined ? info.STROKE : true;
                 this.loop = info.LOOP != undefined ? info.LOOP : true;
                 this.isAura = info.IS_AURA != undefined ? info.IS_AURA : false;
                 this.ring = info.RING;
                 this.arclen = info.ARCLEN != undefined ? info.ARCLEN : 1;
                 this.rpm = info.RPM != undefined ? info.RPM : false;
                 this.dip = info.DIP != undefined ? info.DIP : 1;
-				this.lockRot = info.LOCK_ROT != undefined ? info.LOCK_ROT : true;
-				this.scaleSize = info.SCALE_SIZE != undefined ? info.SCALE_SIZE : true;
-				this.tankOrigin = info.TANK_ORIGIN != undefined ? info.TANK_ORIGIN : true;
-				if(this.isAura === true) this.borderless = false;
+                this.lockRot = info.LOCK_ROT != undefined ? info.LOCK_ROT : true;
+                this.scaleSize = info.SCALE_SIZE != undefined ? info.SCALE_SIZE : true;
+                this.tankOrigin = info.TANK_ORIGIN != undefined ? info.TANK_ORIGIN : true;
+                if (this.isAura === true) this.stroke = false;
             }
         }
         let bots = [];
@@ -5604,11 +5648,11 @@ const Chain = Chainf;
         let bot = null;
         let players = [];
         let clients = [];
-		global.updateRoomInfo = () => {
-			const obj = { type: "updatePlayers", players: clients.length, maxPlayers: maxPlayersOverride, name: room.displayName, desc: room.displayDesc };
-			console.log("Updating room info in WRM", obj)
-			worker.postMessage(obj)
-		}
+        global.updateRoomInfo = () => {
+            const obj = { type: "updatePlayers", players: clients.length, maxPlayers: maxPlayersOverride, name: room.displayName, desc: room.displayDesc, serverSpeed: room.mspt };
+            console.log("Updating room info in WRM", obj)
+            worker.postMessage(obj)
+        }
         let multitabIDs = [];
         let connectedIPs = [];
         let entitiesIdLog = 1;
@@ -5646,7 +5690,7 @@ const Chain = Chainf;
             height: room.height
         }, 16, 16, 0);//new hshg.HSHG();*/
 
-        const dirtyCheck = (p, r, layer=0) => entitiesToAvoid.some(e => (e.roomLayerless || e.roomLayer === layer) && Math.abs(p.x - e.x) < r + e.size && Math.abs(p.y - e.y) < r + e.size);
+        const dirtyCheck = (p, r, layer = 0) => entitiesToAvoid.some(e => (e.roomLayerless || e.roomLayer === layer) && Math.abs(p.x - e.x) < r + e.size && Math.abs(p.y - e.y) < r + e.size);
 
         /*const purgeEntities = () => entities = entities.filter(e => {
             if (e.isGhost) {
@@ -5746,226 +5790,289 @@ const Chain = Chainf;
         }
 
 
-		const lasers = new Set();
-		let laserId = 0;
+        const lasers = new Set();
+        let laserId = 0;
 
-		class Laser {
-		    constructor(gun, startPos, angle, settings = {}) {
-		        this.id = laserId++;
-				this.settings = settings;
-				this.setGun(gun);
-				this.skills = {
-					dmg: this.master?.skill?.dam ?? 0,
-                	len: this.master?.skill?.spd ?? 0,
-                	dur: this.master?.skill?.str ?? 0,
-                	prc: this.master?.skill?.pen ?? 0,
-				}
-				this.scaleWidth = settings.SCALE_WIDTH ?? true;
-				this.refreshStats()
-				this.label = settings.LABEL ?? "Laser";
-				this.persistsAfterDeath = settings.PERSISTS_AFTER_DEATH ?? false;
-				this.clearOnMasterUpgrade = settings.CLEAR_ON_MASTER_UPGRADE ?? true;
+        class Laser {
+            // Static memory pools to eliminate GC allocations entirely
+            static hitPool = [];
+            static hitPoolIndex = 0;
+            static hitsScratch = [];
 
-				this.color = this.master?.master?.color ?? this.master?.color ?? 16;
-				this.team = this.master?.master?.team ?? this.master?.team ?? -101;
-		        this.hitEntities = new Set();
-		
-				this.followGun = this.settings.FOLLOW_GUN ?? true;
-		        this.layer = this.settings.LAYER ?? this.master?.LAYER ?? 0;
+            static acquireHit() {
+                if (this.hitPoolIndex < this.hitPool.length) {
+                    return this.hitPool[this.hitPoolIndex++];
+                }
+                const hit = { entity: null, distanceSq: 0, closestX: 0, closestY: 0 };
+                this.hitPool.push(hit);
+                this.hitPoolIndex++;
+                return hit;
+            }
+
+            constructor(gun, startPos, angle, settings = {}) {
+                this.id = laserId++;
+                this.settings = settings;
+
+                this.setGun(gun);
+
+                this.skills = {
+                    dmg: this.master?.skill?.dam ?? 0,
+                    len: this.master?.skill?.spd ?? 0,
+                    dur: this.master?.skill?.str ?? 0,
+                    prc: this.master?.skill?.pen ?? 0,
+                };
+
+                this.scaleWidth = settings.SCALE_WIDTH ?? true;
+                this.refreshStats();
+
+                this.label = settings.LABEL ?? "Laser";
+                this.persistsAfterDeath = settings.PERSISTS_AFTER_DEATH ?? false;
+                this.clearOnMasterUpgrade = settings.CLEAR_ON_MASTER_UPGRADE ?? true;
+
+                this.color = this.master?.master?.color ?? this.master?.color ?? 16;
+                this.team = this.master?.master?.team ?? this.master?.team ?? -101;
+                this.hitEntities = new Set();
+
+                this.followGun = settings.FOLLOW_GUN ?? true;
+                this.layer = settings.LAYER ?? this.master?.LAYER ?? 0;
 
                 // Angle passed in should be in the same trig convention as getEnd (cos -> x, sin -> y).
                 // Use the exact angle supplied — do not add a hard-coded 90° offset here.
-                this.angle = (angle ?? 0);
-        		if (this.followGun === false && this.gun.master) this.angle += this.gun.master.facing + this.gun.angle;
-            	this.startPoint = this.gun ? this.gun.getEnd() : { x: startPos.x, y: startPos.y };
-			
-				this.onDealtDamage = this.settings.ON_DEALT_DAMAGE;
-				this.onDealtDamageUniv = this.settings.ON_DEALT_DAMAGE_UNIVERSAL;
+                this.angle = angle ?? 0;
+                if (!this.followGun && this.gun?.master) {
+                    this.angle += this.gun.master.facing + this.gun.angle;
+                }
 
-		        this.endPoint = { x: 0, y: 0 };
-				this.calcEndPoint();
-		        this.visualEndPoint = { x: this.endPoint.x, y: this.endPoint.y };
-		        
-				lasers.add(this);
-			}
+                this.startPoint = this.gun ? this.gun.getEnd() : { x: startPos?.x ?? 0, y: startPos?.y ?? 0 };
 
-			refreshStats() {
-		        this.width = (this.scaleWidth ? (this.settings.WIDTH??0) + (this.master?.size * this.gun?.width) : this.settings.WIDTH) ?? 5;
-		        this.range = (this.settings.RANGE ?? 300) * (this.skills.len*5);
-		        this.duration = (this.settings.DURATION ?? 300) * (this.skills.dur*20);
-		        this.maxDuration = this.duration;
-		        this.pierce = Math.round((this.settings.PIERCE ?? 1) * this.skills.prc);
-		        this.damage = (this.settings.DAMAGE ?? .1) * (this.skills.dmg/2);
-			}
-		
-			calcEndPoint() {
-			    let angle = this.angle;
-			    if (this.followGun === true && this.gun) {
-			        this.startPoint = this.gun.getEnd({ x: 0, y: 0 }, 0, this.gun.length * 1.5);
-			        if (this.gun.master) angle += this.gun.master.facing + this.gun.angle;
-			        else angle += this.gun.angle;
-			    }
-			    // use same trig convention as getEnd (cos -> x, sin -> y)
-			    this.endPoint.x = this.startPoint.x + this.range * Math.cos(angle);
-			    this.endPoint.y = this.startPoint.y + this.range * Math.sin(angle);
-			}
+                this.onDealtDamage = settings.ON_DEALT_DAMAGE;
+                this.onDealtDamageUniv = settings.ON_DEALT_DAMAGE_UNIVERSAL;
 
-			setGun(gun){
-				if(this.gun?.laserMap){
-					this.gun.laserMap.delete(this.id);
-				}
-				if(this.master?.laserMap){
-					this.master.laserMap.delete(this.id);
-				}
-				this.gun = gun;
-				this.master = gun?.master;
-				if(this.gun?.laserMap)this.gun.laserMap.set(this.id, this)
-				if(this.master?.laserMap)this.master.laserMap.set(this.id, this)
-			}
+                this.endPoint = { x: 0, y: 0 };
+                this.calcEndPoint();
+                this.visualEndPoint = { x: this.endPoint.x, y: this.endPoint.y };
 
-			destroy(){
-				this.setGun(undefined);
-				lasers.delete(this);
-			}
-		
-		    tick() {
-		        if (this.maxDuration < this.duration) {
-		            this.maxDuration = this.duration;
-		        }
-		        if (this.duration-- <= 0) {
-		            this.destroy()
-		            return;
-		        }
-		        this.calcEndPoint(); // Recalculate in case range/angle changed
-		        this.hitEntities.clear();
-		        this.visualEndPoint = { x: this.endPoint.x, y: this.endPoint.y };
-			
-				const collectedHits = [];
-			
-		        // 1. Traverse grid to gather all potential targets along the laser's path
-				if(this.endPoint.x === this.startPoint.x) this.endPoint.x += 1;
-				if(this.endPoint.y === this.startPoint.y) this.endPoint.y += 1;
-		        const dx = this.endPoint.x - this.startPoint.x;
-		        const dy = this.endPoint.y - this.startPoint.y;
-		        let cellX = Math.floor(this.startPoint.x / (1 << grid.cellShift));
-		        let cellY = Math.floor(this.startPoint.y / (1 << grid.cellShift));
-		        const endCellX = Math.floor(this.endPoint.x / (1 << grid.cellShift));
-		        const endCellY = Math.floor(this.endPoint.y / (1 << grid.cellShift));
-		        const stepX = (dx > 0 ? 1 : -1);
-		        const stepY = (dy > 0 ? 1 : -1);
-		        const cellSize = 1 << grid.cellShift;
-		        const tDeltaX = Math.abs(cellSize / dx);
-		        const tDeltaY = Math.abs(cellSize / dy);
-		        const nextBoundaryX = (cellX + (stepX > 0 ? 1 : 0)) * cellSize;
-		        const nextBoundaryY = (cellY + (stepY > 0 ? 1 : 0)) * cellSize;
-		        let tMaxX = Math.abs((nextBoundaryX - this.startPoint.x) / dx);
-		        let tMaxY = Math.abs((nextBoundaryY - this.startPoint.y) / dy);
-			
+                lasers.add(this);
+            }
+
+            refreshStats() {
+                const baseWidth = this.settings.WIDTH ?? 5;
+                const scaledWidth = (this.master?.size ?? 0) * (this.gun?.width ?? 0);
+
+                this.width = this.scaleWidth ? baseWidth + scaledWidth : baseWidth;
+                this.range = (this.settings.RANGE ?? 300) * (this.skills.len * 5);
+                this.duration = (this.settings.DURATION ?? 300) * (this.skills.dur * 20);
+                this.maxDuration = this.duration;
+                this.pierce = Math.round((this.settings.PIERCE ?? 1) + (this.skills.prc > 0 ? (this.skills.prc - 1) * 11 : 0));
+                this.damage = (this.settings.DAMAGE ?? 0.1) * (this.skills.dmg / 2);
+                console.log(this.skills.prc, this.pierce)
+            }
+
+            calcEndPoint() {
+                let angle = this.angle;
+                if (this.followGun && this.gun) {
+                    this.startPoint = this.gun.getEnd({ x: 0, y: 0 }, 0, this.gun.length * 1.5);
+                    angle += (this.gun.master?.facing ?? 0) + this.gun.angle;
+                }
+
+                // use same trig convention as getEnd (cos -> x, sin -> y)
+                this.endPoint.x = this.startPoint.x + this.range * Math.cos(angle);
+                this.endPoint.y = this.startPoint.y + this.range * Math.sin(angle);
+            }
+
+            setGun(gun) {
+                this.gun?.laserMap?.delete(this.id);
+                this.master?.laserMap?.delete(this.id);
+
+                this.gun = gun;
+                this.master = gun?.master;
+
+                this.gun?.laserMap?.set(this.id, this);
+                this.master?.laserMap?.set(this.id, this);
+            }
+
+            destroy() {
+                this.setGun(undefined);
+                lasers.delete(this);
+            }
+
+            tick() {
+                if (this.maxDuration < this.duration) {
+                    this.maxDuration = this.duration;
+                }
+                if (this.duration-- <= 0) {
+                    this.destroy();
+                    return;
+                }
+
+                this.calcEndPoint();
+                this.hitEntities.clear();
+
+                // In-place mutation (zero object allocations)
+                this.visualEndPoint.x = this.endPoint.x;
+                this.visualEndPoint.y = this.endPoint.y;
+
+                if (this.endPoint.x === this.startPoint.x) this.endPoint.x += 1;
+                if (this.endPoint.y === this.startPoint.y) this.endPoint.y += 1;
+
+                // Calculate ray constants once per tick
+                const dx = this.endPoint.x - this.startPoint.x;
+                const dy = this.endPoint.y - this.startPoint.y;
+                const lenSq = dx * dx + dy * dy;
+                if (lenSq === 0) return;
+                const invLenSq = 1 / lenSq;
+
+                // Reset class scratch state
+                Laser.hitPoolIndex = 0;
+                Laser.hitsScratch.length = 0;
+
+                const cellSize = 1 << grid.cellShift;
+                let cellX = Math.floor(this.startPoint.x / cellSize);
+                let cellY = Math.floor(this.startPoint.y / cellSize);
+                const endCellX = Math.floor(this.endPoint.x / cellSize);
+                const endCellY = Math.floor(this.endPoint.y / cellSize);
+
+                const stepX = dx > 0 ? 1 : -1;
+                const stepY = dy > 0 ? 1 : -1;
+
+                const tDeltaX = Math.abs(cellSize / dx);
+                const tDeltaY = Math.abs(cellSize / dy);
+
+                const nextBoundaryX = (cellX + (stepX > 0 ? 1 : 0)) * cellSize;
+                const nextBoundaryY = (cellY + (stepY > 0 ? 1 : 0)) * cellSize;
+
+                let tMaxX = Math.abs((nextBoundaryX - this.startPoint.x) / dx);
+                let tMaxY = Math.abs((nextBoundaryY - this.startPoint.y) / dy);
+
                 const processCell = (cx, cy) => {
                     const cellContent = grid.getCell(cx * cellSize, cy * cellSize);
-                    if (cellContent) {
-                        for (const entity of cellContent){
-							if (entity.team === this.team || this.hitEntities.has(entity)) continue;
-             				this.hitEntities.add(entity);
-		            		const collisionDetails = this.getCollisionDetails(entity);
-		            		if (collisionDetails){
-								collectedHits.push(collisionDetails);
-		        			}
-						}
+                    if (!cellContent) return;
+
+                    for (const entity of cellContent) {
+                        if (
+                            entity.team === this.team ||
+                            entity.passive ||
+                            this.master?.passive ||
+                            this.hitEntities.has(entity)
+                        ) {
+                            continue;
+                        }
+
+                        this.hitEntities.add(entity);
+                        const hit = this.getCollisionDetails(entity, dx, dy, lenSq, invLenSq);
+                        if (hit) {
+                            Laser.hitsScratch.push(hit);
+                        }
                     }
                 };
-			
-		        processCell(cellX, cellY);
-		        while (collectedHits.length < this.pierce && (cellX !== endCellX || cellY !== endCellY)) {
-		            if (tMaxX < tMaxY) {
-		                tMaxX += tDeltaX;
-		                cellX += stepX;
-		            } else {
-		                tMaxY += tDeltaY;
-		                cellY += stepY;
-		            }
-		            processCell(cellX, cellY);
-		        }
-			
-		        // 3. Sort hits by distance to handle piercing correctly
-		        //collectedHits.sort((a, b) => a.distanceSq - b.distanceSq);
-				// Might not be needed by nature of how arrays works
-			
-		        // 4. Apply damage to pierced targets and update visual end point
-                const piercedCount = Math.min(collectedHits.length, this.pierce);
+
+                processCell(cellX, cellY);
+                while (Laser.hitsScratch.length < this.pierce && (cellX !== endCellX || cellY !== endCellY)) {
+                    if (tMaxX < tMaxY) {
+                        tMaxX += tDeltaX;
+                        cellX += stepX;
+                    } else {
+                        tMaxY += tDeltaY;
+                        cellY += stepY;
+                    }
+                    processCell(cellX, cellY);
+                }
+
+                // Sort hits by distance
+                if (Laser.hitsScratch.length > 1) {
+                    Laser.hitsScratch.sort((a, b) => a.distanceSq - b.distanceSq);
+                }
+
+                // Apply damage to pierced targets
+                const piercedCount = Math.min(Laser.hitsScratch.length, this.pierce);
                 if (this.pierce > 0) {
                     for (let i = 0; i < piercedCount; i++) {
-                        this.collide(collectedHits[i].entity);
+                        this.collide(Laser.hitsScratch[i].entity);
                     }
                 }
-				if(piercedCount === this.pierce){
-                    this.visualEndPoint = collectedHits[this.pierce-1].closestPoint;
-				}
-			}
-		
-		    getCollisionDetails(entity) {
-		        const laserDX = this.endPoint.x - this.startPoint.x;
-		        const laserDY = this.endPoint.y - this.startPoint.y;
-		        const lenSq = laserDX * laserDX + laserDY * laserDY;
-		        if (lenSq === 0) return null;
-			
-		        const dot = ((entity.x - this.startPoint.x) * laserDX + (entity.y - this.startPoint.y) * laserDY);
-		        const t = Math.max(0, Math.min(1, dot / lenSq));
-			
-                const closestX = this.startPoint.x + t * laserDX;
-                const closestY = this.startPoint.y + t * laserDY;
-		        const distanceX = entity.x - closestX;
-		        const distanceY = entity.y - closestY;
-		        const distanceSquared = (distanceX * distanceX) + (distanceY * distanceY);
-			
-		        const totalRadius = entity.size + this.width;
-		        if (distanceSquared < (totalRadius * totalRadius)) {
-		            const distFromStartSq = (closestX - this.startPoint.x) ** 2 + (closestY - this.startPoint.y) ** 2;
-		            return {
-		                entity: entity,
-		                closestPoint: { x: closestX, y: closestY },
-		                distanceSq: distFromStartSq
-		            };
-		        }
-		        return null;
-		    }
-		
+
+                // Set visual endpoint to the last hit target
+                if (this.pierce > 0 && piercedCount === this.pierce) {
+                    const lastHit = Laser.hitsScratch[this.pierce - 1];
+                    this.visualEndPoint.x = lastHit.closestX;
+                    this.visualEndPoint.y = lastHit.closestY;
+                }
+            }
+
+            // Direct, flat collision check using precomputed tick constants
+            getCollisionDetails(entity, dx, dy, lenSq, invLenSq) {
+                const startX = this.startPoint.x;
+                const startY = this.startPoint.y;
+
+                const dot = (entity.x - startX) * dx + (entity.y - startY) * dy;
+                const rawT = dot * invLenSq;
+                const t = rawT < 0 ? 0 : (rawT > 1 ? 1 : rawT);
+
+                const closestX = startX + t * dx;
+                const closestY = startY + t * dy;
+
+                const distX = entity.x - closestX;
+                const distY = entity.y - closestY;
+                const distSq = distX * distX + distY * distY;
+
+                const radius = entity.size + this.width;
+                if (distSq < radius * radius) {
+                    const hit = Laser.acquireHit();
+                    hit.entity = entity;
+                    hit.distanceSq = t * t * lenSq;
+                    hit.closestX = closestX;
+                    hit.closestY = closestY;
+                    return hit;
+                }
+                return null;
+            }
+
             collide(entity) {
                 entity.damageReceived += this.damage;
-				entity.collisionArray.push(this)
-				if(this.master){
-            		if (this.onDealtDamage) {
-            		    this.onDealtDamage(this, entity, this.damage);
-            		}
-            		if (this.onDealtDamageUniv) {
-            		    this.onDealtDamageUniv(this, entity, this.damage);
-            		}
-            		if (this.master && this.master.onDealtDamageUniv) {
-            		    this.master.onDealtDamageUniv(this.master, entity, this.damage);
-            		}
-				}
-				if (entity.onDamaged) entity.onDamaged(entity, null, this.damage)
+                entity.collisionArray.push(this);
+
+                if (this.master) {
+                    this.onDealtDamage?.(this, entity, this.damage);
+                    this.onDealtDamageUniv?.(this, entity, this.damage);
+                    this.master.onDealtDamageUniv?.(this.master, entity, this.damage);
+                }
+
+                entity.onDamaged?.(entity, null, this.damage);
             }
 
             addToPacket(packetArr, playerContext) {
+                const isPlayerOwner = this.master && (
+                    this.master.id === playerContext.body?.id ||
+                    this.master.master?.id === playerContext.body?.id
+                );
+
+                const isSelfFFA = (
+                    playerContext.gameMode === "ffa" &&
+                    this.color === "FFA_RED" &&
+                    playerContext.body?.color === "FFA_RED" &&
+                    isPlayerOwner
+                );
+
+                const color = isSelfFFA ? (playerContext.teamColor ?? 0) : this.color;
+
                 packetArr.push(
                     this.id,
                     this.startPoint.x,
                     this.startPoint.y,
                     this.visualEndPoint.x,
                     this.visualEndPoint.y,
-					(this.master && playerContext.gameMode === "ffa" && this.color === "FFA_RED" && playerContext.body.color === "FFA_RED" && (this.master.id === playerContext.body.id)||(this.master.master.id === playerContext.body.id)) === true ?  playerContext.teamColor??0 : this.color,
+                    color,
                     this.width,
                     this.maxDuration,
                     this.duration
                 );
             }
-		}
+        }
 
         class Entity {
             constructor(position, master = this) {
                 this.isGhost = false;
-				this.spectating = null;
+                this.spectating = null;
                 this.killCount = {
                     solo: 0,
                     assists: 0,
@@ -5977,10 +6084,10 @@ const Chain = Chainf;
                 this.master = master;
                 this.source = this;
                 this.parent = this;
-                this.roomLayer = master.roomLayer||0;
-				this.roomLayerless = master.roomLayerless||false;
+                this.roomLayer = master.roomLayer || 0;
+                this.roomLayerless = master.roomLayerless || false;
                 this.control = {
-                    target: new Vector(position.x + (1000*Math.random()-500), position.y + (1000*Math.random()-500)),
+                    target: new Vector(position.x + (1000 * Math.random() - 500), position.y + (1000 * Math.random() - 500)),
                     goal: new Vector(0, 0),
                     main: false,
                     alt: false,
@@ -6060,7 +6167,7 @@ const Chain = Chainf;
                 };
                 this.aiSettings = {};
                 this.childrenMap = new Map();
-				this.laserMap = new Map();
+                this.laserMap = new Map();
                 this.SIZE = 1;
                 this.define(Class.genericEntity);
                 this.maxSpeed = 0;
@@ -6077,7 +6184,7 @@ const Chain = Chainf;
                 this.accel = new Vector(0, 0);
                 this.damp = .05;
                 this.collisionArray = [];
-				this.collisionArray.lastUpdate = -1;
+                this.collisionArray.lastUpdate = -1;
                 this.invuln = false;
                 this.godmode = false;
                 this.passive = false;
@@ -6092,11 +6199,11 @@ const Chain = Chainf;
                 this.rainbowLoop = this.rainbowLoop.bind(this);
                 this.keyFEntity = ["square", 5, 0, false];
                 this.isActive = true
-				this.deactivationTimer = -1;
-                this.deactivation = function(){
-					this.deactivationTimer -= 1;
+                this.deactivationTimer = -1;
+                this.deactivation = function() {
+                    this.deactivationTimer -= 1;
                     if (this.deactivationTimer < 0) {
-						this.deactivationTimer = 30;
+                        this.deactivationTimer = 30;
                         this.isActive = this.alwaysActive || this.isPlayer || (this.source && this.source.isActive) || (this.bond && this.bond.isActive) || (this.master && this.master.isActive) || false
                     }
                 };
@@ -6463,7 +6570,7 @@ const Chain = Chainf;
                     if (set.TRAVERSE_SPEED != null) this.turretTraverseSpeed = set.TRAVERSE_SPEED;
                     if (set.RIGHT_CLICK_TURRET != null) this.turretRightClick = set.RIGHT_CLICK_TURRET;
                     if (set.index != null) this.index = set.index;
-                    this.name = set.NAME||this.socket?.name||"";
+                    this.name = set.NAME || this.socket?.name || "";
                     if (set.HITS_OWN_TEAM != null) this.hitsOwnTeam = set.HITS_OWN_TEAM;
                     if (set.LABEL != null) this.label = set.LABEL;
                     this.labelOverride = "";
@@ -6564,19 +6671,19 @@ const Chain = Chainf;
                     this.onAlt = set.ON_ALT || null;
                     this.onQ = set.ON_Q || null
                     this.onNotAlt = set.ON_NOT_ALT || null;
-					this.onDead = set.ON_DEAD || null
+                    this.onDead = set.ON_DEAD || null
                     this.isObserver = set.IS_OBSERVER;
                     this.onOverride = set.ON_OVERRIDE;
                     this.isSentry = set.IS_SENTRY || null;
-					if(set.LEASHED){
-						if(typeof set.LEASHED === "number"){
-							this.controllers.push(new ioTypes.leashed(this, set.LEASHED));
-						}else{
-							console.error(`LEASHED must be a number`, this)
-						}
-					}else{
-						this.leash = null;
-					}
+                    if (set.LEASHED) {
+                        if (typeof set.LEASHED === "number") {
+                            this.controllers.push(new ioTypes.leashed(this, set.LEASHED));
+                        } else {
+                            console.error(`LEASHED must be a number`, this)
+                        }
+                    } else {
+                        this.leash = null;
+                    }
                     if (set.UPGRADES_TIER_1 != null)
                         for (let e of set.UPGRADES_TIER_1) this.upgrades.push({
                             class: exportNames[e.index],
@@ -6632,7 +6739,7 @@ const Chain = Chainf;
                     }
                     if (set.CAMERA_TO_MOUSE != null) {
                         this.scoped = true,
-                        this.scopedMult = set.CAMERA_TO_MOUSE[1] - 1
+                            this.scopedMult = set.CAMERA_TO_MOUSE[1] - 1
                     }
                     this.altCameraSource = null
                     if (set.GUNS != null) {
@@ -6707,8 +6814,10 @@ const Chain = Chainf;
                         this.isArenaCloser = set.IS_ARENA_CLOSER;
                         if (this.isArenaCloser) this.immuneToAbilities = true;
                     }
+                    if (this.onVarsCleared) this.onVarsCleared(this);
                     this.variables = set.VARIABLES ? JSON.parse(JSON.stringify(set.VARIABLES)) : {};
-					this.animations = [];
+                    this.onVarsCleared = set.ON_VARIABLES_CLEARED || false;
+                    this.animations = [];
                     if (this.isShiny) {
                         this.color = -1
                         this.skill.score *= 3
@@ -6747,24 +6856,23 @@ const Chain = Chainf;
                 }
             }
             refreshBodyAttributes() {
-                let speedReduce = Math.pow(this.size / this.SIZE, 1);
+                let speedReduce = Math.pow(this.size / this.SIZE, 0.75);
                 this.acceleration = c.runSpeed * this.ACCELERATION / speedReduce;
                 if (this.settings.reloadToAcceleration) this.acceleration *= this.skill.acl;
                 this.topSpeed = c.runSpeed * this.SPEED * this.skill.mob / speedReduce;
-                if (this.settings.reloadToAcceleration) this.topSpeed /= Math.sqrt(this.skill.acl)||c.MIN_SPEED;
+                if (this.settings.reloadToAcceleration) this.topSpeed /= Math.sqrt(this.skill.acl) || c.MIN_SPEED;
                 this.health.set(((this.settings.healthWithLevel ? 1.5 /* 1.8 */ * this.skill.level : 0) + this.HEALTH) * (this.settings.reloadToAcceleration ? this.skill.hlt * 0.95 /*1.025*/ : this.skill.hlt));
                 this.health.resist = 1 - 1 / (Math.max(1, this.RESIST + this.skill.brst) / 1.15);
                 this.shield.set(((this.settings.healthWithLevel ? .6 * this.skill.level : 0) + this.SHIELD) * this.skill.shi * (this.settings.reloadToAcceleration ? .85 : 1), Math.max(0, (((this.settings.healthWithLevel ? .006 * this.skill.level : 0) + 1) * this.REGEN) * this.skill.rgn) * (this.settings.reloadToAcceleration ? 0.9 : 1));
                 this.damage = this.DAMAGE * (this.settings.reloadToAcceleration ? this.skill.atk * 1.1 /*1.1*/ /*1.25*/ : this.skill.atk);
-                this.penetration = this.PENETRATION + 1.5 * (this.skill.brst + 0.8 * (this.skill.atk - 1));//this.PENETRATION + 1.5 * (this.skill.brst + .8 * (this.skill.atk - 1)) * .4;//(this.settings.reloadToAcceleration ? .1 : 1);
-                this.range = this.RANGE;
+                this.penetration = this.PENETRATION + 1.5 * (this.skill.brst /*+ 0.8 * (this.skill.atk - 1)*/); this.range = this.RANGE;
                 this.fov = 250 * this.FOV * Math.sqrt(this.size) * (1 + .003 * this.skill.level);
                 this.density = (1 + 0.08 * this.skill.level) * this.DENSITY;//(1 + .08 * this.skill.level) * this.DENSITY * 2.334;//(this.settings.reloadToAcceleration ? 5 : 1);
                 this.stealth = this.STEALTH;
                 this.pushability = this.PUSHABILITY;
             }
             refreshFOV() {
-                this.fov = 250 * this.FOV * (this.size**.5) * (1 + .003 * this.skill.level);
+                this.fov = 250 * this.FOV * (this.size ** .5) * (1 + .003 * this.skill.level);
             }
             bindToMaster(position, bond) {// size, x, y, angle (deg), turn range, layer
                 this.bond = bond;
@@ -6792,9 +6900,38 @@ const Chain = Chainf;
                 this.isTurret = true;
             }
             get size() {
-                //if (this.bond == null) return (this.coreSize || this.SIZE) * (1 + this.skill.level / 60);
-                if (this.bond == null) return this.SIZE * (1 + (this.skill.level > c.SKILL_CAP ? c.SKILL_CAP : this.skill.level) / 60);
-                return this.bond.size * this.bound.size;
+                // 1. Calculate this entity's own standalone base size
+                const levelFactor = 1 + (this.skill.level > c.SKILL_CAP ? c.SKILL_CAP : this.skill.level) / 60;
+                const ownBaseSize = (this.SIZE) * levelFactor;
+
+                // 2. Fast path: If not a sub-turret, return own base size immediately (O(1), zero recursion)
+                if (!this.bond || !this.bound) {
+                    return ownBaseSize;
+                }
+
+                // 3. Iteratively climb the bond tree without calling `.size` on other entities
+                let multiplier = this.bound.size || 1;
+                let curr = this.bond;
+                let depth = 0;
+
+                // Climb up as long as the parent is also a sub-turret (hard limit of 1048 levels to prevent infinite loops)
+                while (curr && curr.isTurret && curr.bound && depth < 1048) {
+                    if (curr === this) break; // Cycle detected: abort compounding
+                    multiplier *= (curr.bound.size || 1);
+                    curr = curr.bond;
+                    depth++;
+                }
+
+                // If root is invalid or cyclic, fall back safely to own size
+                if (!curr || curr === this) {
+                    return ownBaseSize;
+                }
+
+                // 4. Calculate root tank's base size directly
+                const rootLevelFactor = 1 + (curr.skill.level > c.SKILL_CAP ? c.SKILL_CAP : curr.skill.level) / 60;
+                const rootBaseSize = (curr.SIZE) * rootLevelFactor;
+
+                return rootBaseSize * multiplier;
             }
             get mass() {
                 return this.density * (this.size * this.size + 1);
@@ -6812,12 +6949,12 @@ const Chain = Chainf;
                 let out = {
                     type: tur * 0x01 + this.settings.drawHealth * 0x02 + ((this.type === "tank" || this.type === "utility") && !this.settings.noNameplate) * 0x04 + this.invuln * 0x08,
                     id: this.id,
-					masterId: this.master.id,
+                    masterId: this.master.id,
                     index: this.index,
                     x: this.x,
                     y: this.y,
-                    cx: this.altCameraSource?this.altCameraSource[0]:this.x,
-                    cy: this.altCameraSource?this.altCameraSource[1]:this.y,
+                    cx: this.altCameraSource ? this.altCameraSource[0] : this.x,
+                    cy: this.altCameraSource ? this.altCameraSource[1] : this.y,
                     size: this.size,
                     rsize: this.realSize,
                     status: 1,
@@ -6825,7 +6962,7 @@ const Chain = Chainf;
                     shield: this.shield.display(),
                     facing: this.facing,
                     vfacing: this.vfacing,
-					leash: this.leash,
+                    leash: this.leash,
                     twiggle: this.facingType !== "toTarget" || (this.facingType === "lmg" && this.control.fire), //this.facingType === "looseWithMotion" || this.facingType === "smoothWithMotion" || this.facingType === "spinSlowly" || this.facingType === "spinSlowly2" || this.facingType === "spinSlowly3" || this.facingType === "spinSlowly4" || this.facingType === "altSpin" || this.facingType === "fastSpin" || this.facingType === "autospin" || this.facingType === "autospin2" || this.facingType === "reverseAutospin" || this.facingType === "bitFastSpin" || this.facingType === "hadron" || this.facingType === "locksFacing" && this.control.alt || this.facingType === "hatchet" || this.facingType === "altLocksFacing" || this.facingType === "lmg" && this.control.fire,
                     layer: this.type === "mazeWall" ? 7 : this.passive && this.LAYER !== -1 ? 1 : this.LAYER === -1 ? this.bond == null ? this.type === "wall" ? 11 : this.type === "food" ? 10 : this.type === "tank" ? 5 : this.type === "crasher" ? 8 : 0 : this.bound.layer : this.LAYER,
                     color: this.color,
@@ -6847,7 +6984,7 @@ const Chain = Chainf;
                             this.hasScoped = false
                         }
                         this.cameraShiftFacing = null;
-						this.altCameraSource = null;
+                        this.altCameraSource = null;
                     } else {
                         this.cameraShiftFacing = true
                         if (!this.hasScoped) {
@@ -6855,7 +6992,7 @@ const Chain = Chainf;
                             this.fov = this.currentScopedFOV
                             this.hasScoped = true
                         }
-						if(!this.altCameraSource) this.altCameraSource = []
+                        if (!this.altCameraSource) this.altCameraSource = []
                         this.altCameraSource[0] = this.x + this.fov * Math.cos(this.facing) / 3;
                         this.altCameraSource[1] = this.y + this.fov * Math.sin(this.facing) / 3;
                     }
@@ -6908,11 +7045,11 @@ const Chain = Chainf;
                             o.kill();
                         }
                     });
-					this.laserMap.forEach(laser => {
-			            if (laser.clearOnMasterUpgrade) {
-                        	laser.destroy();
+                    this.laserMap.forEach(laser => {
+                        if (laser.clearOnMasterUpgrade) {
+                            laser.destroy();
                         }
-					})
+                    })
                     //for (let o of entities)
                     //    if (o.settings.clearOnMasterUpgrade && o.master.id === this.id && o.id !== this.id && o !== this) o.kill();
                     this.skill.update();
@@ -6969,11 +7106,11 @@ const Chain = Chainf;
                         o.kill();
                     }
                 });
-				this.laserMap.forEach(laser => {
-		            if (laser.clearOnMasterUpgrade) {
-                    	laser.destroy();
+                this.laserMap.forEach(laser => {
+                    if (laser.clearOnMasterUpgrade) {
+                        laser.destroy();
                     }
-				})
+                })
                 if (this.stealthMode) {
                     this.settings.leaderboardable = this.settings.givesKillMessage = false;
                     this.alpha = this.ALPHA = 0;
@@ -7044,7 +7181,7 @@ const Chain = Chainf;
                                 x: 0,
                                 y: 0
                             }, g);
-                            if (true||l > this.size * 2) {
+                            if (true || l > this.size * 2) {
                                 this.maxSpeed = this.topSpeed;
                                 let desiredxspeed = this.topSpeed * g.x / l,
                                     desiredyspeed = this.topSpeed * g.y / l;
@@ -7094,18 +7231,22 @@ const Chain = Chainf;
                         this.damp = -.0125;
                         this.DAMAGE -= 10; // .05, 1, 2
                         break;
-					case "sonicAccel":
-                        this.damp = -.021;
-                        break;
                     case "glideBall":
                         this.maxSpeed = this.topSpeed;
                         if (this.topSpeed) this.damp = a / this.topSpeed;
                         if (gactive) {
                             let len = Math.sqrt(g.x * g.x + g.y * g.y);
-                            engine = {
-                                x: a * g.x / len,
-                                y: a * g.y / len
-                            };
+                            if (len !== 0 && len !== NaN) {
+                                engine = {
+                                    x: a * g.x / len,
+                                    y: a * g.y / len
+                                };
+                            } else {
+                                engine = {
+                                    x: 0.001,
+                                    y: 0.001,
+                                }
+                            }
                         } else this.damp = .005;
                         break;
                     case "grow":
@@ -7137,16 +7278,33 @@ const Chain = Chainf;
                     case "fastcrockett":
                         this.SIZE += 2;//+6
                         this.DAMAGE += 2;//+6
+                        break;
                     case "crockett":
                         this.SIZE += 2;
                         this.DAMAGE += 2;
+                        break;
+                    case "bigcrockett":
+                        this.SIZE += 4.2;
+                        this.DAMAGE += 2.75;
+                        break;
                     case "snowball":
                         this.SIZE += .15;
                         this.DAMAGE += 2;
                         break;
+                    case "exponennuke":
+                        this.SIZE *= 1.03;
+                        this.DAMAGE *= 1.03;
+                        break;
                     case "fatNuke":
                         this.SIZE += 7;
                         this.DAMAGE += 20;
+                        break;
+                    case "microGrower":
+                        this.SIZE += .06; // + .02 * Math.random();
+                        this.DAMAGE += 12.5;
+                        this.penetration += .005;
+                        if (this.velocity.x > 0) this.velocity.x -= .003;
+                        if (this.velocity.y > 0) this.velocity.y -= .003;
                         break;
                     case "miniGrower":
                         this.SIZE += .1; // + .02 * Math.random();
@@ -7173,6 +7331,21 @@ const Chain = Chainf;
                         this.SIZE += .21; // + .026 * Math.random();
                         this.DAMAGE += .225;
                         this.penetration += .04;
+                        if (this.velocity.x > 0) this.velocity.x -= .005;
+                        if (this.velocity.y > 0) this.velocity.y -= .005;
+                        break;
+                    case "imploder":
+                        if (this.counter == undefined) { this.counter = -50 }
+                        this.counter += 1
+                        if (this.counter != 0) { this.SIZE = (this.counter * 0.1) ** 2 }
+                        this.DAMAGE += .5
+                        this.penetration += .04
+                        if (this.velocity.x > 0) this.velocity.x -= .005;
+                        if (this.velocity.y > 0) this.velocity.y -= .005;
+                        break;
+                    case "antiGrow":
+                        if (this.SIZE - .2 > 0) { this.SIZE -= .2 }
+                        this.penetration += .04
                         if (this.velocity.x > 0) this.velocity.x -= .005;
                         if (this.velocity.y > 0) this.velocity.y -= .005;
                         break;
@@ -7303,7 +7476,7 @@ const Chain = Chainf;
                         this.color = 31;
                         break;
                 }
-				global.gaysex = [engine.x, this.control.power]
+                global.gaysex = [engine.x, this.control.power]
                 this.accel.x += engine.x * this.control.power;
                 this.accel.y += engine.y * this.control.power;
             }
@@ -7356,13 +7529,6 @@ const Chain = Chainf;
                         break;
                     case "withMotion":
                         if (this.velocity.length > 0) this.facing = this.velocity.direction;
-                        break;
-                    case "smoothTargetOrSmoothhMotion":
-                        if (this.source.control.target.length === 0) {
-                            this.facing += util.loopSmooth(this.facing, Math.atan2(this.velocity.y, this.velocity.x), 4 / room.speed);
-                        } else {
-                            this.facing += util.loopSmooth(this.facing, Math.atan2(t.y, t.x), 4 / room.speed);
-                        }
                         break;
                     case "looseWithMotion":
                         if (!this.velocity.length) break;
@@ -7461,21 +7627,24 @@ const Chain = Chainf;
                             this.variables.masterOnSpawnFacing = 1
                         }
                         break;
+                    case "vertical":
+                        this.facing = -1.5881855
+                        break;
                 }
                 let TAU = 2 * Math.PI;
                 this.facing = (this.facing % TAU + TAU) % TAU;
                 this.vfacing = util.angleDifference(oldFacing, this.facing) * room.speed;
             }
             physics() {
-                this.velocity.x += this.accel.x*room.lagComp;
-                this.velocity.y += this.accel.y*room.lagComp;
+                this.velocity.x += this.accel.x * room.lagComp;
+                this.velocity.y += this.accel.y * room.lagComp;
                 this.accel.null();
                 this.stepRemaining = c.ARENA_TYPE === 1 ? 1.5 : 1;
                 this.x += (this.stepRemaining * this.velocity.x / room.speed);
-                this.y += (this.stepRemaining * this.velocity.y / room.speed) ;
+                this.y += (this.stepRemaining * this.velocity.y / room.speed);
             }
             friction() {
-                let motion = this.velocity.length*room.lagComp,
+                let motion = this.velocity.length * room.lagComp,
                     excess = (motion - (this.maxSpeed)) * (c.ARENA_TYPE === 1 ? 1.05 : 1);
                 if (excess > 0 && this.damp) {
                     let drag = excess / ((this.damp) / room.speed + 1),
@@ -7651,6 +7820,28 @@ const Chain = Chainf;
                         this.velocity.y = bounces ? this.velocity.y *= -0.5 : 0;
                     }*/
                     let force = c.BORDER_FORCE;
+
+                    if (myCell === "edge") {
+                        const cellLoc = room.isAt(loc);
+                        const diffX = Math.abs(loc.x - cellLoc.x);
+                        const diffY = Math.abs(loc.y - cellLoc.y);
+
+                        // Only move on the axis with the greater distance to avoid drifting
+                        if (diffX >= diffY) {
+                            if (loc.x < cellLoc.x) {
+                                this.accel.x -= this.realSize * force / room.speed;
+                            } else if (loc.x > cellLoc.x) {
+                                this.accel.x += this.realSize * force / room.speed;
+                            }
+                        } else {
+                            if (loc.y < cellLoc.y) {
+                                this.accel.y -= this.realSize * force / room.speed;
+                            } else if (loc.y > cellLoc.y) {
+                                this.accel.y += this.realSize * force / room.speed;
+                            }
+                        }
+                    }
+
                     this.isOutsideRoom = false
                     switch (c.ARENA_TYPE) {
                         case 1: // Round
@@ -7706,19 +7897,19 @@ const Chain = Chainf;
                         default: // Default rectangular
                             if (this.x < 0) {
                                 this.isOutsideRoom = true
-                                this.accel.x -= Math.min(this.x - this.realSize + 50, 0) * force / room.speed;
+                                this.accel.x -= Math.min(this.x - this.realSize, 0) * force / room.speed;
                             }
                             if (this.x > room.width) {
                                 this.isOutsideRoom = true
-                                this.accel.x -= Math.max(this.x + this.realSize - room.width - 50, 0) * force / room.speed;
+                                this.accel.x -= Math.max(this.x + this.realSize - room.width, 0) * force / room.speed;
                             }
                             if (this.y < 0) {
                                 this.isOutsideRoom = true
-                                this.accel.y -= Math.min(this.y - this.realSize + 50, 0) * force / room.speed;
+                                this.accel.y -= Math.min(this.y - this.realSize, 0) * force / room.speed;
                             }
                             if (this.y > room.height) {
                                 this.isOutsideRoom = true
-                                this.accel.y -= Math.max(this.y + this.realSize - room.height - 50, 0) * force / room.speed;
+                                this.accel.y -= Math.max(this.y + this.realSize - room.height, 0) * force / room.speed;
                             }
                             break;
                     }
@@ -7812,7 +8003,7 @@ const Chain = Chainf;
                     // Explosions, phases and whatnot
                     if (this.onDead != null && !this.hasDoneOnDead) {
                         this.hasDoneOnDead = true;
-                        this.onDead({sockets, ran, Entity, me: this, them: this.collisionArray[0]});
+                        this.onDead({ sockets, ran, Entity, me: this, them: this.collisionArray[0] });
                     }
                     // Second function so onDead isn't overwritten by specific gamemode features
                     if (this.modeDead != null && !this.hasDoneModeDead) {
@@ -7835,8 +8026,8 @@ const Chain = Chainf;
                             if (o.type === "wall" || o.type === "mazeWall") {
                                 continue;
                             }
-							let master = o.master?.master ?? o.master
-							if(!master) continue;
+                            let master = o.master?.master ?? o.master
+                            if (!master) continue;
                             if (master.isDominator || master.isArenaCloser || master.label === "Base Protector") {
                                 if (!killers.includes(master)) {
                                     killers.push(master);
@@ -7847,11 +8038,21 @@ const Chain = Chainf;
                                     notJustFood = true;
                                 }
                                 master.skill.score += jackpot;
+                                if (this.type === "food") {
+                                    master.health.amount += jackpot * .03
+                                } else {
+                                    master.health.amount += jackpot * .0025
+                                }
                                 if (!killers.includes(master)) {
                                     killers.push(master);
                                 }
                             } else if (o.settings.acceptsScore) {
                                 o.skill.score += jackpot;
+                                if (this.type === "food") {
+                                    master.health.amount += jackpot * .03
+                                } else {
+                                    master.health.amount += jackpot * .0025
+                                }
                             }
                         }
                         // Now process that information
@@ -7974,9 +8175,9 @@ const Chain = Chainf;
                 this.invuln = false;
                 this.damageReceived = this.health.max * 2;
                 this.health.amount = -1;
-				this.destroy()
+                this.destroy()
             }
-            destroy(skipEvents=false) {
+            destroy(skipEvents = false) {
                 if (this.hasDestroyed) {
                     return;
                 }
@@ -8073,7 +8274,7 @@ const Chain = Chainf;
                 if (skipEvents === false) {
                     if (this.onDead != null && !this.hasDoneOnDead) {
                         this.hasDoneOnDead = true;
-                        this.onDead({sockets, ran, Entity, me: this, them: this.collisionArray[0]});
+                        this.onDead({ sockets, ran, Entity, me: this, them: this.collisionArray[0] });
                     }
                     // Second function so onDead isn't overwritten by specific gamemode features
                     if (this.modeDead != null && !this.hasDoneModeDead) {
@@ -8168,7 +8369,7 @@ const Chain = Chainf;
                 player.body.kill();
             }
             runAnimations(gun) {
-                switch (onShoot) {
+                switch (gun.onShoot) {
                     case "log":
                         console.log("LOG");
                         break;
@@ -8242,7 +8443,7 @@ const Chain = Chainf;
                                 }
                             }, (500 / amount) * i);
                         };
-                        const hitScanLevel = +onShoot.split("hitScan").pop();
+                        const hitScanLevel = +gun.onShoot.split("hitScan").pop();
                         for (let i = 0; i < amount; i++) {
                             setTimeout(() => {
                                 if (this.master.health.amount < 0) return;
@@ -8293,7 +8494,7 @@ const Chain = Chainf;
                     case "hand2":
                     case "hand3":
                     case "hand4": {
-                        let increment = onShoot === "hand2" ? 20 : onShoot === "hand3" ? 40 : onShoot === "hand4" ? 60 : 0,
+                        let increment = gun.onShoot === "hand2" ? 20 : gun.onShoot === "hand3" ? 40 : gun.onShoot === "hand4" ? 60 : 0,
                             tank = this.label === "Auto-Glove" ? "autoHandBasic" : "handBasic";
                         for (let i = 1; i < 21; i++) setTimeout(() => {
                             if (this.isAlive()) this.define(Class[`${tank}${i + increment}`]);
@@ -8316,7 +8517,7 @@ const Chain = Chainf;
                             if (o.master.id === this.id && o.type === "drone") o.kill();
                         });
                         for (let i = 1; i < 32; i++) setTimeout(() => {
-                            if (this.isAlive()) this.define(Class[`hybranger${onShoot === "hybranger" ? i : (i === 31 ? 0 : i + 31)}`]);
+                            if (this.isAlive()) this.define(Class[`hybranger${gun.onShoot === "hybranger" ? i : (i === 31 ? 0 : i + 31)}`]);
                         }, 14 * i);
                         break;
                     case "shape":
@@ -8325,13 +8526,13 @@ const Chain = Chainf;
                             if (o.master.id === this.id && o.type === "drone") o.kill();
                         });
                         for (let i = 1; i < 32; i++) setTimeout(() => {
-                            if (this.isAlive()) this.define(Class[`shapeChange${onShoot === "shape" ? i : 31 - i}`]);
+                            if (this.isAlive()) this.define(Class[`shapeChange${gun.onShoot === "shape" ? i : 31 - i}`]);
                         }, 14 * i);
                         break;
                     case "surge":
                     case "surge2":
                         for (let i = 1; i < 21; i++) setTimeout(() => {
-                            if (this.isAlive()) this.define(Class[`sniperEMP${onShoot === "surge" ? i : 20 + i}`]);
+                            if (this.isAlive()) this.define(Class[`sniperEMP${gun.onShoot === "surge" ? i : 20 + i}`]);
                         }, this.skill.rld * (onShoot === "surge" ? 180 : 60) * i);
                         break;
                     case "surge3":
@@ -8339,7 +8540,7 @@ const Chain = Chainf;
                         break;
                     default:
                         util.warn("Unknown ON_SHOOT value: " + onShoot + "!");
-                        onShoot = null;
+                        gun.onShoot = null;
                 };
             }
         }
@@ -8402,91 +8603,91 @@ const Chain = Chainf;
             };
         })();
 
-function flatten(data, out, playerContext = null) {
-    out.push(data.type);
+        function flatten(data, out, playerContext = null) {
+            out.push(data.type);
 
-    if (data.type & 0x01) { // Turret specific data
-        out.push(+(data.facing).toFixed(2), data.layer);
-    } else { // Full entity data
-        // Pre-calculate values
-        const x = (data.x + .5) | 0;
-        const y = (data.y + .5) | 0;
-        const size = (data.size + .5) | 0;
-        const facing = +(data.facing).toFixed(2);
+            if (data.type & 0x01) { // Turret specific data
+                out.push(+(data.facing).toFixed(2), data.layer);
+            } else { // Full entity data
+                // Pre-calculate values
+                const x = (data.x + .5) | 0;
+                const y = (data.y + .5) | 0;
+                const size = (data.size + .5) | 0;
+                const facing = +(data.facing).toFixed(2);
 
-        // --- Perspective Logic ---
-        let finalTwiggle = data.twiggle;
-        let finalColor = data.color ?? 0;
+                // --- Perspective Logic ---
+                let finalTwiggle = data.twiggle;
+                let finalColor = data.color ?? 0;
 
-        if (playerContext && playerContext.body) {
-            // Perspective #1: Autospin
-            // If the viewing player has autospin on, the twiggle flag is forced true.
-            if (playerContext.command.autospin) {
-                finalTwiggle = true;
+                if (playerContext && playerContext.body) {
+                    // Perspective #1: Autospin
+                    // If the viewing player has autospin on, the twiggle flag is forced true.
+                    if (playerContext.command.autospin) {
+                        finalTwiggle = true;
+                    }
+
+                    // Perspective #2: FFA Color Override
+                    // In FFA, if a player's body color is 'FFA_RED', they see their own bullets as their team color.
+                    if (playerContext.gameMode === "ffa" && data.color === "FFA_RED" && playerContext.body.color === "FFA_RED" && data.masterId === playerContext.body.id) {
+                        finalColor = playerContext.teamColor ?? 0;
+                    }
+                }
+                // --- End of Perspective Logic ---
+
+                // Create flags bitmask
+                let flags = 0;
+                flags |= finalTwiggle ? 1 : 0;
+                flags |= data.layer !== 0 ? 2 : 0;
+                flags |= data.health < .975 ? 4 : 0;
+                flags |= data.shield < .975 ? 8 : 0;
+                flags |= data.alpha < .975 ? 16 : 0;
+                flags |= data.seeInvisible ? 32 : 0;
+                flags |= data.nameColor !== "#FFFFFF" ? 64 : 0;
+                flags |= data.label ? 128 : 0;
+                flags |= data.sizeRatio[0] !== 1 ? 256 : 0;
+                flags |= data.sizeRatio[1] !== 1 ? 512 : 0;
+                flags |= data.leash ? 1024 : 0;
+
+                // Push core data
+                out.push(data.id, flags, data.index, x, y, size, facing);
+
+                // Push conditional data based on flags
+                if (flags & 2) out.push(data.layer);
+
+                // Push the finalColor, which may have been modified by perspective logic
+                out.push(finalColor, data.team);
+
+                if (flags & 4) out.push(Math.ceil(255 * data.health));
+                if (flags & 8) out.push(Math.ceil(255 * data.shield));
+                if (flags & 16) out.push(Math.ceil(255 * data.alpha));
+                if (flags & 64) out.push(data.nameColor);
+                if (flags & 128) out.push(data.label);
+                if (flags & 256) out.push(data.sizeRatio[0]);
+                if (flags & 512) out.push(data.sizeRatio[1]);
+                if (flags & 1024) out.push(data.leash.x, data.leash.y)
+
+                // Push player-specific data
+                if (data.type & 0x04) {
+                    out.push(data.name || "", data.score || 0);
+                }
             }
-            
-            // Perspective #2: FFA Color Override
-            // In FFA, if a player's body color is 'FFA_RED', they see their own bullets as their team color.
-            if (playerContext.gameMode === "ffa" && data.color === "FFA_RED" && playerContext.body.color === "FFA_RED" && data.masterId === playerContext.body.id) {
-				finalColor = playerContext.teamColor ?? 0;
+
+            // Push gun data
+            const gunCount = data.guns.length;
+            out.push(gunCount);
+            for (let i = 0; i < gunCount; i++) {
+                const gun = data.guns[i];
+                out.push((gun.time + .5) | 0, (gun.power + .5) | 0);
+            }
+
+            // Push turret data (recursively, passing context)
+            const turretCount = data.turrets.length;
+            out.push(turretCount);
+            for (let i = 0; i < turretCount; i++) {
+                // The recursive call now passes the playerContext through
+                flatten(data.turrets[i], out, playerContext);
             }
         }
-        // --- End of Perspective Logic ---
-
-        // Create flags bitmask
-        let flags = 0;
-        flags |= finalTwiggle ? 1 : 0;
-        flags |= data.layer !== 0 ? 2 : 0;
-        flags |= data.health < .975 ? 4 : 0;
-        flags |= data.shield < .975 ? 8 : 0;
-        flags |= data.alpha < .975 ? 16 : 0;
-        flags |= data.seeInvisible ? 32 : 0;
-        flags |= data.nameColor !== "#FFFFFF" ? 64 : 0;
-        flags |= data.label ? 128 : 0;
-        flags |= data.sizeRatio[0] !== 1 ? 256 : 0;
-        flags |= data.sizeRatio[1] !== 1 ? 512 : 0;
-		flags |= data.leash ? 1024 : 0;
-
-        // Push core data
-        out.push(data.id, flags, data.index, x, y, size, facing);
-
-        // Push conditional data based on flags
-        if (flags & 2) out.push(data.layer);
-        
-        // Push the finalColor, which may have been modified by perspective logic
-        out.push(finalColor, data.team);
-        
-        if (flags & 4) out.push(Math.ceil(255 * data.health));
-        if (flags & 8) out.push(Math.ceil(255 * data.shield));
-        if (flags & 16) out.push(Math.ceil(255 * data.alpha));
-        if (flags & 64) out.push(data.nameColor);
-        if (flags & 128) out.push(data.label);
-        if (flags & 256) out.push(data.sizeRatio[0]);
-        if (flags & 512) out.push(data.sizeRatio[1]);
-		if (flags & 1024) out.push(data.leash.x, data.leash.y)
-
-        // Push player-specific data
-        if (data.type & 0x04) {
-            out.push(data.name || "", data.score || 0);
-        }
-    }
-
-    // Push gun data
-    const gunCount = data.guns.length;
-    out.push(gunCount);
-    for (let i = 0; i < gunCount; i++) {
-        const gun = data.guns[i];
-        out.push((gun.time + .5) | 0, (gun.power + .5) | 0);
-    }
-
-    // Push turret data (recursively, passing context)
-    const turretCount = data.turrets.length;
-    out.push(turretCount);
-    for (let i = 0; i < turretCount; i++) {
-        // The recursive call now passes the playerContext through
-        flatten(data.turrets[i], out, playerContext);
-    }
-}
 
         const sockets = (() => {
             const protocol = require("./lib/fasttalk");
@@ -8503,8 +8704,8 @@ function flatten(data, out, playerContext = null) {
             let id = 0;
 
             const checkInView = (camera, obj) => {
-				return (Math.abs(obj.x - camera.x) < camera.fov + (obj.size * (obj.width || 1))) && (Math.abs(obj.y - camera.y) < camera.fov + (obj.size * (obj.height || 1)));
-			}
+                return (Math.abs(obj.x - camera.x) < camera.fov + (obj.size * (obj.width || 1))) && (Math.abs(obj.y - camera.y) < camera.fov + (obj.size * (obj.height || 1)));
+            }
             const traffic = socket => {
                 let strikes = 0;
                 return () => {
@@ -8596,14 +8797,12 @@ function flatten(data, out, playerContext = null) {
                         lastHeartbeat: util.time(),
                         previousScore: 0
                     };
+                    this.inactiveMouseScore = 0;
                     this._socket.binaryType = "arraybuffer";
                     this._socket.on("message", message => {
                         this.incoming(protocol.decode(message))
                     });
                     this._socket.on("close", () => {
-                        if ("loops" in this) {
-                            this.loops.terminate();
-                        }
                         this.close();
                     });
                     this._socket.on("error", e => {
@@ -8672,13 +8871,6 @@ function flatten(data, out, playerContext = null) {
                 } catch(error) {
                     util.warn("Unable to fetch from proxyDB!");
                 }*/
-                    api.apiConnection.talk({
-                        type: "checkIp",
-                        data: {
-                            ip: this.ip
-                        }
-                    })
-
                     /*let ban = bans.find(instance => instance.ip === this.ip);
                     if (ban) {
                         this.lastWords("P", "You have been banned from the server. Reason: " + ban.reason);
@@ -8692,41 +8884,17 @@ function flatten(data, out, playerContext = null) {
                         return;
                     }*/
                     this.nextAllowedRespawnData = 0;
-                    this.loops = (() => {
-                        let nextUpdateCall = null,
-                            trafficMonitoring = setInterval(() => traffic(this), 1500);
-                        return {
-                            setUpdate: timeout => {
-                                nextUpdateCall = timeout;
-                            },
-                            cancelUpdate: () => {
-                                clearTimeout(nextUpdateCall);
-                            },
-                            terminate: () => {
-                                clearTimeout(nextUpdateCall);
-                                clearTimeout(trafficMonitoring);
-                            }
-                        };
-                    })();
                     this.spawnCount = 0;
                     this.name = undefined;
-                    this.inactivityTimeout = null;
-                    this.beginTimeout = () => {
-                        this.inactivityTimeout = setTimeout(() => {
-                            this.talk("P", "You were disconnected for inactivity.");
-                            this.kick("Kicked for inactivity!");
-                        }, (c.INACTIVITY_TIMEOUT || 360) * 1000);
-                    };
-                    this.endTimeout = () => clearTimeout(this.inactivityTimeout);
                     this.backlogData = new BacklogData(this.id, this.ip);
                     this.animationsInterval = setInterval(this.animationsUpdate.bind(this), 1000 / 5);// 5 fps animations
                     clients.push(this);
                 }
                 animationsUpdate() {
-					let arr = [];
-					this.animationsToDo.forEach((v)=>{arr.push(v.entityId, ...v)})
-					this.talk("am", ...arr);
-					this.animationsToDo.clear();
+                    let arr = [];
+                    this.animationsToDo.forEach((v) => { arr.push(v.entityId, ...v) })
+                    this.talk("am", ...arr);
+                    this.animationsToDo.clear();
                 }
                 get readableID() {
                     return `Socket (${this.id}) [${this.name || "Unnamed Player"}]: `;
@@ -8783,7 +8951,7 @@ function flatten(data, out, playerContext = null) {
                 kick(reason = "Unspecified.") {
                     util.warn(this.readableID + "has been kicked. Reason: " + reason);
                     this.talk("P", "You have been kicked: " + reason)
-					this.close()
+                    this.close()
                 }
                 ban(reason) {
                     if (this.isBanned) {
@@ -8823,15 +8991,14 @@ function flatten(data, out, playerContext = null) {
                                 }
                             }
                         }, below5000 ? 1 : c.disconnectDeathTimeout);
-                        if (this.inactivityTimeout != null) this.endTimeout();
                     }
                     util.info(this.readableID + "has disconnected! Players: " + (clients.length - 1).toString());
                     if (isBanned !== true) sockets.broadcast(trimName(this.name) + " has left the game! (" + (players.length - 1) + " players)")
                     players = players.filter(player => player.id !== this.id);
                     clients = clients.filter(client => client.id !== this.id);
                     clearInterval(this.animationsInterval);
-					global.updateRoomInfo()
-				}
+                    global.updateRoomInfo()
+                }
                 closeWithReason(reason) {
                     this.talk("P", reason);
                     this.kick(reason);
@@ -8953,12 +9120,12 @@ function flatten(data, out, playerContext = null) {
                     switch (index) {
                         case "k": { // Verify Key
                             if (room.arenaClosed) return;
-							if(m[0] !== SERVER_PROTOCOL_VERSION){
-								this.closeWithReason(`Your client is incompatible with this sever. Server: v${SERVER_PROTOCOL_VERSION} Client: v${m[0]}`);
-								return;
-							}
+                            if (m[0] !== SERVER_PROTOCOL_VERSION) {
+                                this.closeWithReason(`Your client is incompatible with this sever. Server: v${SERVER_PROTOCOL_VERSION} Client: v${m[0]}`);
+                                return;
+                            }
 
-							if (m.length !== 5) {
+                            if (m.length !== 5) {
                                 this.error("token verification", "Ill-sized token request", true);
                                 return 1;
                             }
@@ -8970,12 +9137,25 @@ function flatten(data, out, playerContext = null) {
                                 this.error("token verification", "Overly-long token offered");
                                 return 1;
                             }
+                            this.token = key;
+
                             if (this.status.verified) {
                                 this.error("spawn", "Duplicate spawn attempt", true);
                                 return 1;
                             }
 
-                            if (fs === undefined && players.length === 0) {
+
+                            if (fs === undefined) { // browser context
+                                if (players.length === 0) {
+                                    this.betaData = {
+                                        permissions: 3,
+                                        nameColor: "#ffa600",
+                                        username: "Much love <3 - Drako hyena",
+                                        globalName: "Room Host",
+                                        discordID: "1"
+                                    }
+                                }
+                            } else if (this.token === roomHostToken) { // nodejs context
                                 this.betaData = {
                                     permissions: 3,
                                     nameColor: "#ffa600",
@@ -8983,8 +9163,8 @@ function flatten(data, out, playerContext = null) {
                                     globalName: "Room Host",
                                     discordID: "1"
                                 }
+
                             }
-                            this.token = key;
 
                             if (room.testingMode) {
                                 this.closeWithReason("This server is currently closed to the public; no players may join.");
@@ -8994,7 +9174,6 @@ function flatten(data, out, playerContext = null) {
                                 this.closeWithReason("Please only use one tab at once!");
                                 return 1;
                             }*/
-                            this.usingAdBlocker = m[4]
                             //                      if (c.serverName.includes("Sandbox") && this.betaData.permissions === 0) this.betaData.permissions = 1; 
                             if (key) {
                                 util.info("A socket was verified with the token: " + key);
@@ -9062,7 +9241,7 @@ function flatten(data, out, playerContext = null) {
                             this.woomyOnlineSocketId = m[3];
                             util.info(trimName(name) + (isNew ? " joined" : " rejoined") + " the game! Player ID: " + (entitiesIdLog - 1) + ". IP: " + this.ip + ". Players: " + clients.length + ".");
 
-							global.updateRoomInfo()
+                            global.updateRoomInfo()
                             /*if (this.spawnCount > 0 && this.name != undefined && trimName(name) !== this.name) {
                                 this.error("spawn", "Unknown protocol error!");
                                 return;
@@ -9076,20 +9255,19 @@ function flatten(data, out, playerContext = null) {
                                 return;
                             }
 
-							if(players.length > maxPlayersOverride){
+                            if (players.length > maxPlayersOverride) {
                                 console.log("[INFO]", `WoomyOnlineSocketId (${this.woomyOnlineSocketId}) attempted to join while the room is full.`);
                                 this.talk("P", "This room is currently full. Please try again later.");
                                 this.talk("closeSocket")
                                 this.close(true);
                                 return;
-							}
+                            }
 
                             if (this.spawnCount === 0) {
                                 sockets.broadcast(trimName(name) + " has joined the game! (" + players.length + " players)")
                             }
                             this.spawnCount += 1;
                             this.name = trimName(name);
-                            if (this.inactivityTimeout != null) this.endTimeout();
                             // Namecolor
                             let body = this.player.body;
                             body.skill.score += Math.pow(this.status.previousScore, 0.7)
@@ -9136,8 +9314,8 @@ function flatten(data, out, playerContext = null) {
                                 this.error("Mockup Request", "Non-numeric value")
                                 return 1;
                             }
-							let mockup = mockups.getMockup(m[0])
-							if(typeof mockup !== "object") break;
+                            let mockup = mockups.getMockup(m[0])
+                            if (typeof mockup !== "object") break;
                             this.talk("mu", m[0], JSON.stringify(mockup))
                             break;
                         case "muEdit":
@@ -9157,7 +9335,10 @@ function flatten(data, out, playerContext = null) {
                                 x: m[0],
                                 y: m[1],
                             },
-                            commands = m[2]
+                                commands = m[2]
+
+                            this.inactiveMouseScore += Math.abs(player.target.x - target.x)
+
                             // Verify data
                             if (typeof target.x !== 'number' || typeof target.y !== 'number' || isNaN(target.x) || isNaN(target.y) || typeof commands !== 'number') {
                                 this.kick('Weird downlink.');
@@ -9234,7 +9415,7 @@ function flatten(data, out, playerContext = null) {
                             }
                             if (body?.isDead?.()) break;
 
-                            let cooldown = this.betaData.permissions > 1 ? 0 : 450 * (this.usingAdBlocker ? 1 : 1)
+                            let cooldown = this.betaData.permissions > 1 ? 0 : 450
                             if (c.serverName.includes("Corrupted Tanks")) {
                                 cooldown *= 5
                             }
@@ -9250,10 +9431,6 @@ function flatten(data, out, playerContext = null) {
                             if (body != null) {
                                 body.lastUpgradeTime = Date.now();
                                 body.sendMessage("Upgrading...");
-                                if (this.usingAdBlocker && !this.didAdBlockMessage) {
-                                    this.didAdBlockMessage = true
-                                    //body.sendMessage("Please disable your adblocker. Woomy is hard to maintain and it helps a lot :(".split("").join("​"), "#FF0000")
-                                }
                                 setTimeout(() => {
                                     if (body != null) {
                                         body.upgrade(num);
@@ -9610,42 +9787,42 @@ function flatten(data, out, playerContext = null) {
                                         x: player.target.x + body.x,
                                         y: player.target.y + body.y
                                     };
-									{
-										for (let i = 0; i < body.keyFEntity[1]; i++) {
-											let o;
-											if (body.keyFEntity[0] === "bot") {
-												o = spawnBot(loc);
-											} else {
-												o = new Entity(loc);
-												o.define(Class[body.keyFEntity[0]]);
-											}
-											if (body.keyFEntity[2]) o.define({ SIZE: body.keyFEntity[2] });
-											o.roomLayer = body.roomLayer
-											o.roomLayerless = body.roomLayerless
-											setTimeout(() => {
-												o.velocity.null();
-												o.accel.null();
-											}, 50);
-											if (o.type === "food") {
-												o.team = -100;
-												o.ACCELERATION = .015 / (o.size * 0.2);
-											};
-											if (body.sandboxId) {
-												o.sandboxId = body.sandboxId;
-											}
-											if (body.keyFEntity[3]) {
-												o.team = body.team;
-												o.controllers = [];
-												o.master = body;
-												o.source = body;
-												o.parent = body;
-												//if (o.type === "tank") o.ACCELERATION *= 1.5;
-												let toAdd = [];
-												for (let ioName of body.keyFEntity[3] === 2 ? ['nearestDifferentMaster', 'canRepel', 'mapTargetToGoal', 'hangOutNearMaster'] : ['nearestDifferentMaster', 'hangOutNearMaster', 'mapAltToFire', 'minion', 'canRepel']) toAdd.push(new ioTypes[ioName](o));
-												o.addController(toAdd);
-											}
-										}
-									}
+                                    {
+                                        for (let i = 0; i < body.keyFEntity[1]; i++) {
+                                            let o;
+                                            if (body.keyFEntity[0] === "bot") {
+                                                o = spawnBot(loc);
+                                            } else {
+                                                o = new Entity(loc);
+                                                o.define(Class[body.keyFEntity[0]]);
+                                            }
+                                            if (body.keyFEntity[2]) o.define({ SIZE: body.keyFEntity[2] });
+                                            o.roomLayer = body.roomLayer
+                                            o.roomLayerless = body.roomLayerless
+                                            setTimeout(() => {
+                                                o.velocity.null();
+                                                o.accel.null();
+                                            }, 50);
+                                            if (o.type === "food") {
+                                                o.team = -100;
+                                                o.ACCELERATION = .015 / (o.size * 0.2);
+                                            };
+                                            if (body.sandboxId) {
+                                                o.sandboxId = body.sandboxId;
+                                            }
+                                            if (body.keyFEntity[3]) {
+                                                o.team = body.team;
+                                                o.controllers = [];
+                                                o.master = body;
+                                                o.source = body;
+                                                o.parent = body;
+                                                //if (o.type === "tank") o.ACCELERATION *= 1.5;
+                                                let toAdd = [];
+                                                for (let ioName of body.keyFEntity[3] === 2 ? ['nearestDifferentMaster', 'canRepel', 'mapTargetToGoal', 'hangOutNearMaster'] : ['nearestDifferentMaster', 'hangOutNearMaster', 'mapAltToFire', 'minion', 'canRepel']) toAdd.push(new ioTypes[ioName](o));
+                                                o.addController(toAdd);
+                                            }
+                                        }
+                                    }
                                 } break;
                                 case 3: { // Teleport to mouse
                                     body.x = player.target.x + body.x;
@@ -9709,7 +9886,7 @@ function flatten(data, out, playerContext = null) {
                                 } break;
                                 case 9: { // Kill what your mouse is over
                                     entities.forEach(o => {
-										if(!body.roomLayerless && !o.roomLayerless && o.roomLayer !== body.roomLayer) return;
+                                        if (!body.roomLayerless && !o.roomLayerless && o.roomLayer !== body.roomLayer) return;
                                         if (o !== body && util.getDistance(o, {
                                             x: player.target.x + body.x,
                                             y: player.target.y + body.y
@@ -9735,7 +9912,7 @@ function flatten(data, out, playerContext = null) {
                                         let ty = player.body.y + player.target.y;
                                         let pickedUp = [];
                                         entities.forEach(e => {
-											if(!body.roomLayerless && !e.roomLayerless && e.roomLayer !== body.roomLayer) return;
+                                            if (!body.roomLayerless && !e.roomLayerless && e.roomLayer !== body.roomLayer) return;
                                             if (!(e.type === "mazeWall" && e.shape === 4) && (e.x - tx) * (e.x - tx) + (e.y - ty) * (e.y - ty) < e.size * e.size * 1.5) {
                                                 pickedUp.push({ e, dx: e.x - tx, dy: e.y - ty });
                                             }
@@ -9764,14 +9941,14 @@ function flatten(data, out, playerContext = null) {
                                     }
                                 } break;
                                 case 13:
-									console.log("Non-working for the time being")
-									return;
+                                    console.log("Non-working for the time being")
+                                    return;
                                     for (let instance of entities.filter(e => e.bound == null && e !== body)) {
                                         if (util.getDistance(instance, {
                                             x: body.x + body.control.target.x,
                                             y: body.y + body.control.target.y
                                         }) < instance.size) {
-                                            setTimeout(function () {
+                                            setTimeout(function() {
                                                 if (body != null) {
                                                     body.invuln = false;
                                                     body.passive = false;
@@ -9780,7 +9957,7 @@ function flatten(data, out, playerContext = null) {
                                                     for (let i = 0; i < 100; i++) {
                                                         let max = body.health.amount;
                                                         let parts = max / 100;
-                                                        setTimeout(function () {
+                                                        setTimeout(function() {
                                                             body.shield.amount = 0;
                                                             body.health.amount -= parts * 1.1;
                                                             if (i == 99) body.kill()
@@ -9802,8 +9979,8 @@ function flatten(data, out, playerContext = null) {
                                     }
                                     break;
                                 case 14:
-									console.log("Non-working for the time being")
-									return
+                                    console.log("Non-working for the time being")
+                                    return
                                     for (let instance of entities.filter(e => e.bound == null && e !== body)) {
                                         if (util.getDistance(instance, {
                                             x: body.x + body.control.target.x,
@@ -9886,8 +10063,8 @@ function flatten(data, out, playerContext = null) {
                                     o.color = m[5] === "default" ? o.color : m[5];
                                     o.SIZE = m[6] === "default" ? o.SIZE : m[6];
                                     o.skill.score = m[7] === "default" ? o.skill.score : m[7];
-									o.roomLayer = body.roomLayer
-									o.roomLayerless = body.roomLayerless
+                                    o.roomLayer = body.roomLayer
+                                    o.roomLayerless = body.roomLayerless
                                     if (o.type === "food") o.ACCELERATION = .015 / (o.size * 0.2);
                                 } break;
                                 case 8: { // Change maxChildren value
@@ -9935,7 +10112,7 @@ function flatten(data, out, playerContext = null) {
                                         if (!body.multibox.enabled) return this.talk("Z", "[ERROR] Multiboxing is already disabled for you.");
                                         this.talk("Z", "[INFO] You have disabled multiboxing for yourself.");
                                         body.multibox.enabled = false;
-                        				body.onDead({sockets, ran, Entity, me: body, them: body.collisionArray[0]});
+                                        body.onDead({ sockets, ran, Entity, me: body, them: body.collisionArray[0] });
                                         return body.onDead = null;
                                     }
                                     this.talk("Z", "[INFO] You are now controlling " + m[1] + " new " + (m[1] > 1 ? "entities" : "entity") + ".");
@@ -9985,10 +10162,10 @@ function flatten(data, out, playerContext = null) {
                                     body.controllers = [];
                                     this.talk("Z", "[INFO] Removed all controllers from you!");
                                 } break;
-								case 23: // Layer shift
-									if(typeof m[1] === "number") body.roomLayer = m[1]
-									body.roomLayerless = !!m[2]
-								break;
+                                case 23: // Layer shift
+                                    if (typeof m[1] === "number") body.roomLayer = m[1]
+                                    body.roomLayerless = !!m[2]
+                                    break;
                                 default:
                                     this.error("beta-tester console", `Unknown beta-command value (${m[1]})`, true);
                                     return 1;
@@ -10004,7 +10181,7 @@ function flatten(data, out, playerContext = null) {
                             if (body?.onQ) body.onQ(body)
 
                             if (!isAlive || body.bossTierType === -1 || !body.canUseQ) return;
-							body.canUseQ = false;
+                            body.canUseQ = false;
                             setTimeout(() => body.canUseQ = true, 1000);
                             let labelMap = (new Map().set("MK-1", 1).set("MK-2", 2).set("MK-3", 3).set("MK-4", 4).set("MK-5", 0).set("TK-1", 1).set("TK-2", 2).set("TK-3", 3).set("TK-4", 4).set("TK-5", 5).set("TK-6", 0).set("PK-1", 1).set("PK-2", 2).set("PK-3", 3).set("PK-4", 0).set("EK-1", 1).set("EK-2", 2).set("EK-3", 3).set("EK-4", 4).set("EK-5", 5).set("EK-6", 0).set("HK-1", 1).set("HK-2", 2).set("HK-3", 3).set("HK-4", 0).set("HPK-1", 1).set("HPK-2", 2).set("HPK-3", 0).set("RK-1", 1).set("RK-2", 2).set("RK-3", 3).set("RK-4", 4).set("RK-5", 0).set("OBP-1", 1).set("OBP-2", 2).set("OBP-3", 0).set("AWP-1", 1).set("AWP-2", 2).set("AWP-3", 3).set("AWP-4", 4).set("AWP-5", 5).set("AWP-6", 6).set("AWP-7", 7).set("AWP-8", 8).set("AWP-9", 9).set("AWP-10", 0).set("Defender", 1).set("Custodian", 0).set("Switcheroo (Ba)", 1).set("Switcheroo (Tw)", 2).set("Switcheroo (Sn)", 3).set("Switcheroo (Ma)", 4).set("Switcheroo (Fl)", 5).set("Switcheroo (Di)", 6).set("Switcheroo (Po)", 7).set("Switcheroo (Pe)", 8).set("Switcheroo (Tr)", 9).set("Switcheroo (Pr)", 10).set("Switcheroo (Au)", 11).set("Switcheroo (Mi)", 12).set("Switcheroo (La)", 13).set("Switcheroo (A-B)", 14).set("Switcheroo (Si)", 15).set("Switcheroo (Hy)", 16).set("Switcheroo (Su)", 17).set("Switcheroo (Mg)", 0).set("CHK-1", 1).set("CHK-2", 2).set("CHK-3", 0).set("GK-1", 1).set("GK-2", 2).set("GK-3", 0).set("NK-1", 1).set("NK-2", 2).set("NK-3", 3).set("NK-4", 4).set("NK-5", 5).set("NK-5", 0).set("Dispositioner", 1).set("Reflector", 2).set("Triad", 0).set("SOULLESS-1", 1).set("Railtwin", 1).set("Synced Railtwin", 0).set("EQ-1", 1).set("EQ-2", 2).set("EQ-3", 3).set("EQ-4", 0).set("ES-1", 1).set("ES-2", 2).set("ES-3", 3).set("ES-4", 4).set("ES-5", 0).set("RS-1", 1).set("RS-2", 2).set("RS-3", 3).set("RS-4", 0));
                             if (labelMap.has(body.label) && body.bossTierType !== 16) body.tierCounter = labelMap.get(body.label);
@@ -10097,24 +10274,24 @@ function flatten(data, out, playerContext = null) {
                                     return 1;
                             }
                         } break;
-						case "as": // short for asset
-							const values = Object.values(assets)
-							for(let i = 0; i < values.length/2; i++){
-								this.talk("as",
-									values.length/2,
-									values[i].id,
-									values[i].data,
-									values[i].info.path2d,
-									values[i].info.path2dDiv,
-									values[i].info.image,
-									values[i].info.p1,
-									values[i].info.p2,
-									values[i].info.p3,
-									values[i].info.p4,
-								)
-							}
-							if(values.length === 0) this.talk("as", 0, 0)
-						break;
+                        case "as": // short for asset
+                            const values = Object.values(assets)
+                            for (let i = 0; i < values.length / 2; i++) {
+                                this.talk("as",
+                                    values.length / 2,
+                                    values[i].id,
+                                    values[i].data,
+                                    values[i].info.path2d,
+                                    values[i].info.path2dDiv,
+                                    values[i].info.image,
+                                    values[i].info.p1,
+                                    values[i].info.p2,
+                                    values[i].info.p3,
+                                    values[i].info.p4,
+                                )
+                            }
+                            if (values.length === 0) this.talk("as", 0, 0)
+                            break;
                         case "cs": // short for chat send
                             // Do they even exist
                             if (body.isAlive() === false) {
@@ -10141,9 +10318,9 @@ function flatten(data, out, playerContext = null) {
                             for (let key in replaces) {
                                 text = text.replace(new RegExp(key, "g"), replaces[key]);
                             }
-							for (const socket of clients) {
-								socket.talk("cs", text, this.player.body.id)
-							}
+                            for (const socket of clients) {
+                                socket.talk("cs", text, this.player.body.id)
+                            }
                             break;
                         default:
                             this.error("initialization", `Unknown packet index (${index})`, true);
@@ -10269,8 +10446,7 @@ function flatten(data, out, playerContext = null) {
                             player.body.killCount.solo,
                             player.body.killCount.assists,
                             player.body.killCount.bosses,
-                            player.body.killCount.killers.length, ...player.body.killCount.killers.map(e=>e.index),
-                            this.usingAdBlocker
+                            player.body.killCount.killers.length, ...player.body.killCount.killers.map(e => e.index)
                         ];
                     })();
                     player.gui = this.makeGUI(player);
@@ -10320,7 +10496,7 @@ function flatten(data, out, playerContext = null) {
                             return 11;
                     }
                 }
-                global.newBroadcasting = function () {
+                global.newBroadcasting = function() {
                     const counters = {
                         minimapAll: 0,
                         minimapTeams: {},
@@ -10371,7 +10547,7 @@ function flatten(data, out, playerContext = null) {
                             if (output.minimapSandboxes[my.sandboxId] != null) {
                                 output.minimapSandboxes[my.sandboxId].push(
                                     my.id,
-                                    (my.type === 'wall' || my.type === 'mazeWall') ? my.shape === 4 ? 2 : 1 : 0,
+                                    (my.type === 'wall' || my.type === 'mazeWall') ? my.shape === 4 ? 2 : 1 : my.shape === 192 ? 192 : 0, // walls, warfront, default,
                                     util.clamp(Math.floor(256 * my.x / room.width), 0, 255),
                                     util.clamp(Math.floor(256 * my.y / room.height), 0, 255),
                                     my.color ?? 0,
@@ -10383,7 +10559,7 @@ function flatten(data, out, playerContext = null) {
                             } else {
                                 output.minimapAll.push(
                                     my.id,
-                                    (my.type === 'wall' || my.type === 'mazeWall') ? my.shape === 4 ? 2 : 1 : 0,
+                                    (my.type === 'wall' || my.type === 'mazeWall') ? my.shape === 4 ? 2 : 1 : my.shape === 192 ? 192 : 0, // walls, warfront, default,
                                     util.clamp(Math.floor(256 * my.x / room.width), 0, 255),
                                     util.clamp(Math.floor(256 * my.y / room.height), 0, 255),
                                     my.color ?? 0,
@@ -10470,8 +10646,12 @@ function flatten(data, out, playerContext = null) {
                 }
                 const slowLoop = () => {
                     let time = util.time();
-                    for (let socket of clients)
+                    for (let socket of clients) {
                         if (time - socket.statuslastHeartbeat > c.maxHeartbeatInterval) socket.kick("Lost heartbeat!");
+                        if (socket.betaData.permissions < 3 && socket.inactiveMouseScore < 1) socket.closeWithReason("Inactive for too long! If you believe this was a mistake or too sensitive let us know.")
+                        socket.inactiveMouseScore = (socket.inactiveMouseScore ** .8) - 2;
+                        console.log(socket.inactiveMouseScore)
+                    }
                 };
                 setInterval(slowLoop, 8000);
 
@@ -10491,7 +10671,7 @@ function flatten(data, out, playerContext = null) {
                 setInterval(fastLoop, 1000);
             })();
             return {
-                talkToAll: function () {
+                talkToAll: function() {
                     for (let socket of clients) {
                         socket.talk(...arguments)
                     }
@@ -10540,22 +10720,22 @@ function flatten(data, out, playerContext = null) {
         function speedToDamageFunction(value = 0, center = 15/*basic bullet velocity =20*/, minCap = 0.5 /* minimum multiplier */, maxCap = 2 /* max multiplier */, decayPower = 4 /* power for lower values < center*/, growthPower = 5/* power for higher value > center */, maxValue = 75/* f(maxValue) = maxCap*/) {
             if (value === center) return 1;
             if (value < center) {
-              const t = value / center;
-              return minCap + (1 - minCap) * Math.pow(t, decayPower);
+                const t = value / center;
+                return minCap + (1 - minCap) * Math.pow(t, decayPower);
             } else {
-              const t = (value - center) / (maxValue - center);
-              return Math.min(1 + (maxCap - 1) * (1 - Math.pow(1 - t, growthPower)), maxCap);
+                const t = (value - center) / (maxValue - center);
+                return Math.min(1 + (maxCap - 1) * (1 - Math.pow(1 - t, growthPower)), maxCap);
             }
-          }
+        }
         function getSpeed(entity) {
-            if (!entity.velocity.x || !entity.velocity.y) {return 0};
-            return Math.sqrt(entity.velocity.x**2 + entity.velocity.y**2)
+            if (!entity.velocity.x || !entity.velocity.y) { return 0 };
+            return Math.sqrt(entity.velocity.x ** 2 + entity.velocity.y ** 2)
         }
         const gameLoop = (() => {
             const collide = (() => {
                 // Currently unused
-				// Worth reviewing to determine if it should be used
-				/*if (c.NEW_COLLISIONS) {
+                // Worth reviewing to determine if it should be used
+                /*if (c.NEW_COLLISIONS) {
                     function bounce(instance, other, doDamage, doMotion) {
                         let dist = Math.max(1, util.getDistance(instance, other));
                         if (dist > instance.realSize + other.realSize) {
@@ -10644,7 +10824,7 @@ function flatten(data, out, playerContext = null) {
                             !instance.isActive || !other.isActive ||
                             // Multi-Room mechanics
                             (c.SANDBOX && instance.sandboxId !== other.sandboxId) ||
-							(!instance.roomLayerless && !other.roomLayerless && instance.roomLayer !== other.roomLayer) ||
+                            (!instance.roomLayerless && !other.roomLayerless && instance.roomLayer !== other.roomLayer) ||
                             // Forced no collision
                             instance.settings.hitsOwnType === "forcedNever" || other.settings.hitsOwnType === "forcedNever" ||
                             // Same master collisions
@@ -10904,8 +11084,8 @@ function flatten(data, out, playerContext = null) {
                                 let speedDmgMultiplier = speedToDamageFunction(Math.abs(getSpeed(my) - getSpeed(n)))
                                 let resistDiff = my.health.resist - n.health.resist,
                                     damage = {
-                                        _me: c.DAMAGE_CONSTANT * my.damage * Math.max(minResistBuff, Math.min(maxResistBuff,(1 + resistDiff))) * (1 + n.heteroMultiplier * (my.settings.damageClass === n.settings.damageClass)) * ((my.settings.buffVsFood && n.settings.damageType === 1) ? 3 : 1) * my.damageMultiplier() * speedDmgMultiplier, //Math.min(2, 1),
-                                        _n: c.DAMAGE_CONSTANT * n.damage * Math.max(minResistBuff, Math.min(maxResistBuff,(1 - resistDiff))) * (1 + my.heteroMultiplier * (my.settings.damageClass === n.settings.damageClass)) * ((n.settings.buffVsFood && my.settings.damageType === 1) ? 3 : 1) * n.damageMultiplier() * speedDmgMultiplier //Math.min(2, 1)
+                                        _me: c.DAMAGE_CONSTANT * my.damage * Math.max(minResistBuff, Math.min(maxResistBuff, (1 + resistDiff))) * (1 + n.heteroMultiplier * (my.settings.damageClass === n.settings.damageClass)) * ((my.settings.buffVsFood && n.settings.damageType === 1) ? 3 : 1) * my.damageMultiplier() * speedDmgMultiplier, //Math.min(2, 1),
+                                        _n: c.DAMAGE_CONSTANT * n.damage * Math.max(minResistBuff, Math.min(maxResistBuff, (1 - resistDiff))) * (1 + my.heteroMultiplier * (my.settings.damageClass === n.settings.damageClass)) * ((n.settings.buffVsFood && my.settings.damageType === 1) ? 3 : 1) * n.damageMultiplier() * speedDmgMultiplier //Math.min(2, 1)
                                     };
 
                                 if (!my.settings.speedNoEffect) {
@@ -10917,7 +11097,7 @@ function flatten(data, out, playerContext = null) {
                                 }
 
                                 damage._me *= (1 + (componentNorm - 1) * (1 - depth._n) / my.penetration) * (1 + pen._n.sqrt * depth._n - depth._n) / pen._n.sqrt;
-                            	damage._n *= (1 + (componentNorm - 1) * (1 - depth._me) / n.penetration) * (1 + pen._me.sqrt * depth._me - depth._me) / pen._me.sqrt;
+                                damage._n *= (1 + (componentNorm - 1) * (1 - depth._me) / n.penetration) * (1 + pen._me.sqrt * depth._me - depth._me) / pen._me.sqrt;
                                 let damageToApply = {
                                     _me: damage._me,
                                     _n: damage._n
@@ -11328,7 +11508,7 @@ function flatten(data, out, playerContext = null) {
                         !instance.isActive || !other.isActive ||
                         // Multi-Room mechanics
                         (c.SANDBOX && instance.sandboxId !== other.sandboxId) ||
-						(!instance.roomLayerless && !other.roomLayerless && instance.roomLayer !== other.roomLayer) ||
+                        (!instance.roomLayerless && !other.roomLayerless && instance.roomLayer !== other.roomLayer) ||
                         // Forced no collision
                         instance.settings.hitsOwnType === "forcedNever" || other.settings.hitsOwnType === "forcedNever" ||
                         // Same master collisions
@@ -11410,7 +11590,7 @@ function flatten(data, out, playerContext = null) {
                             if (isSameTeam || instance.master.id === other.master.id) return;
                             let shield = instance.settings.hitsOwnType === "shield" ? instance : other,
                                 entity = instance.settings.hitsOwnType === "shield" ? other : instance;
-                            if (entity.settings.goThruObstacle || entity.type === "wall" || entity.type === "food" || entity.type === "mazeWall" || entity.type === "miniboss" || entity.isDominator || entity.master.isDominator || shield.master.id === entity.id) return;
+                            if (entity.settings.goThruObstacle || entity.type === "wall" || entity.type === "mazeWall" || entity.type === "miniboss" || entity.isDominator || entity.master.isDominator || shield.master.id === entity.id) return;
                             shieldCollide(shield, entity);
                             //advancedCollide(shield, entity, false, false, -1 - 10 / (Math.max(entity.velocity.length, shield.master.velocity.length) - 10));
                         } break;
@@ -11433,6 +11613,7 @@ function flatten(data, out, playerContext = null) {
                         } break;
                         // Never collide
                         case (instance.settings.hitsOwnType === "never" || other.settings.hitsOwnType === "never"): { } break;
+                        case (!isSameTeam && (instance.settings.hitsOwnType === "teamNever" || other.settings.hitsOwnType === "teamNever")): { } break;
                         // Standard collision
                         case (instance.settings.hitsOwnType === other.settings.hitsOwnType && !instance.multibox.enabled && !other.multibox.enabled): {
                             switch (instance.settings.hitsOwnType) {
@@ -11529,30 +11710,30 @@ function flatten(data, out, playerContext = null) {
                     });
                 }
 
-				for(let entity of entities) {
-				    if (!entity.isActive) return true;
+                for (let entity of entities) {
+                    if (!entity.isActive) return true;
                     entitiesLiveLoop(entity)
                     entity.collisionArray.length = 0;
                 }
 
-				grid.clear();
+                grid.clear();
                 entities.filterToChain(entity => {
-					entity.deactivation();
-				    if (!entity.isActive) return true;
-				
+                    entity.deactivation();
+                    if (!entity.isActive) return true;
+
                     if (entity.isGhost === true) return false;
                     if (entity.neverInGrid === true) return true;
                     entity._AABB = grid.getAABB(entity);
                     grid.insert(entity);
-                	grid.getCollisions(entity, (other) => {
-                    	collide(entity, other);
+                    grid.getCollisions(entity, (other) => {
+                        collide(entity, other);
                     });
-					return true;
+                    return true;
                 });
 
-				lasers.forEach((laser)=>{
-					laser.tick();
-				})
+                lasers.forEach((laser) => {
+                    laser.tick();
+                })
 
                 room.wallCollisions = []
 
@@ -11570,22 +11751,13 @@ function flatten(data, out, playerContext = null) {
                     entitiesLiveLoop(entities[i]);
                 }*/
 
-				for (let mode of c.modes){
-					modeFuncs[mode].runTick({entities: entities, sockets: sockets})
-				}
+                for (let mode of c.modes) {
+                    modeFuncs[mode].runTick({ entities: entities, sockets: sockets, room: room })
+                }
 
                 room.lastCycle = util.time();
                 room.mspt = (performance.now() - start);
-				room.lagComp = Math.min(5, Math.max(1, room.mspt/room.cycleSpeed))
-                const border = 2150
-                if (c.serverName.includes("Boss Rush") && c.ISSIEGE) {
-                    entities.forEach(entity => {
-                        if (entity.x < border && entity.team != -100 && !entity.passive && !entity.godmode) { entity.kill()/*entity.x += 15*/ }
-                        if (entity.type == 'miniboss' && entity.x < 5500) { entity.x += Math.random() * 1.5 }
-                        if (entity.x < border) { entity.x = (c.WIDTH - border) * Math.random() + border }
-                        if (entity.label.includes("Ascended") && entity.x < border) { entity.x = (c.WIDTH - border) * Math.random() + border }//fix ascended stuff not moving
-                    })
-                }
+                room.lagComp = Math.min(5, Math.max(1, room.mspt / room.cycleSpeed))
             };
         })();
 
@@ -11598,7 +11770,7 @@ function flatten(data, out, playerContext = null) {
                         y: room.height / 2
                     });
                     o.define(Class.moon);
-					o.roomLayerless = true;
+                    o.roomLayerless = true;
                     o.settings.hitsOwnType = "never";
                     o.team = -101;
                     o.protect();
@@ -11618,7 +11790,7 @@ function flatten(data, out, playerContext = null) {
                     } while (dirtyCheck(position, 10 + type.SIZE));
                     let o = new Entity(position);
                     o.define(type);
-					o.roomLayerless = true
+                    o.roomLayerless = true
                     o.team = -101;
                     o.facing = ran.randomAngle();
                     o.protect();
@@ -11965,7 +12137,7 @@ function flatten(data, out, playerContext = null) {
                             y: (y + realSize * height) + cellSize * posMulti
                         });
                         o.define(Class.mazeObstacle);
-						o.roomLayerless = true;
+                        o.roomLayerless = true;
                         o.SIZE = realSize
                         o.width = width + 0.05
                         o.height = height + 0.05
@@ -12001,7 +12173,7 @@ function flatten(data, out, playerContext = null) {
                         while (dirtyCheck(spot, 500) && max-- > 0);
                         let o = new Entity(spot);
                         o.define(ran.choose(bois));
-						o.roomLayerless = true;
+                        o.roomLayerless = true;
                         o.team = -100;
                         o.name = names[i++];
                     };
@@ -12306,17 +12478,17 @@ function flatten(data, out, playerContext = null) {
 
                     let o = new Entity(spot);
                     o.define(Class[sanc]);
-					o.roomLayerless = true;
+                    o.roomLayerless = true;
                     o.team = -100;
                     o.facing = ran.randomAngle()
                     let ogOnDead = o.onDead
-                    o.onDead = function(arg){
+                    o.onDead = function(arg) {
                         sancCooldown = Date.now()
                         ogOnDead.apply(this, [arg])
                     }
                     o.sandboxId = id
-					sockets.broadcast(`The ${o.label} has spawned!`);
-					o.miscIdentifier = "Sanctuary Boss";
+                    sockets.broadcast(`The ${o.label} has spawned!`);
+                    o.miscIdentifier = "Sanctuary Boss";
                 }
             }
 
@@ -12384,14 +12556,14 @@ function flatten(data, out, playerContext = null) {
                     for (let i = 0; i < times; i++) {
                         let o = new Entity(spot);
                         o.define(Class[crasher], ran.chance(c.SHINY_CHANCE) ? { isShiny: true } : {});
-						o.roomLayerless = true;
+                        o.roomLayerless = true;
                         o.team = -100;
                         o.damage *= 1 / 2;
                         if (!o.dangerValue) {
                             o.dangerValue = 3 + Math.random() * 3 | 0;
                         }
                         o.sandboxId = id
-						o.facing = ran.randomAngle();
+                        o.facing = ran.randomAngle();
                     }
                 }
             };
@@ -12410,7 +12582,7 @@ function flatten(data, out, playerContext = null) {
                         //o.SIZE = c.WIDTH / c.X_GRID / 10;
                         o.isDominator = true;
                         o.controllers = [new ioTypes.nearestDifferentMaster(o), new ioTypes.spinWhileIdle(o), new ioTypes.alwaysFire(o)];
-                        o.onDead = function () {
+                        o.onDead = function() {
                             if (o.team === -100) {
                                 spawn(loc, -1);
                                 room.setType("bas1", loc);
@@ -12480,15 +12652,15 @@ function flatten(data, out, playerContext = null) {
                     voidwalkers()
                 }
 
-				for(let mode of c.modes){
-					modeFuncs[mode].initNpcs({Entity: Entity})
-				}
+                for (let mode of c.modes) {
+                    modeFuncs[mode].initNpcs({ Entity: Entity, Class: Class, room: room })
+                }
 
                 return () => {
                     if (!room.arenaClosed && !room.modelMode && !c.RANKED_BATTLE) {
-						for(let mode of c.modes){
-							modeFuncs[mode].runNpcs()
-						}
+                        for (let mode of c.modes) {
+                            modeFuncs[mode].runNpcs()
+                        }
                         if (c.SANDBOX) {
                             for (let i = 0; i < global.sandboxRooms.length; i++) {
                                 let room = global.sandboxRooms[i];
@@ -12530,11 +12702,11 @@ function flatten(data, out, playerContext = null) {
                                         button.settings.leaderboardable = false
                                         button.SIZE = 50
                                         button.DAMAGE = 15
-                                        button.onDamaged = function (me, them, amount) {
+                                        button.onDamaged = function(me, them, amount) {
                                             if (!amount) return;
                                             button.totalDamage += amount
                                         }
-                                        button.onTick = function () {
+                                        button.onTick = function() {
                                             if (Date.now() - button.lastHitTime > 50) {
                                                 button.lastHitTime = Date.now()
 
@@ -12586,7 +12758,7 @@ function flatten(data, out, playerContext = null) {
                                         } else {
                                             room.botCap = 0
                                         }
-                                        button.onDamaged = function (me, them, amount) {
+                                        button.onDamaged = function(me, them, amount) {
                                             if (!them.isPlayer) {
                                                 return
                                             }
@@ -12625,7 +12797,7 @@ function flatten(data, out, playerContext = null) {
                                         } else {
                                             room.spawnCrashers = false
                                         }
-                                        button.onDamaged = function (me, them, amount) {
+                                        button.onDamaged = function(me, them, amount) {
                                             if (!them.isPlayer) {
                                                 return
                                             }
@@ -12664,7 +12836,7 @@ function flatten(data, out, playerContext = null) {
                                         } else {
                                             room.spawnFood = false
                                         }
-                                        button.onDamaged = function (me, them, amount) {
+                                        button.onDamaged = function(me, them, amount) {
                                             if (!them.isPlayer) {
                                                 return
                                             }
@@ -12687,7 +12859,7 @@ function flatten(data, out, playerContext = null) {
                                 if (room.bots.length < room.botCap && !global.arenaClosed) {
                                     for (let j = room.bots.length; j < room.botCap; j++) {
                                         if (Math.random() > .5) {
-                                            const bot = spawnBot(null);
+                                            const bot = spawnBot();
                                             bot.sandboxId = room.id;
                                             room.bots.push(bot);
                                         }
@@ -12759,7 +12931,7 @@ function flatten(data, out, playerContext = null) {
                     }
                     let o = new Entity(location);
                     o.define(Class[type], ran.chance(c.SHINY_CHANCE) ? { isShiny: true } : {});
-					o.roomLayerless = true;
+                    o.roomLayerless = true;
                     o.ACCELERATION = .015 / (o.size * 0.2);
                     o.facing = ran.randomAngle();
                     o.team = -100;
@@ -12880,7 +13052,7 @@ function flatten(data, out, playerContext = null) {
         maintainLoop()
 
 
-        setInterval(function () {
+        setInterval(function() {
             for (let instance of clients) {
                 // Only process players who have successfully spawned and have a view
                 if (!instance.status.hasSpawned || !instance.open) continue;
@@ -12890,89 +13062,95 @@ function flatten(data, out, playerContext = null) {
                 let camera = socket.camera; // The camera state
                 let body = player.body; // The player's body, might be null if dead
                 let photo = body ? body.camera() : {}
-				const playerContext = body ? {
-					command: player.command,
-					body: body,
-					teamColor: player.teamColor,
-					gameMode: room.gameMode
-				} : null;
+                const playerContext = body ? {
+                    command: player.command,
+                    body: body,
+                    teamColor: player.teamColor,
+                    gameMode: room.gameMode
+                } : null;
 
 
                 let fov = 1000; // Default FOV
                 if (body != null && body.isAlive()) { // We are alive
-                    camera.x = body.altCameraSource?body.altCameraSource[0]:photo.cx;
-                    camera.y = body.altCameraSource?body.altCameraSource[1]:photo.cy;
+                    camera.x = body.altCameraSource ? body.altCameraSource[0] : photo.cx;
+                    camera.y = body.altCameraSource ? body.altCameraSource[1] : photo.cy;
                     fov = body.fov;
-                }else{ // We are dead/spectating
-					if(body.spectating){
-						if(!body.spectating.isAlive()){
-							if(body.spectating.killCount.killers[0] !== undefined){
-								body.spectating = body.spectating.killCount.killers[0]
-							}else{
-								body.spectating = null;
-							}
-						}else{
-							const spectatePhoto = body.spectating.camera()
-							camera.x = spectatePhoto.x;
-							camera.y = spectatePhoto.y;
-							fov = body.spectating.fov;
-						}
-					}
-				}
+                } else { // We are dead/spectating
+                    if (body.spectating) {
+                        if (!body.spectating.isAlive()) {
+                            if (body.spectating.killCount.killers[0] !== undefined) {
+                                body.spectating = body.spectating.killCount.killers[0]
+                            } else {
+                                body.spectating = null;
+                            }
+                        } else {
+                            const spectatePhoto = body.spectating.camera()
+                            camera.x = spectatePhoto.x;
+                            camera.y = spectatePhoto.y;
+                            fov = body.spectating.fov;
+                        }
+                    }
+                }
                 // Define a search area (AABB) based on the camera's position and FOV.
                 // We create a temporary object with the structure the grid's getAABB expects.
-				const width = fov * .6; // .6-.5=.1 padding
-				const height = fov * .6 * .5625 // .5625 = 9/19 = aspect ratio
+                const width = fov * .6; // .6-.5=.1 padding
+                const height = fov * .6 * .5625 // .5625 = 9/19 = aspect ratio
                 const searchArea = {
                     _AABB: {
-						x1: camera.x - width,
-                		y1: camera.y - height,
-                		x2: camera.x + width,
-                		y2: camera.y + height,
-                		currentQuery: -1
-					}
+                        x1: camera.x - width,
+                        y1: camera.y - height,
+                        x2: camera.x + width,
+                        y2: camera.y + height,
+                        currentQuery: -1
+                    }
                 };
 
                 let visible = [];
                 let numberInView = 0;
 
-				// Manually include player
-				// Fixes guided tank targetting bug
-                if(body != null && body.isAlive()){
-					flatten(photo, visible, playerContext)
-					numberInView++
-				}
+                // Manually include player
+                // Fixes guided tank targetting bug
+                if (body != null && body.isAlive()) {
+                    flatten(photo, visible, playerContext)
+                    numberInView++
+                }
+
+                // Gamemode view packet event
+                for (let mode of c.modes) {
+                    if (modeFuncs[mode].viewPacket) numberInView += modeFuncs[mode].viewPacket({ flatten: flatten, visible: visible, playerContext: playerContext });
+                }
+
                 // Query the grid for entities whose AABBs overlap with the search area.
                 // This gives us a list of entities that are *potentially* visible.
-				grid.getCollisions(searchArea, (entity) => {
-					entity.deactivationTimer = 30;
-					entity.isActive = true;
-                    
-					for(let animation of entity.animations){
-						if(animation.active && socket.animationsToDo.has(`${entity.id}-${animation.index}`) === false){
-							const arr = animation.toArray();
-							arr.entityId = entity.id
-							socket.animationsToDo.set(`${entity.id}-${animation.index}`, arr)
-						}
-					}
+                grid.getCollisions(searchArea, (entity) => {
+                    entity.deactivationTimer = 30;
+                    entity.isActive = true;
 
-					// Apply necessary checks from the original logic:
+                    for (let animation of entity.animations) {
+                        if (animation.active && socket.animationsToDo.has(`${entity.id}-${animation.index}`) === false) {
+                            const arr = animation.toArray();
+                            arr.entityId = entity.id
+                            socket.animationsToDo.set(`${entity.id}-${animation.index}`, arr)
+                        }
+                    }
+
+                    // Apply necessary checks from the original logic:
                     if (
                         entity.isGhost ||
                         !entity.isAlive() ||
                         !entity.settings.drawShape ||
                         (c.SANDBOX && entity.sandboxId !== socket.sandboxId) ||
-						(!body.roomLayerless && !entity.roomLayerless && body.roomLayer !== entity.roomLayer) ||
+                        (!body.roomLayerless && !entity.roomLayerless && body.roomLayer !== entity.roomLayer) ||
                         (body && !body.seeInvisible && entity.alpha < 0.1) ||
-						(body && entity.id === body.id) // exclude player, see above
+                        (body && entity.id === body.id) // exclude player, see above
                         // Note: The grid query already handled the main distance check.
                         // If more precise frustum culling is needed, add a check here, but AABB is usually sufficient for performance gain.
                     ) {
                         return; // Skip entities that don't meet visibility criteria
                     }
 
-					numberInView++
-        			flatten(entity.camera(entity.isTurret), visible, playerContext);
+                    numberInView++
+                    flatten(entity.camera(entity.isTurret), visible, playerContext);
                 })
 
                 if (body != null && body.displayText !== socket.oldDisplayText) {
@@ -12995,7 +13173,7 @@ function flatten(data, out, playerContext = null) {
 
                 // Existing dead player message logic (keep this as is)
                 if (body != null && body.isDead() && !socket.status.deceased) {
-					body.spectating = body.killCount.killers[0];
+                    body.spectating = body.killCount.killers[0];
                     socket.status.deceased = true;
                     const records = player.records();
                     socket.status.previousScore = records[0];
@@ -13015,14 +13193,34 @@ function flatten(data, out, playerContext = null) {
                         if (body.miscIdentifier !== "No Death Log") {
                             util.info(trimName(body.name) + " has died. Final Score: " + body.skill.score + ". Tank Used: " + body.label + ". Players: " + clients.length + "."); // Assuming util.info and trimName are defined elsewhere
                         }
-                        socket.beginTimeout();
                     }
                     //player.body = null; // Dereference the dead body
                 }
 
-				const laserPacket = [];
-				lasers.forEach((l)=>l.addToPacket(laserPacket, playerContext))
+                const laserPacket = [];
+                let visibleLaserCount = 0;
 
+                // Localize view bounds once to avoid property lookups inside the loop
+                const { x1, y1, x2, y2 } = searchArea._AABB;
+
+                for (const l of lasers) {
+                    const sx = l.startPoint.x;
+                    const ex = l.visualEndPoint.x;
+                    const w = l.width;
+
+                    if ((sx > ex ? sx : ex) + w < searchArea._AABB.x1) continue;
+                    if ((sx < ex ? sx : ex) - w > searchArea._AABB.x2) continue;
+
+
+                    const sy = l.startPoint.y;
+                    const ey = l.visualEndPoint.y;
+
+                    if ((sy > ey ? sy : ey) + w < searchArea._AABB.y1) continue;
+                    if ((sy < ey ? sy : ey) - w > searchArea._AABB.y2) continue;
+
+                    l.addToPacket(laserPacket, playerContext);
+                    visibleLaserCount++;
+                }
 
                 // Send the update packet to the client
                 socket.talk(
@@ -13034,8 +13232,8 @@ function flatten(data, out, playerContext = null) {
                     fov + .5 | 0, // FOV (rounded)
                     // camera.vx, camera.vy, // Omitted velocity as per original packet format change
                     (player.gui ? player.gui() : []), // Player GUI data (assuming player.gui() is defined elsewhere and returns an array)
-					lasers.size,
-					laserPacket,
+                    visibleLaserCount, // <-- Pass visible count
+                    laserPacket,
                     numberInView, // Count of visible entities
                     visible.flat() // Flattened data for visible entities
                 );
@@ -13070,9 +13268,9 @@ function flatten(data, out, playerContext = null) {
         }, 1000);*/
 
         if (room.maxBots > 0) setTimeout(() => util.log(`Spawned ${room.maxBots} AI bot${room.maxBots > 1 ? "s." : "."}`), 350);
-		global.updateRoomInfo()
+        global.updateRoomInfo()
         worker.postMessage({ type: "serverStarted" })
     })();
 }
 
-export {global}
+export { global }
