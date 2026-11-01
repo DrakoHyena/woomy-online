@@ -1702,7 +1702,7 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                     //finalTank.MOTION_TYPE = 'motor'
                     //finalTank.FACING_TYPE = 'toTarget'
                     finalTank.RANDOM_TYPE = 'None'
-                    finalTank.MISC_IDENTIFIER = "None"
+                    finalTank.MISC_IDENTIFIERS = [];
                     finalTank.MAX_CHILDREN = (CONFIG.usedTanks * CONFIG.gunsPerTank * CONFIG.maxChildren) * 0.5
 
                     let exportName = `${Date.now()}-${Math.random()}`
@@ -2983,7 +2983,7 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                     dominator.color = 13;
                     dominator.FOV = .5;
                     dominator.isDominator = true;
-                    dominator.miscIdentifier = "appearOnMinimap";
+                    dominator.miscIdentifiers =["appearOnMinimap"];
                     dominator.settings.hitsOwnType = "pushOnlyTeam";
                     dominator.SIZE = 70;
                     dominator.team = -100;
@@ -3046,7 +3046,7 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                 teamColors = ["#00B0E1", "#F04F54", "#00E06C", "#BE7FF5", "#FFEB8E", "#F37C20", "#E85DDF", "#8EFFFB"];
             o.define(Class.mothership);
             o.isMothership = true;
-            o.miscIdentifier = "appearOnMinimap";
+            o.miscIdentifiers = ["appearOnMinimap"];
             o.alwaysActive = true;
             o.team = -team;
             o.controllers.push(new ioTypes.nearestDifferentMaster(o), new ioTypes.mapTargetToGoal(o), new ioTypes.roamWhenIdle(o));
@@ -3081,7 +3081,7 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                     y: room.height / 2
                 });
                 o.define(Class.soccerBall);
-                o.miscIdentifier = "appearOnMinimap";
+                o.miscIdentifiers = ["appearOnMinimap"];
                 o.settings.noNameplate = true;
                 o.settings.acceptsScore = false;
                 o.team = -100;
@@ -6314,7 +6314,7 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                 this.isBot = false;
                 this.underControl = false;
                 this.stealthMode = false;
-                this.miscIdentifier = "None";
+                this.miscIdentifiers = [];
                 this.switcherooID = -1;
                 this.gunIndex = undefined;
                 //entities.push(this);
@@ -6418,7 +6418,7 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                 this.control.alt = control.alt;
                 this.control.altOverride = control.altOverride;
                 this.control.power = control.power == null ? 1 : control.power;
-                this.move();
+                if (this.canMove) this.move();
                 this.face();
                 if (this.invuln && this.invulnTime[1] > -1) {
                     if (Date.now() - this.invulnTime[0] > this.invulnTime[1]) {
@@ -6631,7 +6631,7 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                     if (set.DANGER != null) this.dangerValue = set.DANGER;
                     if (set.VARIES_IN_SIZE != null) {
                         this.settings.variesInSize = set.VARIES_IN_SIZE;
-                        this.squiggle = this.settings.variesInSize ? ran.randomRange(.8, 1.2) : 1;
+                        this.squiggle = this.settings.variesInSize ? ran.randomRange(.7, 1.6) : 1;
                     }
                     if (set.RESET_UPGRADES) this.upgrades = [];
                     if (set.DIES_TO_TEAM_BASE != null) this.diesToTeamBase = set.DIES_TO_TEAM_BASE;
@@ -6675,6 +6675,9 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                     this.isObserver = set.IS_OBSERVER;
                     this.onOverride = set.ON_OVERRIDE;
                     this.isSentry = set.IS_SENTRY || null;
+                    this.settings.cameraShake = 0; // unused for now 
+                    this.treadSpeed = 1;
+                    this.canMove = true;
                     if (set.LEASHED) {
                         if (typeof set.LEASHED === "number") {
                             this.controllers.push(new ioTypes.leashed(this, set.LEASHED));
@@ -6692,12 +6695,14 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                             tier: 1
                         });
                     if (set.UPGRADES_TIER_2 != null)
-                        for (let e of set.UPGRADES_TIER_2) this.upgrades.push({
-                            class: exportNames[e.index],
-                            level: c.LEVEL_ZERO_UPGRADES ? 0 : 30,
-                            index: e.index,
-                            tier: 2
-                        });
+                        for (let e of set.UPGRADES_TIER_2) {
+                            this.upgrades.push({
+                                class: exportNames[e.index],
+                                level: c.LEVEL_ZERO_UPGRADES ? 0 : 30,
+                                index: e.index,
+                                tier: 2
+                            });
+                        }
                     if (set.UPGRADES_TIER_3 != null)
                         for (let e of set.UPGRADES_TIER_3) this.upgrades.push({
                             class: exportNames[e.index],
@@ -6706,12 +6711,15 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                             tier: 3
                         });
                     if (set.UPGRADES_TIER_4 != null)
-                        for (let e of set.UPGRADES_TIER_4) this.upgrades.push({
-                            class: exportNames[e.index],
-                            level: c.LEVEL_ZERO_UPGRADES ? 0 : 60,
-                            index: e.index,
-                            tier: 4
-                        });
+                        for (let e of set.UPGRADES_TIER_4) {
+                            if (Class[exportNames[e.index]].TEAM_EXCLUSIVE && c.MODE === "ffa") continue;
+                            this.upgrades.push({
+                                class: exportNames[e.index],
+                                level: c.LEVEL_ZERO_UPGRADES ? 0 : 60,
+                                index: e.index,
+                                tier: 4
+                            });
+                        }
                     if (set.SIZE != null) {
                         this.SIZE = set.SIZE * this.squiggle;
                     }
@@ -6774,6 +6782,8 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                         if (set.BODY.STEALTH != null) this.STEALTH = set.BODY.STEALTH;
                         if (set.BODY.PUSHABILITY != null) this.PUSHABILITY = set.BODY.PUSHABILITY;
                         if (set.BODY.HETERO != null) this.heteroMultiplier = set.BODY.HETERO;
+                        if (set.BODY.KNOCKBACK != null) this.KNOCKBACK = set.BODY.KNOCKBACK;
+                        if (set.BODY.DAMP != null) this.DAMP = set.BODY.DAMP;
                         this.refreshBodyAttributes();
                     }
                     if (set.TURRETS != null) {
@@ -6808,7 +6818,7 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                     if (set.ABILITY_IMMUNE != null) this.immuneToAbilities = set.ABILITY_IMMUNE;
                     if (set.SPAWNS_DECA != null) this.define(Class.decagon);
                     if (set.ALWAYS_ACTIVE != null) this.alwaysActive = set.ALWAYS_ACTIVE;
-                    if (set.MISC_IDENTIFIER != null) this.miscIdentifier = set.MISC_IDENTIFIER;
+                    if (set.MISC_IDENTIFIERS != null) this.miscIdentifiers = set.MISC_IDENTIFIERS;
                     if (set.SWITCHEROO_ID != null) this.switcherooID = set.SWITCHEROO_ID;
                     if (set.IS_ARENA_CLOSER != null) {
                         this.isArenaCloser = set.IS_ARENA_CLOSER;
@@ -6848,6 +6858,10 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                         }, (c.EVOLVE_TIME + Math.random() * c.EVOLVE_TIME_RAN_ADDER) * ((this.type === "crasher" || this.isSentry) ? 0.5 : 1)) // Crashers evolve 2x as fast
                     }
                     if (set.ON_DEFINED) set.ON_DEFINED(this, entities, sockets, Entity);
+					if (this.type === "boom") {
+						this.x = this.source.x;
+                        this.y = this.source.y;
+					}                    
                 } catch (e) {
                     if (this.isBot) console.error(this.tank);
                     console.error("An error occured while trying to set " + trimName(this.name) + "'s parent entity, aborting! Index: " + this.index + "." + " Export: " + global.exportNames[this.index]);
@@ -7141,16 +7155,16 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                 switch (this.motionType) {
                     case "glide":
                         this.maxSpeed = this.topSpeed;
-                        this.damp = .05;
+                        this.damp = .05 * (this.DAMP ?? 1);
                         break;
                     case "motor":
                         this.maxSpeed = 0;
-                        if (this.topSpeed) this.damp = a / this.topSpeed;
+                        if (this.topSpeed) this.damp = (a / this.topSpeed) * (this.DAMP ?? 1);
                         if (gactive) {
                             let len = Math.sqrt(g.x * g.x + g.y * g.y);
                             engine = {
-                                x: a * g.x / len,
-                                y: a * g.y / len
+                                x: (a * g.x / len) * this.treadSpeed,
+                                y: (a * g.y / len) * this.treadSpeed
                             };
                         }
                         break;
@@ -7238,8 +7252,8 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                             let len = Math.sqrt(g.x * g.x + g.y * g.y);
                             if (len !== 0 && len !== NaN) {
                                 engine = {
-                                    x: a * g.x / len,
-                                    y: a * g.y / len
+                                    x: (a * g.x / len) * this.treadSpeed,
+                                    y: (a * g.y / len) * this.treadSpeed
                                 };
                             } else {
                                 engine = {
@@ -7413,10 +7427,6 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                         this.SIZE -= 1;
                         if (this.SIZE <= 1) this.kill();
                         this.maxSpeed = this.topSpeed;
-                        break;
-                    case "decelfast":
-                        this.maxSpeed = this.topSpeed;
-                        this.damp = .2;
                         break;
                     case "decel":
                         this.maxSpeed = this.topSpeed;
@@ -9516,7 +9526,7 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                                     body.passive = false;
                                     setTimeout(() => {
                                         if (body != null) {
-                                            body.miscIdentifier = "No Death Log";
+                                            body.miscIdentifiers = ["No Death Log"];
                                             body.kill();
                                         }
                                     }, 5000);
@@ -9558,7 +9568,7 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                                     body.passive = false;
                                     setTimeout(() => {
                                         if (body != null) {
-                                            body.miscIdentifier = "No Death Log";
+                                            body.miscIdentifiers = ["No Death Log"];
                                             body.kill();
                                         }
                                     }, 1000);
@@ -10398,6 +10408,9 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                         default:
                             body.define(Class[c.STARTING_TANK] || Class[startingTank]);
                     }
+                    body.frozen = false;
+                    body.poisoned = false;
+                    body.crippled = false;
                     body.name = name || this.betaData.globalName;
                     body.addController(new ioTypes.listenToPlayer(body, player));
                     body.sendMessage = (content, color = 0) => this.talk("m", content, color);
@@ -10543,7 +10556,7 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                         if (my.type === "bullet" || my.type === "swarm" || my.type === "drone" || my.type === "minion" || my.type === "trap") {
                             return;
                         }
-                        if (!my.isOutsideRoom && (((my.type === 'wall' || my.type === "mazeWall") && my.alpha > 0.2) || my.showsOnMap || my.type === 'miniboss' || (my.type === 'tank' && my.lifetime) || my.isMothership || my.miscIdentifier === "appearOnMinimap") || my.miscIdentifier === "Sanctuary Boss") {
+                        if (!my.isOutsideRoom && (((my.type === 'wall' || my.type === "mazeWall") && my.alpha > 0.2) || my.showsOnMap || my.type === 'miniboss' || (my.type === 'tank' && my.lifetime) || my.isMothership || my.miscIdentifiers.includes("appearOnMinimap")) || my.miscIdentifiers.includes("Sanctuary Boss")) {
                             if (output.minimapSandboxes[my.sandboxId] != null) {
                                 output.minimapSandboxes[my.sandboxId].push(
                                     my.id,
@@ -10996,6 +11009,16 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                     n.accel.y -= b / (a + 0.3) * d * f;
                 }
                 const advancedCollide = (my, n, doDamage, doInelastic, nIsFirmCollide = false) => {
+                    // before doing anything, check to see who cant collide 
+					if ((my.settings.isHelicopter && my.type !== "tank") && "trap boom".includes(n.type)) return;
+					if ((n.settings.isHelicopter && n.type !== "tank") && "trap boom".includes(my.type)) return;
+					if ((my.settings.isHelicopter && my.type === "tank") && "miniboss tank trap".includes(n.type)) return;
+					if ((n.settings.isHelicopter && n.type === "tank") && "miniboss tank trap".includes(my.type)) return;
+					
+                    if ((my.settings.isHelicopter && my.miscIdentifiers.includes("flyOverExplosions")) && (n.type === "boom" && !n.miscIdentifier.includes("evadeFlyingBypass"))) return;
+                    if ((n.settings.isHelicopter && n.miscIdentifiers.includes("flyOverExplosions"))  && (my.type === "boom" && !my.miscIdentifier.includes("evadeFlyingBypass"))) return;
+
+                    // NOW start hitting each other 
                     let tock = Math.min(my.stepRemaining, n.stepRemaining),
                         combinedRadius = n.size + my.size,
                         motion = {
@@ -11084,8 +11107,26 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                                 let speedDmgMultiplier = speedToDamageFunction(Math.abs(getSpeed(my) - getSpeed(n)))
                                 let resistDiff = my.health.resist - n.health.resist,
                                     damage = {
-                                        _me: c.DAMAGE_CONSTANT * my.damage * Math.max(minResistBuff, Math.min(maxResistBuff, (1 + resistDiff))) * (1 + n.heteroMultiplier * (my.settings.damageClass === n.settings.damageClass)) * ((my.settings.buffVsFood && n.settings.damageType === 1) ? 3 : 1) * my.damageMultiplier() * speedDmgMultiplier, //Math.min(2, 1),
-                                        _n: c.DAMAGE_CONSTANT * n.damage * Math.max(minResistBuff, Math.min(maxResistBuff, (1 - resistDiff))) * (1 + my.heteroMultiplier * (my.settings.damageClass === n.settings.damageClass)) * ((n.settings.buffVsFood && my.settings.damageType === 1) ? 3 : 1) * n.damageMultiplier() * speedDmgMultiplier //Math.min(2, 1)
+                                        _me: 
+                                            c.DAMAGE_CONSTANT 
+                                            * my.damage 
+                                            * Math.max(minResistBuff, Math.min(maxResistBuff, (1 + resistDiff))) 
+                                            * (my.settings.damageClass === n.settings.damageClass ? n.heteroMultiplier : 1) 
+                                            * ((my.settings.buffVsFood && n.type === "food") ? 3 : 1) 
+                                            * my.damageMultiplier() 
+                                            * speedDmgMultiplier
+                                            * (my.invuln ? 0 : 1)
+                                            * (n.type === "boom" && my.type !== "boom" ? 0 : 1),
+                                        _n:  
+                                            c.DAMAGE_CONSTANT 
+                                            * n.damage 
+                                            * Math.max(minResistBuff, Math.min(maxResistBuff, (1 + resistDiff))) 
+                                            * (my.settings.damageClass === n.settings.damageClass ? my.heteroMultiplier : 1) 
+                                            * ((n.settings.buffVsFood && my.type === "food") ? 3 : 1) 
+                                            * n.damageMultiplier() 
+                                            * speedDmgMultiplier
+                                            * (n.invuln ? 0 : 1)
+                                            * (my.type === "boom" && n.type !== "boom" ? 0 : 1)
                                     };
 
                                 if (!my.settings.speedNoEffect) {
@@ -11096,8 +11137,8 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                                     damage._n *= Math.min(2, Math.max(speedFactor._n, 1) * speedFactor._n);
                                 }
 
-                                damage._me *= (1 + (componentNorm - 1) * (1 - depth._n) / my.penetration) * (1 + pen._n.sqrt * depth._n - depth._n) / pen._n.sqrt;
-                                damage._n *= (1 + (componentNorm - 1) * (1 - depth._me) / n.penetration) * (1 + pen._me.sqrt * depth._me - depth._me) / pen._me.sqrt;
+                                damage._me *= Math.abs((1 + (componentNorm - 1) * (1 - depth._n) / my.penetration) * (1 + pen._n.sqrt * depth._n - depth._n) / pen._n.sqrt);
+                                damage._n *= Math.abs((1 + (componentNorm - 1) * (1 - depth._me) / n.penetration) * (1 + pen._me.sqrt * depth._me - depth._me) / pen._me.sqrt);
                                 let damageToApply = {
                                     _me: damage._me,
                                     _n: damage._n
@@ -11174,8 +11215,8 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                                         y: impulse * dir.y
                                     },
                                     modifiers = {
-                                        _me: c.KNOCKBACK_CONSTANT * my.pushability / my.mass * deathFactor._n,
-                                        _n: c.KNOCKBACK_CONSTANT * n.pushability / n.mass * deathFactor._me
+                                        _me: c.KNOCKBACK_CONSTANT * my.pushability / my.mass * deathFactor._n * (n.knockbackMultiplier ?? 1), // INTENTIONALLY uses the other collider's knockback dont change that
+                                        _n: c.KNOCKBACK_CONSTANT * n.pushability / n.mass * deathFactor._me * (my.knockbackMultiplier ?? 1), 
                                     };
                                 my.accel.x += modifiers._me * force.x;
                                 my.accel.y += modifiers._me * force.y;
@@ -12488,7 +12529,7 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                     }
                     o.sandboxId = id
                     sockets.broadcast(`The ${o.label} has spawned!`);
-                    o.miscIdentifier = "Sanctuary Boss";
+                    o.miscIdentifiers = ["Sanctuary Boss"];
                 }
             }
 
@@ -12895,7 +12936,7 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                             entities.forEach(instance => {
                                 if (census[instance.type] != null) {
                                     census[instance.type]++;
-                                } else if (instance.miscIdentifier === "Sanctuary Boss") {
+                                } else if (instance.miscIdentifiers.includes("Sanctuary Boss")) {
                                     census.sancs++
                                 }
                             });
@@ -13190,7 +13231,7 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                                 timeAlive: util.formatTime(records[1] * 1000),
                             });
                         }
-                        if (body.miscIdentifier !== "No Death Log") {
+                        if (!body.miscIdentifiers.includes("No Death Log")) { // who even uses ts identifier 
                             util.info(trimName(body.name) + " has died. Final Score: " + body.skill.score + ". Tank Used: " + body.label + ". Players: " + clients.length + "."); // Assuming util.info and trimName are defined elsewhere
                         }
                     }
