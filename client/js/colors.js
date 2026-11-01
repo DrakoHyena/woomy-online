@@ -694,6 +694,8 @@ function getColor(colorID) {
 			return mixColors(color.red, color.grey, .8);
 		case 46: // Red team trench warfare door color (open) and sporulator colors
 			return mixColors(color.green, color.grey, .8);
+		case 47: // heinrich turret 
+			return Date.now() > 400 ? color.vlgrey : color.black;
 		// Rainbow Colors
 		case 100:
 			return "#FF0000";
@@ -1280,6 +1282,7 @@ function getZoneColor(cell, real, seed = 1) {
 		case "bad2":
 		case "dom2":
 		case "boss":
+		case "bosp":
 			return color.red;
 		case "n_b3":
 		case "bas3":
