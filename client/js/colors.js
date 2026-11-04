@@ -696,6 +696,18 @@ function getColor(colorID) {
 			return mixColors(color.green, color.grey, .8);
 		case 47: // heinrich turret 
 			return Date.now() > 400 ? color.vlgrey : color.black;
+		case 48: // new version of the red color that flak guns and healers use to avoid overlap w/ red team's color 
+			return "#F22639";
+		case 49: // deflector shield 
+			return "#FFE100";
+		case 50: // starvation debuff 
+			return "#202060";
+		case 51: // blasting debuff 
+			return "#FFC971";
+		case 52: // the color of sound
+			return "#63E291";
+		case 53: // infobox color 
+			return "#756C6C";
 		// Rainbow Colors
 		case 100:
 			return "#FF0000";
