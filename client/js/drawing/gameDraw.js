@@ -668,80 +668,118 @@ let gameDraw = function(ratio) {
                 }
             }
 
-            // TANK UPGRADES
-            {
-                upgradeMenu.set(0 + (global.canUpgrade || global.upgradeHover));
-                let glide = upgradeMenu.get();
-                global.clickables.upgrade.hide();
-                if (_gui._upgrades.length > 0) {
-                    global.canUpgrade = 1;
-                    let spacing = 10,
-                        x = 20,
-                        tankColor = global._tankMenuColor,//global._tankMenuColor,
-                        i = 0,
-                        y = 20,
-                        x2 = x,
-                        x3 = 0,
-                        y2 = y,
-                        ticker = 0,
-                        len = alcoveSize * .45, //100
-                        height = len;
-                    upgradeSpin += .0025
-                    for (let model of _gui._upgrades) {
-                        if (y > y2) y2 = y - 60;
-                        x3 = x * 2 + 105;
-                        x *= glide
-                        y *= glide
-                        global.clickables.upgrade.place(i++, y, x, len, height);
-                        ctx.globalAlpha = .5;
-                        ctx.fillStyle = tankColor;
-                        config.roundUpgrades ? drawGuiRoundRect(y, x, len, height, 10) : drawGuiRect(y, x, len, height);
-                        ctx.fillStyle = mixColors(tankColor, color.white, .5);
-                        config.roundUpgrades ? drawGuiRoundRect(y, x, len, .6 * height, 4) : drawGuiRect(y, x, len, .6 * height);
-                        ctx.fillStyle = "black";
-                        ctx.globalAlpha = .25;
-                        if (!global._died && !global._disconnected) {
-                            let tx = Math.pow((global.guiMouse.x) - (y + height / 2), 2),
-                                ty = Math.pow((global.guiMouse.y) - (x + len / 2), 2);
-                            if (Math.sqrt(tx + ty) < height * .55) {
-                                config.roundUpgrades ? drawGuiRoundRect(y, x, len, height, 10) : drawGuiRect(y, x, len, height);
-                            }
-                        }
-                        ctx.globalAlpha = 1;
-                        let picture = getEntityImageFromMockup(model, tankColor),
-                            position = mockups.get(model).position,
-                            scale = .6 * len / position.axis,
-                            xx = y + .5 * height - scale * position.middle.x * Math.cos(upgradeSpin),
-                            yy = x + .5 * len - scale * position.middle.x * Math.sin(upgradeSpin);
-                        // Mini render
-                        drawEntity(xx, yy, picture, 1, 1, scale / picture.size, upgradeSpin, 1);
-                        drawText(picture.name, y + len / 2, x + height - 6, height / 8 - 3, color.guiwhite, "center");
-                        ctx.strokeStyle = color.black;
-                        ctx.globalAlpha = 1;
-                        ctx.lineWidth = 3;
-                        config.roundUpgrades ? drawGuiRoundRect(y, x, len, height, 10, false, true) : drawGuiRect(y, x, len, height, true);
-                        if (++ticker % (global.mobile ? 3 : 4) === 0) {
-                            x = x2;
-                            y += height + spacing;
-                        } else {
-                            x += (len + spacing);
-                        }
-                    }
-                    let h = 14,
-                        txt = "Ignore",
-                        m = measureText(txt, h - 3) + 10,
-                        xx = y2 + height + spacing,
-                        yy = (x3 + len + spacing + x2 - 15) / 2;
-                    drawBar(xx - m / 2, xx + m / 2, yy + h / 2, h + config.barChunk, color.black);
-                    drawBar(xx - m / 2, xx + m / 2, yy + h / 2, h, color.white);
-                    drawText(txt, xx, yy + h / 2, h - 2, color.guiwhite, "center", 1);
-                    global.clickables.skipUpgrades.place(0, xx - m / 2, yy, m, h);
-                } else {
-                    global.canUpgrade = 0;
-                    global.clickables.upgrade.hide();
-                    global.clickables.skipUpgrades.hide();
-                }
-            }
+			// TANK UPGRADES
+			{
+				upgradeMenu.set(0 + (global.canUpgrade || global.upgradeHover));
+				let glide = upgradeMenu.get();
+				global.clickables.upgrade.hide();
+				if (_gui._upgrades.length > 0) {
+					global.canUpgrade = 1;
+					let spacing = 10,
+						x = 20,
+						tankColor = global._tankMenuColor,
+						i = 0,
+						y = 20,
+						x2 = x,
+						x3 = 0,
+						y2 = y,
+						ticker = 0,
+						len = alcoveSize * .45, //100
+						height = len,
+						upgradeSpin = -45;
+
+					for (let model of _gui._upgrades) {
+						if (y > y2) y2 = y - 60;
+						x3 = x * 2 + 105;
+						x *= glide
+						y *= glide
+						global.clickables.upgrade.place(i++, y, x, len, height);
+						ctx.globalAlpha = .5;
+						ctx.fillStyle = tankColor;
+						config.roundUpgrades ? drawGuiRoundRect(y, x, len, height, 10) : drawGuiRect(y, x, len, height);
+						ctx.fillStyle = mixColors(tankColor, color.white, .5);
+						config.roundUpgrades ? drawGuiRoundRect(y, x, len, .6 * height, 4) : drawGuiRect(y, x, len, .6 * height);
+						ctx.fillStyle = "black";
+						ctx.globalAlpha = .25;
+						if (!global._died && !global._disconnected) {
+							let tx = Math.pow((global.guiMouse.x) - (y + height / 2), 2),
+								ty = Math.pow((global.guiMouse.y) - (x + len / 2), 2);
+							if (Math.sqrt(tx + ty) < height * .55) {
+								config.roundUpgrades ? drawGuiRoundRect(y, x, len, height, 10) : drawGuiRect(y, x, len, height);
+							}
+						}
+						ctx.globalAlpha = 1;
+						let picture = getEntityImageFromMockup(model, tankColor),
+							position = mockups.get(model).position,
+							scale = .3 * len / position.axis,
+							xx = y + .5 * height,//y + .5 * height - scale * position.middle.x * Math.cos(upgradeSpin),
+							yy = x + .5 * len
+						// Mini render
+						drawEntity(
+							xx, 
+							yy, 
+							picture, 
+							1, 
+							1, 
+							scale / (picture.size / 2.4), 
+							0, 
+							1
+						);
+						drawText(
+							picture.name, 
+							y + len / 2, 
+							x + height - 6, 
+							picture.name.length <= 7 ? height / (7 / 1.2) : (height / (picture.name.length / 1.2)), 
+							color.guiwhite, 
+							"center"
+						);
+						ctx.strokeStyle = color.black;
+						ctx.globalAlpha = 1;
+						ctx.lineWidth = 3;
+						config.roundUpgrades ? drawGuiRoundRect(y, x, len, height, 10, false, true) : drawGuiRect(y, x, len, height, true);
+
+						// infobox 
+						let tx = (global.guiMouse.x) - (y + height / 2),
+							ty = (global.guiMouse.y) - (x + len / 2);
+						if (Math.sqrt(tx * tx + ty * ty) < (height * .55) - 11 && !global._died && !global._disconnected) {
+							ctx.fillStyle = "#756C6C";
+							drawGuiRect(20, 500, len * Math.sqrt(picture.desc ? picture.desc.length : 1 + picture.name.length), height * 1.1);
+
+							ctx.fillStyle = mixColors("#756C6C", color.black, .5);
+							drawGuiRect(20, 500, len * Math.sqrt(picture.desc ? picture.desc.length : 1 + picture.name.length), height * .3);
+
+							drawText(picture.name, 23 * Math.sqrt(picture.name.length), 519, 15, color.guiwhite, "center");
+							if (picture.metatier) drawText(
+								`||    Tier: ${picture.metatier}`, 
+								35 * Math.sqrt(picture.name.length * 1.6), 519, 12, color.guiwhite, "left");
+							if (picture.desc) drawText(picture.desc, 27, 545, 11.5, color.guiwhite, "left");
+
+							ctx.fillStyle = color.guiblack;
+							drawGuiRect(20, 500, len * Math.sqrt(picture.desc ? picture.desc.length : 1 + picture.name.length), height * 1.1, "center");
+						}
+						
+						if (++ticker % 3 === 0) {
+							x = x2;
+							y += height + spacing;
+						} else {
+							x += (len + spacing);
+						}
+					}
+					let h = 14,
+						txt = "Ignore",
+						m = measureText(txt, h - 3) + 10,
+						xx = y2 + height + spacing,
+						yy = (x3 + len + spacing + x2 - 15) / 2;
+					drawBar(xx - m / 2, xx + m / 2, yy + h / 2, h + config.barChunk, color.black);
+					drawBar(xx - m / 2, xx + m / 2, yy + h / 2, h, color.white);
+					drawText(txt, xx, yy + h / 2, h - 2, color.guiwhite, "center", 1);
+					global.clickables.skipUpgrades.place(0, xx - m / 2, yy, m, h);
+				} else {
+					global.canUpgrade = 0;
+					global.clickables.upgrade.hide();
+					global.clickables.skipUpgrades.hide();
+				}
+			}
 
             // MOBILE SKILL BARS
             {
