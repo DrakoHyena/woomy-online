@@ -172,6 +172,8 @@ function getEntityImageFromMockup(index, color) {
 		facing: mockup.facing,
 		shape: mockup.shape,
 		name: mockup.name,
+		metatier: mockup.metatier,
+		desc: mockup.desc,
 		score: 0,
 		tiggle: 0,
 		layer: mockup.layer,
