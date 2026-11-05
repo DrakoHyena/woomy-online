@@ -15,7 +15,7 @@ const ROW_MARGIN = 2.5;
 const BAR_WIDTH_MULT = 0.22; // fraction of canvas height used for bar width
 const BASE_MARGIN = 5;
 const BASE_PADDING = 5;
-const ANIM_SPEED = 0.3;
+const ANIM_SPEED = 0.5;
 
 export const leaderboardState = {
     active: true,
@@ -54,7 +54,7 @@ const leaderboardTiles = new Map();
 function drawBars({ canvas, ctx, delta }) {
     updateState(delta);
 
-    // Fade logic
+    // Fade 
     if (leaderboardState.active) {
         leaderboardState.fade = lerp(leaderboardState.fade, 1, leaderboardState.animSpeed);
     } else {
@@ -84,12 +84,9 @@ function drawBars({ canvas, ctx, delta }) {
 
     const entries = playerState.gui?.leaderboard?.entries || [];
 
-    let maxBottom = leaderboardTiles.size * leaderboardState.rowHeight;
-    const actualListH = maxBottom === -Infinity ? 0 : Math.max(0, maxBottom - top);
-    const desiredContentH = titleSize + titleSpacing + actualListH;
+    const desiredContentH = titleSize + titleSpacing * 2 + padding * 2 + (leaderboardTiles.size * rowHeight);
 
     leaderboardState.contentH = lerp(leaderboardState.contentH, desiredContentH, leaderboardState.animSpeed);
-    if (Math.abs(leaderboardState.contentH - desiredContentH) < 0.5) leaderboardState.contentH = desiredContentH;
 
     // Update Tiles
     const currentRootX = rootX + (barWidth * (1 - leaderboardState.fade));
