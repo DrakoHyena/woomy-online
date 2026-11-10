@@ -21,58 +21,58 @@ const state = {
 
 const statBars = new Map();
 
-function rebuildSortedBars() {
-    const canonical = Object.keys(playerState.gui.skills).filter(k => k !== "points");
-    const arr = [];
-    for (let i = 0; i < canonical.length; i++) {
-        const skillName = canonical[i];
-        const bar = statBars.get(skillName);
-        if (bar) {
-            arr.push(bar);
-            // assign hotkey only if not already set (preserve existing hotkeys)
-            if (bar.hotkey === null || typeof bar.hotkey === "undefined") {
-                bar.hotkey = (canonical.length - i) % 10;
-            }
-        }
-    }
-    // Append any remaining bars that didn't come from playerState (fallback)
-    for (const [skillName, bar] of statBars) {
-        if (!canonical.includes(skillName)) {
-            arr.push(bar);
-            if (bar.hotkey === null || typeof bar.hotkey === "undefined") {
-                bar.hotkey = arr.length % 10;
-            }
-        }
-    }
-    sortedBars = arr;
-}
-
-function simNumberPress(num) {
-    num = `${num}`;
-    keyboard.keys[num] = true;
-    setTimeout(() => {
-        keyboard.keys[num] = false; // release the key after a short press
-    }, 100);
-}
-
 class StatBar {
     constructor(label, current, max) {
         this.label = label;
+        this.hotkey = -1;
+
+        this.removing = false;
+        this.fade = 0;
+
+        this.maxGoal = max;
         this.max = max;
+        this.currentGoal = current;
         this.current = current;
-        this.fillScalar = 0;
-        this.hotkey = null; // assigned from server order when the bar is created
         this.scale = 1;
         this.targetScale = 1;
+        this.fillScalar = 0;
+
         this.clickPunch = 0;
         this.lastClickTime = 0;
     }
 
+    click() {
+        const now = performance.now();
+        if (now - this.lastClickTime >= 200) {
+            this.lastClickTime = now;
+            this.clickPunch = 1;
+
+        }
+
+    }
+
+    update(current, max) {
+        this.currentGoal = current;
+        this.maxGoal = max;
+    }
+
     tick(delta) {
         const speed = currentSettings.menuAnimSpeed.value.number * delta;
+
+        if (this.removing === true) {
+            this.fade = lerp(this.fade, 0, speed);
+        } else {
+            this.fade = lerp(this.fade, 1, speed);
+        }
+        if (this.fade <= 0.01) {
+            statBars.delete(this);
+        }
+
         this.scale = lerp(this.scale, this.targetScale, speed);
         this.clickPunch = lerp(this.clickPunch, 0, speed);
-        this.fillScalar = lerp(this.fillScalar, state.fade * (this.current / this.max), speed)
+        this.current = lerp(this.current, this.currentGoal, speed);
+        this.max = lerp(this.max, this.maxGoal, speed)
+        this.fillScalar = lerp(this.fillScalar, state.fade * (this.current / Math.max(this.max, this.current)), speed) // max incase modders overbuff
     }
 }
 
@@ -109,50 +109,32 @@ function draw({ canvas, ctx, delta }) {
     const INNER_PAD = 6;             // inner panel border → bar shadow
     const BAR_GAP = 3;            // gap between bar shadow boxes
     const PANEL_BORDER = borderBase * 0.005 * borderMult * scale; // dependent on canvas & settings
+    const skills = playerState.gui.skills
 
-    // Sync statBars with player skills
-    let dirty = false;
-    for (const skill in playerState.gui.skills) {
-        if (skill === "points") continue;
-
-        const skillData = playerState.gui.skills[skill];
+    let i = 0;
+    for (const [skill, stat] in skills) {
         let bar = statBars.get(skill);
-
         if (!bar) {
-            bar = new StatBar(skill, skillData.current, skillData.max);
-            const canonical = Object.keys(playerState.gui.skills).filter(k => k !== "points");
-            const idx = canonical.indexOf(skill);
-            bar.hotkey = idx !== -1 ? (canonical.length - idx) % 10 : 0;
+            bar = new StatBar(skill, stat.current, stat.max);
+            bar.hotkey = (canonical.length - i) % 10
             statBars.set(skill, bar);
-            dirty = true;
-
         } else {
-            bar.max = skillData.max;
-            bar.current = skillData.current;
-
+            bar.update(stat.current, stat.max)
         }
+        i++
     }
-
-    for (const [skill, bar] of statBars) {
-        if (bar.max === 0 || !playerState.gui.skills[skill]) {
-            statBars.delete(skill);
-        }
-    }
-
-    if (dirty) rebuildSortedBars();
 
     for (const [k, bar] in statBars) {
+        if (!playerState.gui.skills[k]) {
+            bar.removing = true;
+        }
+
         const barH = BASE_BAR_HEIGHT * bar.scale;
         const click = clickableActive(bar.x, bar.y, bar.x + BAR_WIDTH, bar.y + barH);
         bar.targetScale = click ? HOVER_SCALE : 1;
+
         if (click?.left) {
-            const now = performance.now();
-            if (now - bar.lastClickTime >= 200) {
-                bar.lastClickTime = now;
-                bar.clickPunch = 1;
-                // use stable hotkey assigned to the StatBar; fall back to old index-based formula
-                simNumberPress(typeof bar.hotkey !== 'undefined' && bar.hotkey !== null ? bar.hotkey : ((sortedBars.length - i) % 10));
-            }
+            bar.click()
         }
 
     }
@@ -167,7 +149,7 @@ function draw({ canvas, ctx, delta }) {
 
     // Sum bar heights including their shadow outset on both sides
     let barsH = 0;
-    for (const bar of sortedBars) {
+    for (const bar of statBars.values()) {
         barsH += BASE_BAR_HEIGHT * bar.scale + SHADOW * 2;
     }
     const gapsH = sortedBars.length > 1 ? BAR_GAP * (sortedBars.length - 1) : 0;
@@ -193,7 +175,7 @@ function draw({ canvas, ctx, delta }) {
     // shadowBottom tracks the bottom edge of the current bar's shadow box.
     let shadowBottom = outerY + panelH - PANEL_BORDER - INNER_PAD;
 
-    for (const bar of sortedBars) {
+    for (const bar of statBars.entries()) {
         const scaledH = BASE_BAR_HEIGHT * bar.scale * heightRatio;
         // shadow box: top = shadowBottom - SHADOW*2 - scaledH, bottom = shadowBottom
         // bar coloured area top = shadowBottom - SHADOW - scaledH
@@ -230,7 +212,7 @@ function draw({ canvas, ctx, delta }) {
     const cornerStyle = currentSettings.squareStatsBars.value.enabled ? "square" : "round";
     const colors = ["#D4826A", "#D8B94C", "#70CBB1", "#7EAF42", "#E1DE7C", "#C64247", "#A4D47C", "#389AC0", "#CE91B9", "#7B6FD2"].reverse();
 
-    for (const [colorIndex, bar] of sortedBars.entries()) {
+    for (const [colorIndex, bar] of statBars.values()) {
         const punchOffset = bar.clickPunch * 0.15;
         const barH = BASE_BAR_HEIGHT * bar.scale;
         const drawW = BAR_WIDTH * (1 - punchOffset);
