@@ -3,53 +3,53 @@ import { lerp } from "../lerp.js";
 import { canvas } from "../drawing/drawLoop.js";
 
 const mouse = {
-	x: 0,
-	y: 0,
-	buttons: {
-		left: false,
-		middle: false,
-		right: false
-	},
-	scrollY: 0,
-	scrollX: 0
+    x: 0,
+    y: 0,
+    buttons: {
+        left: false,
+        middle: false,
+        right: false
+    },
+    scrollY: 0,
+    scrollX: 0
 }
-mouse._updatePos = function(mouseMoveEvent){
-	mouse.x = mouseMoveEvent.clientX;
-	mouse.y = mouseMoveEvent.clientY;
-}
-
-mouse._updateButtons = function(mouseEvent){
-	const isDown = mouseEvent.type === "mousedown";
-	switch(mouseEvent.button){
-		case 0:
-			mouse.buttons.left = isDown;
-			break;
-		case 1:
-			mouse.buttons.middle = isDown;
-			break;
-		case 2:
-			mouse.buttons.right = isDown;
-			break;
-	}
+mouse._updatePos = function(mouseMoveEvent) {
+    mouse.x = mouseMoveEvent.clientX;
+    mouse.y = mouseMoveEvent.clientY;
 }
 
-mouse._updateScroll = function(wheelEvent){
-	mouse.scrollX = wheelEvent.deltaX;
-	mouse.scrollY = wheelEvent.deltaY;
+mouse._updateButtons = function(mouseEvent) {
+    const isDown = mouseEvent.type === "mousedown";
+    switch (mouseEvent.button) {
+        case 0:
+            mouse.buttons.left = isDown;
+            break;
+        case 1:
+            mouse.buttons.middle = isDown;
+            break;
+        case 2:
+            mouse.buttons.right = isDown;
+            break;
+    }
 }
-setInterval(()=>{
-	mouse.scrollX = lerp(mouse.scrollX, 0, .15);
-	mouse.scrollY = lerp(mouse.scrollY, 0, .15);
-}, 25)
 
-mouse.posRelativeToCanvas = function(){
-	const rect = canvas.getBoundingClientRect();
-	const scaleX = canvas.width / rect.width;
-	const scaleY = canvas.height / rect.height;
-	return {
-		x: (mouse.x - rect.left) * scaleX,
-		y: (mouse.y - rect.top) * scaleY
-	};
+mouse._updateScroll = function(wheelEvent) {
+    mouse.scrollX = wheelEvent.deltaX;
+    mouse.scrollY = wheelEvent.deltaY;
+}
+setInterval(() => {
+    mouse.scrollX = lerp(mouse.scrollX, 0, .3);
+    mouse.scrollY = lerp(mouse.scrollY, 0, .3);
+}, 250)
+
+mouse.posRelativeToCanvas = function() {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+        x: (mouse.x - rect.left) * scaleX,
+        y: (mouse.y - rect.top) * scaleY
+    };
 }
 
 window.addEventListener("mousemove", mouse._updatePos);

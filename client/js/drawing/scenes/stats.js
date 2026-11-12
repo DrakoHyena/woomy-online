@@ -112,11 +112,13 @@ function draw({ canvas, ctx, delta }) {
     const skills = playerState.gui.skills
 
     let i = 0;
-    for (const [skill, stat] in skills) {
+    for (const skill in skills) {
+        if (skill === "points") continue;
+        let stat = skills[skill]
         let bar = statBars.get(skill);
         if (!bar) {
             bar = new StatBar(skill, stat.current, stat.max);
-            bar.hotkey = (canonical.length - i) % 10
+            bar.hotkey = Math.abs(9 - i) % 10
             statBars.set(skill, bar);
         } else {
             bar.update(stat.current, stat.max)
@@ -124,7 +126,7 @@ function draw({ canvas, ctx, delta }) {
         i++
     }
 
-    for (const [k, bar] in statBars) {
+    for (const [k, bar] of statBars) {
         if (!playerState.gui.skills[k]) {
             bar.removing = true;
         }
@@ -152,7 +154,7 @@ function draw({ canvas, ctx, delta }) {
     for (const bar of statBars.values()) {
         barsH += BASE_BAR_HEIGHT * bar.scale + SHADOW * 2;
     }
-    const gapsH = sortedBars.length > 1 ? BAR_GAP * (sortedBars.length - 1) : 0;
+    const gapsH = statBars.size > 1 ? BAR_GAP * (statBars.size - 1) : 0;
 
     // Full panel height: border + inner-pad + title + spacing + bars + gaps + inner-pad + border
     const fullPanelH = PANEL_BORDER * 2 + INNER_PAD * 2 + titleH + titleSpacing + barsH + gapsH;
@@ -175,7 +177,7 @@ function draw({ canvas, ctx, delta }) {
     // shadowBottom tracks the bottom edge of the current bar's shadow box.
     let shadowBottom = outerY + panelH - PANEL_BORDER - INNER_PAD;
 
-    for (const bar of statBars.entries()) {
+    for (const [_, bar] of statBars) {
         const scaledH = BASE_BAR_HEIGHT * bar.scale * heightRatio;
         // shadow box: top = shadowBottom - SHADOW*2 - scaledH, bottom = shadowBottom
         // bar coloured area top = shadowBottom - SHADOW - scaledH
@@ -212,14 +214,15 @@ function draw({ canvas, ctx, delta }) {
     const cornerStyle = currentSettings.squareStatsBars.value.enabled ? "square" : "round";
     const colors = ["#D4826A", "#D8B94C", "#70CBB1", "#7EAF42", "#E1DE7C", "#C64247", "#A4D47C", "#389AC0", "#CE91B9", "#7B6FD2"].reverse();
 
-    for (const [colorIndex, bar] of statBars.values()) {
+    for (const [statName, bar] of statBars) {
+        const colorIndex = bar.hotkey;
         const punchOffset = bar.clickPunch * 0.15;
         const barH = BASE_BAR_HEIGHT * bar.scale;
         const drawW = BAR_WIDTH * (1 - punchOffset);
         const drawH = barH * (1 - punchOffset);
         // Centre the punched bar within the original footprint
-        const drawX = bar.x + (BAR_WIDTH - drawW) / 2 - drawW * (1 - state.fade);
-        const drawY = bar.y + (barH - drawH) / 2;
+        const drawX = outerX - drawW * (1 - state.fade) * (1 - bar.fade);
+        const drawY = outerY;
 
         // Black shadow outline
         drawBar(ctx, drawX - SHADOW, drawY - SHADOW, drawW + SHADOW * 2, drawH + SHADOW * 2, 0, "black", "black", 1, cornerStyle);
@@ -227,7 +230,7 @@ function draw({ canvas, ctx, delta }) {
         // Coloured jib segments
         const jibSize = drawW / bar.max;
         let jX = drawX;
-        for (const jib of bar.jibs) {
+        for (let i = 0; i < bar.current; i++) {
             ctx.globalAlpha = jib * state.fade;
             drawBar(ctx, jX, drawY, jibSize, drawH, JIB_PADDING, colors[colorIndex], "black", jib, cornerStyle);
             jX += jibSize;
@@ -241,29 +244,6 @@ function draw({ canvas, ctx, delta }) {
             const keyBmp = renderText(String(bar.hotkey), Math.round(drawH * 0.55));
             ctx.drawImage(keyBmp, drawX + 6, drawY + drawH / 2 - keyBmp.height / 2);
         }
-    }
-
-    // ── Fading-out (removed) bars ───────────────────────────────────────
-    for (let i = REMOVING_statBars.length - 1; i >= 0; i--) {
-        const bar = REMOVING_statBars[i];
-        bar.tick(delta);
-        const fade = (1 - bar.removingFade) * state.fade;
-        ctx.globalAlpha = fade;
-        const barH = BASE_BAR_HEIGHT * bar.scale;
-        // slide left as it fades (keep Y unchanged)
-        const slideX = bar.x - (1 - fade) * BAR_WIDTH;
-        drawBar(ctx, slideX, bar.y, BAR_WIDTH, barH, 0, "black", "black", fade, cornerStyle);
-
-        // show label + preserved hotkey while fading
-        ctx.globalAlpha = fade;
-        const labelBmp = renderText(bar.label, barH * 0.85);
-        ctx.drawImage(labelBmp, slideX + BAR_WIDTH / 2 - labelBmp.width / 2, bar.y + barH / 2 - labelBmp.height / 2);
-        if (bar.hotkey !== null && typeof bar.hotkey !== 'undefined') {
-            const keyBmp = renderText(String(bar.hotkey), Math.round(barH * 0.55));
-            ctx.drawImage(keyBmp, slideX + 6, bar.y + barH / 2 - keyBmp.height / 2);
-        }
-
-        if (bar.removingFade >= 0.99) REMOVING_statBars.splice(i, 1);
     }
 
     ctx.globalAlpha = 1;
