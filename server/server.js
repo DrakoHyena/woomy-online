@@ -6963,7 +6963,7 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                     facing: this.facing,
                     vfacing: this.vfacing,
                     leash: this.leash,
-                    twiggle: this.facingType !== "toTarget" || (this.facingType === "lmg" && this.control.fire), //this.facingType === "looseWithMotion" || this.facingType === "smoothWithMotion" || this.facingType === "spinSlowly" || this.facingType === "spinSlowly2" || this.facingType === "spinSlowly3" || this.facingType === "spinSlowly4" || this.facingType === "altSpin" || this.facingType === "fastSpin" || this.facingType === "autospin" || this.facingType === "autospin2" || this.facingType === "reverseAutospin" || this.facingType === "bitFastSpin" || this.facingType === "hadron" || this.facingType === "locksFacing" && this.control.alt || this.facingType === "hatchet" || this.facingType === "altLocksFacing" || this.facingType === "lmg" && this.control.fire,
+                    twiggle: this.facingType !== "toTarget" || (this.facingType === "lmg" && this.control.fire), //this.facingType === "looseWithMotion" || this.facingType === "smoothWithMotion" || this.facingType === "spinSlowly" || this.facingType === "spinSlowly2" || this.facingType === "spinSlowly3" || this.facingType === "spinSlowly4" || this.facingType === "reversespinSlowly" || this.facingType === "reversespinSlowly2" || this.facingType === "reversespinSlowly3" || this.facingType === "reversespinSlowly4" || this.facingType === "altSpin" || this.facingType === "fastSpin" || this.facingType === "autospin" || this.facingType === "autospin2" || this.facingType === "reverseAutospin" || this.facingType === "bitFastSpin" || this.facingType === "hadron" || this.facingType === "locksFacing" && this.control.alt || this.facingType === "hatchet" || this.facingType === "altLocksFacing" || this.facingType === "lmg" && this.control.fire,
                     layer: this.type === "mazeWall" ? 7 : this.passive && this.LAYER !== -1 ? 1 : this.LAYER === -1 ? this.bond == null ? this.type === "wall" ? 11 : this.type === "food" ? 10 : this.type === "tank" ? 5 : this.type === "crasher" ? 8 : 0 : this.bound.layer : this.LAYER,
                     color: this.color,
                     team: this.team,
@@ -7501,6 +7501,18 @@ async function startServer(configSuffix, defExports, displyNameOverride, display
                         break;
                     case "spinSlowly4":
                         this.facing += .00125 / room.speed;
+                        break;
+                    case "reversespinSlowly":
+                        this.facing -= .0075 / room.speed;
+                        break;
+                    case "reversespinSlowly2":
+                        this.facing -= .004 / room.speed;
+                        break;
+                    case "reversespinSlowly3":
+                        this.facing -= .0025 / room.speed;
+                        break;
+                    case "reversespinSlowly4":
+                        this.facing -= .00125 / room.speed;
                         break;
                     case "bitFastSpin":
                         this.facing += .035 / room.speed;
